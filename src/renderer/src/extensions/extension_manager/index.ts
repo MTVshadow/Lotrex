@@ -189,15 +189,9 @@ function checkMissingDependencies(
 
   if (missingDependencies.size === 0) return;
 
-  const promises = missingDependencies.values().map((dependencyId) =>
-    installDependency(api, dependencyId).catch((err) => {
-      api.showErrorNotification("Failed to install extension", err, {
-        message: dependencyId,
-      });
+  const dependencyIds = Array.from(missingDependencies);
 
-      return false;
-    }),
-  );
+  log("warn", "extensions have unmet dependencies", { dependencyIds });
 
   api.sendNotification({
     type: "warning",
@@ -209,7 +203,22 @@ function checkMissingDependencies(
         title: "Fix",
         action: (dismiss) => {
           void (async () => {
-            const results = await Promise.all(promises);
+            // Build the promises here rather than once outside: Set.values().map() is a
+            // lazy iterator, so it can only be consumed once. Awaiting it in this handler
+            // exhausted it, leaving every later click with an empty result set -- no
+            // install attempt, no error, no dismiss. Kicking the installs off eagerly
+            // outside would be worse still: they'd run before the user pressed Fix.
+            const results = await Promise.all(
+              dependencyIds.map((dependencyId) =>
+                installDependency(api, dependencyId).catch((err) => {
+                  api.showErrorNotification("Failed to install extension", err, {
+                    message: dependencyId,
+                  });
+
+                  return false;
+                }),
+              ),
+            );
             if (results.some((success) => success)) {
               api.sendNotification({
                 type: "success",
