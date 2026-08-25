@@ -19,7 +19,8 @@ Replace this with a normal dependency if libloot ever publishes to npm.
 Only what is needed to load the module:
 
 - `libloot-nodejs.linux-x64-gnu.node` — the native addon, `strip --strip-unneeded` (33MB -> 5.5MB)
-- `index.js`, `index.d.ts` — the napi-generated loader and typings
+- `libloot-nodejs.js`, `index.d.ts` — the napi-generated loader (renamed from `index.js` so it can
+  sit flat in `dist/` beside the bundled `index.cjs`) and typings
 - `LICENSE` — libloot is GPL-3.0, as are Vortex and node-loot
 
 Deliberately excluded: Rust sources, `Cargo.*`, `node_modules`, `npm/` platform stubs, tests,
