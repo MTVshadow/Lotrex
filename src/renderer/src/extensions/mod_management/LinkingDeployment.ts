@@ -83,6 +83,7 @@ abstract class LinkingActivator implements IDeploymentMethod {
   private mQueue: Promise<void> = Promise.resolve();
   private mContext: IDeploymentContext;
   private mDirCache: Set<string>;
+  private mCaseCache: Map<string, string>;
 
   constructor(
     id: string,
@@ -341,6 +342,7 @@ abstract class LinkingActivator implements IDeploymentMethod {
         })
         .finally(() => {
           this.mDirCache = undefined;
+          this.mCaseCache = undefined;
         })
     );
   }
@@ -649,7 +651,60 @@ abstract class LinkingActivator implements IDeploymentMethod {
     return fs.lstatAsync(filePath);
   }
 
-  protected ensureDir(dirPath: string, dirTags?: boolean): Promise<boolean> {
+  /**
+   * Reuse a directory that already exists under a different case rather than creating a second one.
+   *
+   * A mod archive records "SKSE/Plugins" while the game shipped "skse/plugins"; on Windows those
+   * are the same directory, on a case-sensitive filesystem they are not. Creating the archive's
+   * spelling verbatim forks the tree, and the two halves are invisible to each other -- the game
+   * reads one, Vortex deploys into the other, and files that are plainly present appear missing.
+   * The same split at the top level is how a game ends up with both Data/ and data/.
+   *
+   * Resolves each component against what is actually on disk, preferring an exact match, so this
+   * only ever redirects to a directory that already exists. Returns the path unchanged on Windows
+   * and wherever nothing matches.
+   */
+  private async resolveExistingCase(dirPath: string): Promise<string> {
+    if (process.platform === "win32") return dirPath;
+
+    const cached = this.mCaseCache?.get(dirPath);
+    if (cached !== undefined) return cached;
+
+    const parent = path.dirname(dirPath);
+    // Bail out at the filesystem root, where dirname stops changing.
+    if (parent === dirPath) return dirPath;
+
+    const resolvedParent = await this.resolveExistingCase(parent);
+    const base = path.basename(dirPath);
+    let result = path.join(resolvedParent, base);
+
+    try {
+      const entries = await fs.readdirAsync(resolvedParent);
+      if (!entries.includes(base)) {
+        const lower = base.toLowerCase();
+        const match = entries.find((entry) => entry.toLowerCase() === lower);
+        if (match !== undefined) {
+          log("debug", "reusing existing directory with different case", {
+            requested: base,
+            existing: match,
+            parent: resolvedParent,
+          });
+          result = path.join(resolvedParent, match);
+        }
+      }
+    } catch {
+      // Parent does not exist yet, so there is nothing to collide with.
+    }
+
+    if (this.mCaseCache === undefined) {
+      this.mCaseCache = new Map<string, string>();
+    }
+    this.mCaseCache.set(dirPath, result);
+    return result;
+  }
+
+  protected async ensureDir(dirPath: string, dirTags?: boolean): Promise<boolean> {
+    dirPath = await this.resolveExistingCase(dirPath);
     let didCreate = false;
     const onDirCreated = (createdPath: string) => {
       didCreate = true;
