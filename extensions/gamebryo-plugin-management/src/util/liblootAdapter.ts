@@ -1,5 +1,6 @@
 import { fork } from "child_process";
 import type { ChildProcess } from "child_process";
+import { readdirSync } from "fs";
 import * as net from "net";
 import * as os from "os";
 import * as path from "path";
@@ -74,7 +75,7 @@ export class LootAsync {
   ): void {
     let instance: LootAsync;
     try {
-      instance = new LootAsync(logCallback);
+      instance = new LootAsync(logCallback, path.join(gamePath, "Data"));
     } catch (error) {
       callback(error instanceof Error ? error : new Error("failed to start libloot worker"));
       return;
@@ -98,9 +99,12 @@ export class LootAsync {
   private mQueue: IPending[] = [];
   private mClosed = false;
   private mLogCallback: (level: number, message: string) => void;
+  private mDataPath: string;
+  private mNameIndex: Map<string, string> | undefined;
 
-  private constructor(logCallback: (level: number, message: string) => void) {
+  private constructor(logCallback: (level: number, message: string) => void, dataPath: string) {
     this.mLogCallback = logCallback;
+    this.mDataPath = dataPath;
     // Short path: unix socket paths are limited to ~108 bytes.
     this.mSocketPath = path.join(os.tmpdir(), `vtx-loot-${process.pid}-${Date.now()}.sock`);
   }
@@ -130,11 +134,15 @@ export class LootAsync {
   }
 
   public sortPlugins(pluginNames: string[], cb: Callback<string[]>): void {
-    this.call("sortPlugins", [pluginNames], cb);
+    this.call("sortPlugins", [this.resolveNames(pluginNames)], cb);
   }
 
   public loadPlugins(pluginPaths: string[], headersOnly: boolean, cb: Callback<void>): void {
-    this.call(headersOnly ? "loadPluginHeaders" : "loadPlugins", [pluginPaths], cb);
+    this.call(
+      headersOnly ? "loadPluginHeaders" : "loadPlugins",
+      [this.resolveNames(pluginPaths)],
+      cb,
+    );
   }
 
   public loadCurrentLoadOrderState(cb: Callback<void>): void {
@@ -142,11 +150,12 @@ export class LootAsync {
   }
 
   public getPlugin(pluginName: string, cb: Callback<any>): void {
-    this.call("plugin", [pluginName], cb);
+    this.call("plugin", [this.resolveNames([pluginName])[0] ?? pluginName], cb);
   }
 
   public getPluginMetadata(pluginName: string, cb: Callback<any>): void {
-    this.call("pluginMetadata", [pluginName, WITH_USER_METADATA, EVALUATE_CONDITIONS], cb);
+    const resolved = this.resolveNames([pluginName])[0] ?? pluginName;
+    this.call("pluginMetadata", [resolved, WITH_USER_METADATA, EVALUATE_CONDITIONS], cb);
   }
 
   public clearConditionCache(cb: Callback<void>): void {
@@ -195,6 +204,47 @@ export class LootAsync {
 
   public writeUserMetadata(userlistPath: string, cb: Callback<void>): void {
     this.call("writeUserMetadata", [userlistPath, { truncate: true }], cb);
+  }
+
+  /**
+   * Map plugin names onto the files that actually exist on disk.
+   *
+   * Vortex's canonical plugin id is lowercased (see toPluginId), which is invisible on Windows but
+   * not on a case-sensitive filesystem: libloot is handed "beardmaskfix.esp", finds nothing, falls
+   * back to looking for "beardmaskfix.esp.ghost", and reports a missing plugin header for a file
+   * that was never there.
+   *
+   * Names that do not correspond to a file are dropped rather than passed through to fail the whole
+   * call. That also covers entries containing a path separator, which are not plugin names at all --
+   * they come from archives whose Windows-style separators were not split on extraction, and libloot
+   * rejects them because a lone backslash is an invalid regex escape.
+   */
+  private resolveNames(names: string[]): string[] {
+    if (this.mNameIndex === undefined) {
+      this.mNameIndex = new Map<string, string>();
+      try {
+        for (const entry of readdirSync(this.mDataPath)) {
+          this.mNameIndex.set(entry.toLowerCase(), entry);
+        }
+      } catch {
+        // Without an index every name passes through unchanged: the previous behaviour.
+      }
+    }
+
+    const resolved: string[] = [];
+    for (const name of names) {
+      if (name.includes("\\") || name.includes("/")) {
+        this.mLogCallback?.(2, `ignoring plugin name containing a path separator: ${name}`);
+        continue;
+      }
+      const actual = this.mNameIndex.get(name.toLowerCase());
+      if (actual !== undefined) {
+        resolved.push(actual);
+      } else {
+        this.mLogCallback?.(2, `plugin not found on disk, ignoring: ${name}`);
+      }
+    }
+    return resolved;
   }
 
   /** Start the worker and wait for the readiness message it sends once connected. */
