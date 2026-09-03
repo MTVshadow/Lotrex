@@ -6,22 +6,29 @@ import { afterAll, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ discovery: undefined as any }));
 
-vi.mock("@nexusmods/vortex-api", () => ({
-  fs: { readFileAsync: vi.fn(() => Promise.reject(new Error("not present"))) },
-  log: vi.fn(),
-  selectors: {
-    discoveryByGame: () => mocks.discovery,
-    gameById: () => undefined,
-  },
-  util: {
-    getVortexPath: () => "/native/.config/Vortex",
-    makeOverlayableDictionary: (base: any) =>
-      Object.assign(base, {
-        has: (gameId: string) => base[gameId] !== undefined,
-        get: (gameId: string, key: string) => base[gameId][key],
-      }),
-  },
-}));
+vi.mock("@nexusmods/vortex-api", async () => {
+  const { ProtonPaths } = await vi.importActual<any>(
+    "../../../../src/renderer/src/util/linux/ProtonPaths",
+  );
+  return {
+    fs: { readFileAsync: vi.fn(() => Promise.reject(new Error("not present"))) },
+    log: vi.fn(),
+    selectors: {
+      discoveryByGame: () => mocks.discovery,
+      gameById: () => undefined,
+    },
+    ProtonPaths,
+    util: {
+      getVortexPath: () => "/native/.config/Vortex",
+      ProtonPaths,
+      makeOverlayableDictionary: (base: any) =>
+        Object.assign(base, {
+          has: (gameId: string) => base[gameId] !== undefined,
+          get: (gameId: string, key: string) => base[gameId][key],
+        }),
+    },
+  };
+});
 
 vi.mock("./patternMatchNativePlugins", () => ({
   patternMatchNativePlugins: () => Promise.resolve([]),

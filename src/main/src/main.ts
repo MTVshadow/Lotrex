@@ -30,6 +30,10 @@ import i18next from "i18next";
 import * as sourceMapSupport from "source-map-support";
 import winapi from "winapi-bindings";
 
+// Встановлюємо стабільне ім'я додатку для збереження userData (~/.config/Vortex)
+// та збереження ключів автентифікації між dev-запуском та релізами.
+app.name = "Vortex";
+
 // E2E test isolation: redirect userData and appData to temp directories so
 // parallel test workers share no data and don't conflict with the real install.
 if (process.env.VORTEX_E2E === "1") {

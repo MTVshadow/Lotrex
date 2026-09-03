@@ -6,17 +6,24 @@ import { afterAll, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ discovery: undefined as any }));
 
-vi.mock("@nexusmods/vortex-api", () => ({
-  log: vi.fn(),
-  selectors: { discoveryByGame: () => mocks.discovery },
-  util: {
-    getVortexPath: () => "/native/Documents",
-    makeOverlayableDictionary: (base: any) => ({
-      has: (gameId: string) => base[gameId] !== undefined,
-      get: (gameId: string, key: string) => base[gameId][key],
-    }),
-  },
-}));
+vi.mock("@nexusmods/vortex-api", async () => {
+  const { ProtonPaths } = await vi.importActual<any>(
+    "../../../../src/renderer/src/util/linux/ProtonPaths",
+  );
+  return {
+    log: vi.fn(),
+    selectors: { discoveryByGame: () => mocks.discovery },
+    ProtonPaths,
+    util: {
+      getVortexPath: () => "/native/Documents",
+      ProtonPaths,
+      makeOverlayableDictionary: (base: any) => ({
+        has: (gameId: string) => base[gameId] !== undefined,
+        get: (gameId: string, key: string) => base[gameId][key],
+      }),
+    },
+  };
+});
 
 import { initGameSupport, mygamesPath } from "./gameSupport";
 

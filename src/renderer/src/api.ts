@@ -25,3 +25,9 @@ export type {
   FileSystemErrorData,
   OsErrorData,
 } from "@vortex/shared";
+
+export {
+  ProtonPaths,
+  type IProtonPaths,
+  type IProtonResolveOptions,
+} from "./util/linux/ProtonPaths";

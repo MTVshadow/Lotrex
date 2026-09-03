@@ -1,7 +1,7 @@
 import * as nodeFs from "fs";
 import * as path from "path";
 
-import { fs, log, selectors, types, util } from "@nexusmods/vortex-api";
+import { fs, log, selectors, types, util, ProtonPaths } from "@nexusmods/vortex-api";
 import Promise from "bluebird";
 import memoizeOne from "memoize-one";
 
@@ -363,46 +363,11 @@ export function initGameSupport(api: types.IExtensionApi): Promise<void> {
 
 export function appDataPath(gameMode: string): string {
   const dataPath = gameSupport.get(gameMode, "appDataPath");
-
-  if (process.platform !== "win32") {
-    try {
-      const discovery = discoveryForGame(gameMode);
-      if (discovery?.path !== undefined && discovery.store === "steam") {
-        const steamApps = path.dirname(path.dirname(discovery.path));
-        const installDir = path.basename(discovery.path);
-        const escapedInstallDir = installDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const manifest = nodeFs
-          .readdirSync(steamApps)
-          .filter((entry) => entry.startsWith("appmanifest_") && entry.endsWith(".acf"))
-          .find((entry) => {
-            const content = nodeFs.readFileSync(path.join(steamApps, entry), "utf8");
-            return new RegExp(`"installdir"\\s+"${escapedInstallDir}"`, "i").test(content);
-          });
-
-        if (manifest !== undefined) {
-          const appId = manifest.slice("appmanifest_".length, -".acf".length);
-          const localAppData = path.join(
-            steamApps,
-            "compatdata",
-            appId,
-            "pfx",
-            "drive_c",
-            "users",
-            "steamuser",
-            "AppData",
-            "Local",
-          );
-          if (nodeFs.existsSync(localAppData)) {
-            return path.join(localAppData, dataPath);
-          }
-        }
-      }
-    } catch (error) {
-      log("debug", "failed to resolve proton local app data path", {
-        gameMode,
-        error: error instanceof Error ? error.message : "unknown error",
-      });
-    }
+  const discovery = discoveryForGame(gameMode);
+  // Використовуємо централізований сервіс ProtonPaths для пошуку каталогу AppData/Local у префіксі Proton
+  const proton = (ProtonPaths ?? util.ProtonPaths)?.resolve({ gameMode, discovery });
+  if (proton?.appDataLocalPath) {
+    return path.join(proton.appDataLocalPath, dataPath);
   }
 
   return process.env.LOCALAPPDATA !== undefined

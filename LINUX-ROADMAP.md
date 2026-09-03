@@ -9,7 +9,10 @@ for regular use, initially focusing on Skyrim Special Edition running through St
 - Steam discovery finds Skyrim Special Edition (App ID `489830`).
 - Hardlink deployment initializes successfully.
 - LOOT masterlist updates work.
-- Skyrim's `Documents/My Games` and `AppData/Local` paths can be resolved inside its Proton prefix.
+- Centralized `ProtonPaths` service implemented and fully tested.
+- All 7 consumers migrated from direct Linux paths to `ProtonPaths` (local game settings, INI preparation, plugin management, save-game management, archive invalidation, script extender logs, open-directory).
+- Robust Proton prefix detection: manifest parsing without regex, multi-library & Flatpak/Snap layouts, dynamic Wine user resolution, case-insensitive directory lookups, caching & invalidation.
+- Stable application identity (`app.name = "Vortex"`) set to guarantee consistent `userData` location (`~/.config/Vortex`) across dev and packaged releases.
 - A clean first launch no longer fails when the Vortex configuration directory does not exist.
 - Full end-to-end mod installation, deployment, launch, and purge still need verification.
 

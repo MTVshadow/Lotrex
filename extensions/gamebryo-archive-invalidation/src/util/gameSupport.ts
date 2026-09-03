@@ -1,6 +1,6 @@
 import * as path from "path";
 
-import { selectors, types, util } from "@nexusmods/vortex-api";
+import { selectors, types, util, ProtonPaths } from "@nexusmods/vortex-api";
 import * as Redux from "redux";
 
 interface IGameSupport {
@@ -258,11 +258,12 @@ const gameSupport = util.makeOverlayableDictionary<string, IGameSupport>(
   (gameId: string) => gameStoreForGame(gameId),
 );
 
+let discoveryForGame: (gameId: string) => types.IDiscoveryResult = () => undefined;
 let gameStoreForGame: (gameId: string) => string = () => undefined;
 
 export function initGameSupport(api: types.IExtensionApi) {
-  gameStoreForGame = (gameId: string) =>
-    selectors.discoveryByGame(api.store.getState(), gameId)?.store;
+  discoveryForGame = (gameId: string) => selectors.discoveryByGame(api.store.getState(), gameId);
+  gameStoreForGame = (gameId: string) => discoveryForGame(gameId)?.store;
 }
 
 export function isSupported(gameId: string): boolean {
@@ -286,11 +287,11 @@ export function bsaVersion(gameId: string): number {
 }
 
 export function mygamesPath(gameMode: string): string {
-  return path.join(
-    util.getVortexPath("documents"),
-    "My Games",
-    gameSupport.get(gameMode, "mygamesPath"),
-  );
+  const discovery = discoveryForGame(gameMode);
+  // Використовуємо централізований сервіс ProtonPaths для вирішення шляху My Games у префіксі Proton
+  const proton = (ProtonPaths ?? util.ProtonPaths)?.resolve({ gameMode, discovery });
+  const myGamesBase = proton?.myGamesPath ?? path.join(util.getVortexPath("documents"), "My Games");
+  return path.join(myGamesBase, gameSupport.get(gameMode, "mygamesPath"));
 }
 
 export function iniName(gameMode: string): string {

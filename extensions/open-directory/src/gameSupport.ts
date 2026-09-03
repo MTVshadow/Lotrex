@@ -1,6 +1,6 @@
 import * as path from "path";
 
-import { selectors, types, util } from "@nexusmods/vortex-api";
+import { selectors, types, util, ProtonPaths } from "@nexusmods/vortex-api";
 import * as Redux from "redux";
 
 interface IGameSupport {
@@ -98,17 +98,42 @@ const gameSupport = util.makeOverlayableDictionary<string, IGameSupport>(
   (gameId) => gameStoreForGame(gameId),
 );
 
+let discoveryForGame: (gameId: string) => types.IDiscoveryResult = () => undefined;
 let gameStoreForGame: (gameId: string) => string = () => undefined;
 
 export function initGameSupport(api: types.IExtensionApi) {
-  gameStoreForGame = (gameId: string) =>
-    selectors.discoveryByGame(api.store.getState(), gameId)?.store;
+  discoveryForGame = (gameId: string) => selectors.discoveryByGame(api.store.getState(), gameId);
+  gameStoreForGame = (gameId: string) => discoveryForGame(gameId)?.store;
 }
 
 export function settingsPath(game: types.IGame): string {
+  const discovery = discoveryForGame(game.id);
+  // Використовуємо централізований сервіс ProtonPaths для вирішення шляхів налаштувань у префіксі Proton
+  const proton = (ProtonPaths ?? util.ProtonPaths)?.resolve({ gameMode: game.id, discovery, game });
+  if (proton?.myGamesPath) {
+    const defaultSettings =
+      gameSupport.get(game.id, "settingsPath")?.() ?? game.details?.settingsPath?.();
+    if (defaultSettings) {
+      const subDir = path.basename(defaultSettings);
+      return path.join(proton.myGamesPath, subDir);
+    }
+    return proton.myGamesPath;
+  }
   return gameSupport.get(game.id, "settingsPath")?.() ?? game.details?.settingsPath?.();
 }
 
 export function appDataPath(game: types.IGame): string {
+  const discovery = discoveryForGame(game.id);
+  // Використовуємо централізований сервіс ProtonPaths для вирішення шляхів AppData у префіксі Proton
+  const proton = (ProtonPaths ?? util.ProtonPaths)?.resolve({ gameMode: game.id, discovery, game });
+  if (proton?.appDataLocalPath) {
+    const defaultAppData =
+      gameSupport.get(game.id, "appDataPath")?.() ?? game.details?.appDataPath?.();
+    if (defaultAppData) {
+      const subDir = path.basename(defaultAppData);
+      return path.join(proton.appDataLocalPath, subDir);
+    }
+    return proton.appDataLocalPath;
+  }
   return gameSupport.get(game.id, "appDataPath")?.() ?? game.details?.appDataPath?.();
 }

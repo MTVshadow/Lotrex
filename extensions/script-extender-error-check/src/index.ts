@@ -1,7 +1,16 @@
 import * as path from "path";
 import * as url from "url";
 
-import { actions, fs, log, selectors, tooltip, types, util } from "@nexusmods/vortex-api";
+import {
+  actions,
+  fs,
+  log,
+  selectors,
+  tooltip,
+  types,
+  util,
+  ProtonPaths,
+} from "@nexusmods/vortex-api";
 import * as React from "react";
 
 import BooleanFilter from "./BooleanFilter";
@@ -13,23 +22,11 @@ const ONE_HOUR = 60 * ONE_MINUTE;
 // https://github.com/ModOrganizer2/modorganizer-script_extender_plugin_checker
 // by Silarn.
 const compatibleGames = {
-  skyrim: [path.join(util.getVortexPath("documents"), "My Games", "Skyrim", "SKSE", "skse.log")],
-  skyrimse: [
-    path.join(
-      util.getVortexPath("documents"),
-      "My Games",
-      "Skyrim Special Edition",
-      "SKSE",
-      "skse64.log",
-    ),
-  ],
-  skyrimvr: [
-    path.join(util.getVortexPath("documents"), "My Games", "Skyrim VR", "SKSE", "sksevr.log"),
-  ],
-  enderal: [path.join(util.getVortexPath("documents"), "My Games", "Skyrim", "SKSE", "skse.log")],
-  fallout4: [
-    path.join(util.getVortexPath("documents"), "My Games", "Fallout 4", "F4SE", "f4se.log"),
-  ],
+  skyrim: [path.join("{MyGames}", "Skyrim", "SKSE", "skse.log")],
+  skyrimse: [path.join("{MyGames}", "Skyrim Special Edition", "SKSE", "skse64.log")],
+  skyrimvr: [path.join("{MyGames}", "Skyrim VR", "SKSE", "sksevr.log")],
+  enderal: [path.join("{MyGames}", "Skyrim", "SKSE", "skse.log")],
+  fallout4: [path.join("{MyGames}", "Fallout 4", "F4SE", "f4se.log")],
   oblivion: [path.join("{GamePath}", "obse.log"), path.join("{GamePath}", "obse_editor.log")],
   falloutnv: [path.join("{GamePath}", "nvse.log"), path.join("{GamePath}", "nvse_editor.log")],
   fallout3: [path.join("{GamePath}", "fose.log"), path.join("{GamePath}", "fose_editor.log")],
@@ -80,6 +77,10 @@ async function checkForErrors(api: types.IExtensionApi) {
     return false;
   }
 
+  // Використовуємо централізований сервіс ProtonPaths для вирішення шляху My Games у префіксі Proton
+  const proton = (ProtonPaths ?? util.ProtonPaths)?.resolve({ gameMode, discovery: gameDiscovery });
+  const myGamesPath = proton?.myGamesPath ?? path.join(util.getVortexPath("documents"), "My Games");
+
   const errorInstances: IErrorLog[] = [];
 
   await Promise.all(
@@ -88,8 +89,8 @@ async function checkForErrors(api: types.IExtensionApi) {
       let errLogFile: string;
       let errLogTime: number = 0;
 
-      // Replace {GamePath} if it's not a full path.
-      filePath = filePath.replace("{GamePath}", gamePath);
+      // Replace {GamePath} and {MyGames} placeholders
+      filePath = filePath.replace("{GamePath}", gamePath).replace("{MyGames}", myGamesPath);
 
       try {
         const logTime = (await fs.statAsync(filePath)).mtime.getTime();

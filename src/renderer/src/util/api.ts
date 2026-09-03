@@ -119,6 +119,8 @@ import relativeTime, { userFriendlyTime } from "./relativeTime";
 import StarterInfo from "./StarterInfo";
 import steam from "./Steam";
 export type { ISteamEntry } from "./Steam.ts";
+import ProtonPaths, { type IProtonPaths, type IProtonResolveOptions } from "./linux/ProtonPaths";
+export type { IProtonPaths, IProtonResolveOptions };
 import SevenZip from "node-7z";
 
 import {
@@ -275,6 +277,7 @@ export {
   Overlayable,
   pad,
   ProcessCanceled,
+  ProtonPaths,
   ReduxProp,
   relativeTime,
   removeMods,
