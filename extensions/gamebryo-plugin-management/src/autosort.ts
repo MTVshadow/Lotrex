@@ -675,10 +675,10 @@ class LootInterface {
             group: meta?.group || "",
             requirements: (meta?.requirements || []).map(toRef),
             incompatibilities: (meta?.incompatibilities || []).map(toRef),
-            isValidAsLightPlugin: pluginsLoaded && info !== undefined && info.isValidAsLightPlugin,
-            loadsArchive: pluginsLoaded && info !== undefined && info.loadsArchive,
-            isEmpty: pluginsLoaded && info !== undefined && info.isEmpty,
-            version: pluginsLoaded && info !== undefined ? info.version : "",
+            isValidAsLightPlugin: Boolean(pluginsLoaded && info?.isValidAsLightPlugin),
+            loadsArchive: Boolean(pluginsLoaded && info?.loadsArchive),
+            isEmpty: Boolean(pluginsLoaded && info?.isEmpty),
+            version: (pluginsLoaded && info?.version) || "",
           };
         } catch (err) {
           result[pluginName] = createEmpty();

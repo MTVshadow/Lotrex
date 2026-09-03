@@ -548,7 +548,14 @@ export function onNexusDownload(
     fileName?: string,
     allowInstall?: boolean,
   ): Bluebird<string> => {
-    const game = gameId === SITE_ID ? null : gameById(api.store.getState(), gameId);
+    const state = api.store.getState();
+    let game = gameId === SITE_ID ? null : gameById(state, gameId);
+
+    if (!game && gameId !== SITE_ID) {
+      const mappedId = convertGameIdReverse(knownGames(state), gameId);
+      game = (mappedId ? gameById(state, mappedId) : undefined) || currentGame(state);
+    }
+
     log("debug", "on nexus download", fileName);
     return ensureLoggedIn(api)
       .then(() => {
@@ -556,7 +563,7 @@ export function onNexusDownload(
           return downloadFile(
             api,
             nexus,
-            { ...game, downloadGameId: gameId },
+            { ...game, downloadGameId: game?.id ?? gameId },
             modId,
             fileId,
             fileName,
@@ -1265,6 +1272,116 @@ export function onGetTrendingMods(api: IExtensionApi, nexus: Nexus) {
       mods: mods
         .filter((mod) => !mod.contains_adult_content && mod.available)
         .map((mod) => extractLatestModInfo(state, gameId, mod)),
+    }));
+  };
+}
+
+interface IModSearchNode {
+  adult?: boolean;
+  author?: string;
+  downloads?: number;
+  endorsements?: number;
+  game?: { domainName?: string };
+  modCategory?: { name?: string };
+  modId: number;
+  name?: string;
+  pictureUrl?: string;
+  status?: string;
+  summary?: string;
+  version?: string;
+}
+
+interface INexusGraphClient {
+  args(input: object): object;
+  requestGraph(
+    root: string,
+    parameters: object,
+    query: object,
+    variables: object,
+    args: object,
+  ): Promise<{ nodes?: IModSearchNode[]; totalCount?: number }>;
+}
+
+export function onSearchMods(api: IExtensionApi, nexus: Nexus) {
+  return (options: {
+    count?: number;
+    gameId: string;
+    offset?: number;
+    search?: string;
+    sort?: "latest" | "trending";
+  }): Bluebird<{ mods: IModListItem[]; totalCount: number }> => {
+    const state = api.getState();
+    const gameDomain = nexusGameId(gameById(state, options.gameId), options.gameId);
+    const filter: Record<string, unknown> = {
+      filter: [
+        { gameDomainName: { op: "EQUALS", value: gameDomain } },
+        { adultContent: { op: "EQUALS", value: false } },
+        { status: { op: "EQUALS", value: "published" } },
+      ],
+      op: "AND",
+    };
+    if (options.search?.trim()) {
+      (filter.filter as object[]).push({
+        nameStemmed: { op: "WILDCARD", value: options.search.trim() },
+      });
+    }
+
+    const graph = nexus as unknown as INexusGraphClient;
+    return Bluebird.resolve(
+      graph.requestGraph(
+        "mods",
+        {
+          count: { optional: true, type: "Int" },
+          filter: { optional: true, type: "ModsFilter" },
+          offset: { optional: true, type: "Int" },
+          sort: { optional: true, type: "[ModsSort!]" },
+        },
+        {
+          nodes: {
+            adult: true,
+            author: true,
+            downloads: true,
+            endorsements: true,
+            game: { domainName: true },
+            modCategory: { name: true },
+            modId: true,
+            name: true,
+            pictureUrl: true,
+            status: true,
+            summary: true,
+            version: true,
+          },
+          totalCount: true,
+        },
+        {
+          count: options.count ?? 20,
+          filter,
+          offset: options.offset ?? 0,
+          sort: [
+            options.sort === "latest"
+              ? { createdAt: { direction: "DESC" } }
+              : { endorsements: { direction: "DESC" } },
+          ],
+        },
+        graph.args({ path: {} }),
+      ),
+    ).then((result) => ({
+      mods: (result.nodes ?? []).map((mod) => ({
+        author: mod.author,
+        category: mod.modCategory?.name,
+        domainName: mod.game?.domainName ?? gameDomain,
+        extra: [
+          { id: "endorsements", value: mod.endorsements ?? 0 },
+          { id: "downloads", value: mod.downloads ?? 0 },
+        ],
+        imageUrl: mod.pictureUrl,
+        link: `${NEXUS_BASE_URL}/${mod.game?.domainName ?? gameDomain}/mods/${mod.modId}`,
+        modId: mod.modId,
+        name: mod.name,
+        summary: mod.summary,
+        version: mod.version,
+      })),
+      totalCount: result.totalCount ?? 0,
     }));
   };
 }

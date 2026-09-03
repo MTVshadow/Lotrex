@@ -54,6 +54,100 @@ const client = net.connect(process.argv[2], () => {
     }
   }
 
+  function serializeFile(f) {
+    if (!f) return null;
+    return {
+      name: typeof f.name?.asStr === "function" ? f.name.asStr() : f.name || "",
+      displayName: f.displayName || "",
+    };
+  }
+
+  function serializeMessage(m) {
+    if (!m) return null;
+    return {
+      type: m.messageType,
+      content: (m.content || []).map((c) => ({
+        text: c.text,
+        language: c.language,
+      })),
+      condition: m.condition || "",
+    };
+  }
+
+  function serializeTag(t) {
+    if (!t) return null;
+    return {
+      name: t.name,
+      isAddition: t.isAddition,
+      condition: t.condition || "",
+    };
+  }
+
+  function serializeCleaningData(c) {
+    if (!c) return null;
+    return {
+      crc: c.crc,
+      CRC: c.crc,
+      itmCount: c.itmCount,
+      deletedReferenceCount: c.deletedReferenceCount,
+      deletedNavmeshCount: c.deletedNavmeshCount,
+      cleaningUtility: c.cleaningUtility,
+      condition: c.condition,
+      detail: (c.detail || []).map((d) => ({
+        text: d.text,
+        language: d.language,
+      })),
+      info: (c.detail || []).map((d) => ({
+        text: d.text,
+        language: d.language,
+      })),
+    };
+  }
+
+  function serializePluginMetadata(m) {
+    if (!m) return null;
+    return {
+      name: m.name,
+      group: m.group || "",
+      messages: (m.messages || []).map(serializeMessage),
+      tags: (m.tags || []).map(serializeTag),
+      cleanInfo: (m.cleanInfo || []).map(serializeCleaningData),
+      dirtyInfo: (m.dirtyInfo || []).map(serializeCleaningData),
+      incompatibilities: (m.incompatibilities || []).map(serializeFile),
+      requirements: (m.requirements || []).map(serializeFile),
+      loadAfterFiles: (m.loadAfterFiles || []).map(serializeFile),
+    };
+  }
+
+  function serializeGroup(g) {
+    if (!g) return null;
+    return {
+      name: g.name,
+      description: g.description || "",
+      afterGroups: g.afterGroups || [],
+    };
+  }
+
+  function serializePlugin(p) {
+    if (!p) return null;
+    return {
+      name: p.name(),
+      version: p.version() || "",
+      masters: p.masters() || [],
+      bashTags: p.bashTags() || [],
+      crc: p.crc(),
+      isMaster: p.isMaster(),
+      isLightPlugin: p.isLightPlugin(),
+      isValidAsLightPlugin: p.isValidAsLightPlugin(),
+      isMediumPlugin: p.isMediumPlugin(),
+      isValidAsMediumPlugin: p.isValidAsMediumPlugin(),
+      isUpdatePlugin: p.isUpdatePlugin(),
+      isValidAsUpdatePlugin: p.isValidAsUpdatePlugin(),
+      isEmpty: p.isEmpty(),
+      loadsArchive: p.loadsArchive(),
+    };
+  }
+
   function handleEvent(event) {
     let result;
     try {
@@ -64,6 +158,18 @@ const client = net.connect(process.argv[2], () => {
       } else if (event.type === "terminate") {
         send({});
         process.exit(0);
+      } else if (event.type === "plugin") {
+        result = serializePlugin(game.plugin(...event.args));
+      } else if (event.type === "pluginMetadata") {
+        result = serializePluginMetadata(database.pluginMetadata(...event.args));
+      } else if (event.type === "pluginUserMetadata") {
+        result = serializePluginMetadata(database.pluginUserMetadata(...event.args));
+      } else if (event.type === "generalMessages") {
+        result = (database.generalMessages(...event.args) || []).map(serializeMessage);
+      } else if (event.type === "groups") {
+        result = (database.groups(...event.args) || []).map(serializeGroup);
+      } else if (event.type === "userGroups") {
+        result = (database.userGroups(...event.args) || []).map(serializeGroup);
       } else if (DATABASE_METHODS.has(event.type)) {
         result = database[event.type](...event.args);
       } else {

@@ -244,6 +244,8 @@ function BrowseNexusPage(props: IBrowseNexusPageProps) {
   const [modsSearchQuery, setModsSearchQuery] = useState<string>("");
   const [modsActiveSearch, setModsActiveSearch] = useState<string>("");
   const [modsRefreshTrigger, setModsRefreshTrigger] = useState<number>(0);
+  const [modsCurrentPage, setModsCurrentPage] = useState<number>(1);
+  const [modsTotalCount, setModsTotalCount] = useState<number>(0);
 
   const handleDownloadMod = async (mod: IModListItem) => {
     if (!isLoggedIn) {
@@ -278,18 +280,20 @@ function BrowseNexusPage(props: IBrowseNexusPageProps) {
         const targetFile = activeFiles.length > 0 ? activeFiles[0] : files?.[0];
 
         if (targetFile && api.ext.nexusDownload) {
-          await api.ext.nexusDownload(
-            gameDomainName,
+          const dlId = await api.ext.nexusDownload(
+            gameId,
             mod.modId,
             targetFile.file_id,
             targetFile.name,
             true,
           );
-          api.sendNotification({
-            type: "success",
-            message: `Starting download: ${targetFile.name}`,
-          });
-          return;
+          if (dlId) {
+            api.sendNotification({
+              type: "success",
+              message: `Starting download: ${targetFile.name}`,
+            });
+            return;
+          }
         }
       }
     } catch {
@@ -309,35 +313,38 @@ function BrowseNexusPage(props: IBrowseNexusPageProps) {
     setModsLoading(true);
     setModsError(null);
 
-    const fetcher =
-      modSortType === "trending" ? api.ext.nexusGetTrendingMods : api.ext.nexusGetLatestMods;
-
-    if (!fetcher) {
+    if (!api.ext.nexusSearchMods) {
       setModsLoading(false);
       return;
     }
 
-    Promise.resolve(fetcher(gameId))
-      .then((result: { mods: IModListItem[] }) => {
+    Promise.resolve(
+      api.ext.nexusSearchMods({
+        gameId,
+        count: itemsPerPage,
+        offset: (modsCurrentPage - 1) * itemsPerPage,
+        search: modsActiveSearch || undefined,
+        sort: modSortType,
+      }),
+    )
+      .then((result: { mods: IModListItem[]; totalCount: number }) => {
         setMods(result?.mods || []);
+        setModsTotalCount(result?.totalCount || 0);
         setModsLoading(false);
       })
       .catch((err: Error) => {
         setModsError(err);
         setModsLoading(false);
       });
-  }, [gameId, selectedTab, modSortType, modsRefreshTrigger, api]);
-
-  const filteredMods = mods.filter((mod) => {
-    if (!modsActiveSearch) return true;
-    const q = modsActiveSearch.toLowerCase();
-    return (
-      mod.name?.toLowerCase().includes(q) ||
-      mod.author?.toLowerCase().includes(q) ||
-      mod.summary?.toLowerCase().includes(q) ||
-      mod.category?.toLowerCase().includes(q)
-    );
-  });
+  }, [
+    gameId,
+    selectedTab,
+    modSortType,
+    modsActiveSearch,
+    modsCurrentPage,
+    modsRefreshTrigger,
+    api,
+  ]);
 
   if (!gameId) {
     return (
@@ -367,7 +374,7 @@ function BrowseNexusPage(props: IBrowseNexusPageProps) {
             />
 
             <TabButton
-              count={mods.length > 0 ? mods.length : undefined}
+              count={modsTotalCount > 0 ? modsTotalCount : undefined}
               name={t("collection:browse.tabs.mods")}
               panelId="mods"
             />
@@ -499,6 +506,7 @@ function BrowseNexusPage(props: IBrowseNexusPageProps) {
                 onSubmit={(e) => {
                   e.preventDefault();
                   setModsActiveSearch(modsSearchQuery.trim());
+                  setModsCurrentPage(1);
                 }}
               >
                 <Input
@@ -534,7 +542,7 @@ function BrowseNexusPage(props: IBrowseNexusPageProps) {
                     brand="neutral-translucent"
                     typographyType="body-sm"
                   >
-                    {filteredMods.length} mods
+                    {numeral(modsTotalCount).format("0,0")} mods
                   </Typography>
                 </div>
 
@@ -544,13 +552,16 @@ function BrowseNexusPage(props: IBrowseNexusPageProps) {
                     { label: "Latest Added", value: "latest" },
                   ]}
                   value={modSortType}
-                  onChange={(val: "trending" | "latest") => setModSortType(val)}
+                  onChange={(val: "trending" | "latest") => {
+                    setModSortType(val);
+                    setModsCurrentPage(1);
+                  }}
                 />
               </div>
 
               <Listing
                 className="grid grid-cols-[repeat(auto-fit,minmax(26rem,1fr))] gap-4"
-                entityCount={filteredMods.length}
+                entityCount={mods.length}
                 isError={!!modsError}
                 isLoading={modsLoading}
                 noResultsChildren={
@@ -572,7 +583,7 @@ function BrowseNexusPage(props: IBrowseNexusPageProps) {
                 skeletonCount={12}
                 SkeletonTile={ModTileSkeleton}
               >
-                {filteredMods.map((mod) => (
+                {mods.map((mod) => (
                   <ModTile
                     api={api}
                     gameDomainName={gameDomainName}
@@ -584,6 +595,14 @@ function BrowseNexusPage(props: IBrowseNexusPageProps) {
                   />
                 ))}
               </Listing>
+
+              <Pagination
+                currentPage={modsCurrentPage}
+                recordsPerPage={itemsPerPage}
+                scrollRef={scrollRef}
+                totalRecords={modsTotalCount}
+                onPaginationUpdate={(newPage) => setModsCurrentPage(newPage)}
+              />
             </div>
           </TabPanel>
         </TabProvider>
