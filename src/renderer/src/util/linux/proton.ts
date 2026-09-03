@@ -177,25 +177,47 @@ export async function resolveProtonPath(
   return undefined;
 }
 
+const LEGACY_GAMES_REQUIRING_MEDIA_CODECS = new Set([
+  "22300", // Fallout 3
+  "22370", // Fallout 3 GOTY
+  "22380", // Fallout New Vegas
+  "22490", // Fallout New Vegas PCR
+  "22330", // Oblivion
+]);
+
 /**
  * Оцінка пріоритету версії Proton для вибору найновішої стабільної версії
  */
-function scoreProtonVersion(name: string): number {
+function scoreProtonVersion(name: string, appId?: string): number {
+  const isGe = /GE-Proton/i.test(name);
   const match = name.match(/(?:Proton|GE-Proton|UMU-Proton)[\s-]*(\d+)(?:[.-](\d+))?/i);
+  let score = 0;
   if (match) {
     const major = parseInt(match[1], 10);
     const minor = match[2] ? parseInt(match[2], 10) : 0;
-    return major * 1000 + minor;
+    score = major * 1000 + minor;
+  } else if (/experimental/i.test(name)) {
+    score = 500;
+  } else if (/hotfix/i.test(name)) {
+    score = 100;
   }
-  if (/experimental/i.test(name)) return 500;
-  if (/hotfix/i.test(name)) return 100;
-  return 0;
+
+  // Для старих ігор Bethesda (Fallout 3, NV, Oblivion), де потрібні додаткові кодеки WMF/DirectMusic,
+  // надаємо пріоритет GE-Proton
+  if (appId && LEGACY_GAMES_REQUIRING_MEDIA_CODECS.has(appId) && isGe) {
+    score += 5000;
+  }
+
+  return score;
 }
 
 /**
  * Find the latest installed Proton version (fallback)
  */
-export async function findLatestProton(steamPath: string): Promise<string | undefined> {
+export async function findLatestProton(
+  steamPath: string,
+  appId?: string,
+): Promise<string | undefined> {
   const home = process.env.HOME || "";
   const candidateDirs: string[] = [
     path.join(steamPath, "steamapps", "common"),
@@ -218,7 +240,7 @@ export async function findLatestProton(steamPath: string): Promise<string | unde
         if (await pathExists(protonBin)) {
           foundRuntimes.push({
             path: fullPath,
-            score: scoreProtonVersion(entry),
+            score: scoreProtonVersion(entry, appId),
           });
         }
       }
@@ -259,7 +281,7 @@ export async function getProtonInfo(
   }
 
   if (!protonPath) {
-    protonPath = await findLatestProton(steamPath);
+    protonPath = await findLatestProton(steamPath, appId);
   }
 
   return { usesProton: true, compatDataPath, protonPath };
@@ -296,6 +318,35 @@ export function buildProtonEnvironment(
   if (gamePath) {
     // Для запуску ігор/інструментів з додаткових розділів або зовнішніх дисків
     env.STEAM_COMPAT_MOUNTS = gamePath;
+
+    // Перевіряємо наявність ENB, ReShade або кастомних перехоплювачів рендерера
+    // На Linux Wine/DXVK за замовчуванням блокує зовнішні d3d11/dxgi/d3d9, якщо не вказано native-then-builtin
+    const hasCustomD3D = [
+      "d3d11.dll",
+      "dxgi.dll",
+      "d3d9.dll",
+      "enbseries.ini",
+      "ReShade.ini",
+      "dxgi.ini",
+    ].some((fileName) => {
+      try {
+        fs.statSync(path.join(gamePath, fileName));
+        return true;
+      } catch {
+        return false;
+      }
+    });
+
+    if (hasCustomD3D) {
+      const overrides = "d3d11=n,b;dxgi=n,b;d3d9=n,b";
+      env.WINEDLLOVERRIDES = env.WINEDLLOVERRIDES
+        ? `${env.WINEDLLOVERRIDES};${overrides}`
+        : overrides;
+      log("info", "Proton: Applied WINEDLLOVERRIDES for ENB/ReShade", {
+        gamePath,
+        overrides: env.WINEDLLOVERRIDES,
+      });
+    }
   }
   return env;
 }

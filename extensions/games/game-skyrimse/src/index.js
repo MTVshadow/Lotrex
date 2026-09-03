@@ -73,6 +73,35 @@ const tools = [
     relative: true,
     requiredFiles: ["CreationKit.exe"],
   },
+  {
+    id: "nemesis",
+    name: "Nemesis Unlimited Behavior Engine",
+    shortName: "Nemesis",
+    logo: "auto",
+    executable: () => path.join("Data", "Nemesis_Engine", "Nemesis Unlimited Behavior Engine.exe"),
+    requiredFiles: [path.join("Data", "Nemesis_Engine", "Nemesis Unlimited Behavior Engine.exe")],
+    relative: true,
+  },
+  {
+    id: "pandora",
+    name: "Pandora Behaviour Engine+",
+    shortName: "Pandora",
+    logo: "auto",
+    executable: (discoveryPath) => {
+      const p1 = path.join("Data", "Pandora_Engine", "Pandora.exe");
+      const p2 = path.join("Data", "tools", "Pandora", "Pandora.exe");
+      if (discoveryPath !== undefined) {
+        try {
+          if (fs.existsSync(path.join(discoveryPath, p2))) {
+            return p2;
+          }
+        } catch (err) {}
+      }
+      return p1;
+    },
+    requiredFiles: [path.join("Data", "Pandora_Engine", "Pandora.exe")],
+    relative: true,
+  },
 ];
 
 function requiresLauncher(gamePath, store) {

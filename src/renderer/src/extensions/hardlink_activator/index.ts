@@ -296,11 +296,22 @@ class DeploymentMethod extends LinkingDeployment {
   protected linkFile(linkPath: string, sourcePath: string, dirTags?: boolean): Promise<void> {
     return this.ensureDir(path.dirname(linkPath), dirTags)
       .then(() => fs.linkAsync(sourcePath, linkPath))
-      .catch((err: unknown) =>
-        getErrorCode(err) !== "EEXIST"
+      .catch((err: unknown) => {
+        const code = getErrorCode(err);
+        if (code === "EXDEV") {
+          return Promise.reject(
+            new Error(
+              `Cannot create hardlink across different filesystems/drives (from "${sourcePath}" to "${linkPath}"). ` +
+                "On Linux, hardlinks only work on the same filesystem partition. " +
+                "Please go to Settings -> Mods and set the Mod Staging folder to be on the same drive/partition as the game, " +
+                "or switch the deployment method to Symlink Deployment.",
+            ),
+          );
+        }
+        return code !== "EEXIST"
           ? Promise.reject(unknownToError(err))
-          : fs.removeAsync(linkPath).then(() => fs.linkAsync(sourcePath, linkPath)),
-      );
+          : fs.removeAsync(linkPath).then(() => fs.linkAsync(sourcePath, linkPath));
+      });
   }
 
   protected unlinkFile(linkPath: string): PromiseBB<void> {
