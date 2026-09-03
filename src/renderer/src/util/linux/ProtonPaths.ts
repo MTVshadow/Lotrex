@@ -38,8 +38,8 @@ export interface IProtonResolveOptions {
   gameMode?: string;
   /** Результат виявлення гри (discovery) */
   discovery?: IDiscoveryResult;
-  /** Метадані гри з розширення */
-  game?: IGame;
+  /** Метадані гри з розширення або сховища стану */
+  game?: IGame | any;
   /** Стан Redux (для селекторів) */
   state?: any;
   /** Явний Steam AppID (перевизначає автоматичний пошук) */
@@ -144,7 +144,7 @@ export class ProtonPaths {
    */
   public static resolveAppId(
     discovery?: IDiscoveryResult,
-    game?: IGame,
+    game?: IGame | any,
     explicitAppId?: string,
   ): string | undefined {
     if (explicitAppId) {
