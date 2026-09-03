@@ -1,6 +1,6 @@
 import * as path from "path";
 
-import { selectors, types, util } from "@nexusmods/vortex-api";
+import { selectors, types, util, ProtonPaths } from "@nexusmods/vortex-api";
 import * as Redux from "redux";
 
 interface IGameSupport {
@@ -111,11 +111,11 @@ export function gameSupported(gameMode: string): boolean {
 }
 
 export function mygamesPath(gameMode: string): string {
-  return path.join(
-    util.getVortexPath("documents"),
-    "My Games",
-    gameSupport.get(gameMode, "mygamesPath"),
-  );
+  const discovery = discoveryForGame(gameMode);
+  // Використовуємо централізований сервіс ProtonPaths для вирішення шляху My Games у префіксі Proton
+  const proton = (ProtonPaths ?? util.ProtonPaths)?.resolve({ gameMode, discovery });
+  const myGamesBase = proton?.myGamesPath ?? path.join(util.getVortexPath("documents"), "My Games");
+  return path.join(myGamesBase, gameSupport.get(gameMode, "mygamesPath"));
 }
 
 export function iniPath(gameMode: string): string {

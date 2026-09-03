@@ -4,10 +4,15 @@ import type { IExtensionApi } from "../../../types/IExtensionContext";
 import type { IGame } from "../../../types/IGame";
 import type { IDiscoveryResult, IState } from "../../../types/IState";
 import getVortexPath from "../../../util/getVortexPath";
+import ProtonPaths from "../../../util/linux/ProtonPaths";
 import { makeOverlayableDictionary } from "../../../util/util";
 
-function bethIni(gamePath: string, iniName: string) {
-  return path.join(getVortexPath("documents"), "My Games", gamePath, iniName + ".ini");
+function bethIni(gameMode: string, gamePath: string, iniName: string) {
+  const discovery = discoveryForGame(gameMode);
+  // Використовуємо централізований сервіс ProtonPaths для пошуку INI у префіксі Proton
+  const proton = ProtonPaths.resolve({ gameMode, discovery });
+  const base = proton?.myGamesPath ?? path.join(getVortexPath("documents"), "My Games");
+  return path.join(base, gamePath, iniName + ".ini");
 }
 
 function toWordExp(input: string): string {
@@ -292,7 +297,7 @@ const gameSupport = makeOverlayableDictionary<string, IGameSupport>(
       stopPatterns: stopPatterns("dragonsdogma"),
     },
     fallout4: {
-      iniPath: () => bethIni("Fallout4", "Fallout4"),
+      iniPath: () => bethIni("fallout4", "Fallout4", "Fallout4"),
       stopPatterns: stopPatterns("fallout4"),
       pluginPath: "Data",
       nativePlugins: [
@@ -329,7 +334,7 @@ const gameSupport = makeOverlayableDictionary<string, IGameSupport>(
       ],
     },
     fallout4vr: {
-      iniPath: () => bethIni("Fallout4VR", "Fallout4Custom"),
+      iniPath: () => bethIni("fallout4vr", "Fallout4VR", "Fallout4Custom"),
       stopPatterns: stopPatterns("fallout4"),
       pluginPath: "Data",
       nativePlugins: [
@@ -344,7 +349,7 @@ const gameSupport = makeOverlayableDictionary<string, IGameSupport>(
       ],
     },
     fallout3: {
-      iniPath: () => bethIni("Fallout3", "Fallout3"),
+      iniPath: () => bethIni("fallout3", "Fallout3", "Fallout3"),
       stopPatterns: stopPatterns("fallout3"),
       pluginPath: "Data",
       nativePlugins: [
@@ -357,19 +362,19 @@ const gameSupport = makeOverlayableDictionary<string, IGameSupport>(
       ],
     },
     falloutnv: {
-      iniPath: () => bethIni("FalloutNV", "Fallout"),
+      iniPath: () => bethIni("falloutnv", "FalloutNV", "Fallout"),
       stopPatterns: stopPatterns("falloutnv"),
       pluginPath: "Data",
       nativePlugins: ["falloutnv.esm"],
     },
     morrowind: {
-      iniPath: () => bethIni("Morrowind", "Morrowind"),
+      iniPath: () => bethIni("morrowind", "Morrowind", "Morrowind"),
       stopPatterns: stopPatterns("morrowind"),
       pluginPath: "Data",
       nativePlugins: ["morrowind.esm"],
     },
     oblivion: {
-      iniPath: () => bethIni("Oblivion", "Oblivion"),
+      iniPath: () => bethIni("oblivion", "Oblivion", "Oblivion"),
       stopPatterns: stopPatterns("oblivion"),
       pluginPath: "Data",
       nativePlugins: ["oblivion.esm"],
@@ -380,25 +385,25 @@ const gameSupport = makeOverlayableDictionary<string, IGameSupport>(
       nativePlugins: ["nehrim.esm"],
     },
     skyrim: {
-      iniPath: () => bethIni("Skyrim", "Skyrim"),
+      iniPath: () => bethIni("skyrim", "Skyrim", "Skyrim"),
       stopPatterns: stopPatterns("skyrim"),
       pluginPath: "Data",
       nativePlugins: ["skyrim.esm", "update.esm"],
     },
     enderal: {
-      iniPath: () => bethIni("Enderal", "Enderal"),
+      iniPath: () => bethIni("enderal", "Enderal", "Enderal"),
       stopPatterns: stopPatterns("skyrim"),
       pluginPath: "Data",
       nativePlugins: ["skyrim.esm", "update.esm"],
     },
     enderalspecialedition: {
-      iniPath: () => bethIni("Enderal Special Edition", "Enderal"),
+      iniPath: () => bethIni("enderalspecialedition", "Enderal Special Edition", "Enderal"),
       stopPatterns: stopPatterns("skyrimse"),
       pluginPath: "Data",
       nativePlugins: [],
     },
     skyrimse: {
-      iniPath: () => bethIni("Skyrim Special Edition", "Skyrim"),
+      iniPath: () => bethIni("skyrimse", "Skyrim Special Edition", "Skyrim"),
       stopPatterns: stopPatterns("skyrimse"),
       pluginPath: "Data",
       nativePlugins: [
@@ -410,7 +415,7 @@ const gameSupport = makeOverlayableDictionary<string, IGameSupport>(
       ],
     },
     skyrimvr: {
-      iniPath: () => bethIni("Skyrim VR", "Skyrim"),
+      iniPath: () => bethIni("skyrimvr", "Skyrim VR", "Skyrim"),
       stopPatterns: stopPatterns("skyrimse"),
       pluginPath: "Data",
       nativePlugins: [
@@ -472,25 +477,25 @@ const gameSupport = makeOverlayableDictionary<string, IGameSupport>(
   {
     gog: {
       skyrimse: {
-        iniPath: () => bethIni("Skyrim Special Edition GOG", "Skyrim"),
+        iniPath: () => bethIni("skyrimse", "Skyrim Special Edition GOG", "Skyrim"),
       },
     },
     epic: {
       skyrimse: {
-        iniPath: () => bethIni("Skyrim Special Edition EPIC", "Skyrim"),
+        iniPath: () => bethIni("skyrimse", "Skyrim Special Edition EPIC", "Skyrim"),
       },
     },
     xbox: {
       skyrimse: {
-        iniPath: () => bethIni("Skyrim Special Edition MS", "Skyrim"),
+        iniPath: () => bethIni("skyrimse", "Skyrim Special Edition MS", "Skyrim"),
       },
       fallout4: {
-        iniPath: () => bethIni("Fallout4 MS", "Fallout4"),
+        iniPath: () => bethIni("fallout4", "Fallout4 MS", "Fallout4"),
       },
     },
     enderalseOverlay: {
       enderalspecialedition: {
-        iniPath: () => bethIni("Skyrim Special Edition", "Skyrim"),
+        iniPath: () => bethIni("enderalspecialedition", "Skyrim Special Edition", "Skyrim"),
       },
     },
   },

@@ -120,6 +120,11 @@ class GameStoreHelper {
       );
     }
 
+    if (process.platform !== "win32") {
+      // Реєстр Windows відсутній на Linux; повертаємо unsupported/NotFound без помилок
+      return Bluebird.reject(new GameEntryNotFound(lookup, "registry"));
+    }
+
     try {
       const instPath = winapi.RegGetValue(chunked[0] as any, chunked[1], chunked[2]);
       if (!instPath || instPath.type !== "REG_SZ") {
@@ -361,13 +366,27 @@ class GameStoreHelper {
     );
   }
 
-  private isStoreRunning(storeExecPath: string) {
-    const runningProcesses = winapi.GetProcessList();
-    const exeId = makeExeId(storeExecPath);
-    return (
-      runningProcesses.find((runningProc) => exeId === runningProc.exeFile.toLowerCase()) !==
-      undefined
-    );
+  private isStoreRunning(storeExecPath: string): boolean {
+    if (process.platform !== "win32") {
+      try {
+        const exeName = path.basename(storeExecPath);
+        const { execSync } = require("child_process");
+        execSync(`pgrep -x "${exeName}" || pgrep -f "${exeName}"`, { stdio: "ignore" });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    try {
+      const runningProcesses = winapi.GetProcessList();
+      const exeId = makeExeId(storeExecPath);
+      return (
+        runningProcesses.find((runningProc) => exeId === runningProc.exeFile.toLowerCase()) !==
+        undefined
+      );
+    } catch {
+      return false;
+    }
   }
 
   private validInput(input: string | string[]): boolean {
