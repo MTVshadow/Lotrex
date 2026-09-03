@@ -15,8 +15,10 @@ for regular use, initially focusing on Skyrim Special Edition running through St
 - Stable application identity (`app.name = "Vortex"`) set to guarantee consistent `userData` location (`~/.config/Vortex`) across dev and packaged releases.
 - Proton tool launcher upgraded: external mod tools (LOOT, xEdit, BodySlide, Nemesis, Pandora) and SKSE automatically launched inside the game's Proton prefix; multi-location GE-Proton/UMU-Proton detection and semver scoring implemented; `STEAM_COMPAT_TOOL_PATHS` and `STEAM_COMPAT_MOUNTS` configured.
 - Mod archive extraction & installer normalized: directory markers with forward/backslashes handled, destination paths normalized to prevent backslash file naming on Linux filesystems.
+- Case-folding directory collision resolved in `LinkingDeployment.ts`: resolves existing target directory case before linking, preventing duplicate capitalized folders (`Data/Textures` vs `Data/textures`).
+- NXM protocol integration fixed and tested on Linux desktop: direct URL extraction in CLI, FreeDesktop MIME registration via `xdg-mime`, and proper Electron app path resolution in desktop entry scripts.
+- Verified Skyrim Special Edition mod lifecycle under Proton: SKSE execution, SkyUI inventory management, and Ukrainian localization strings functioning with `bInvalidateOlderFiles=1`.
 - A clean first launch no longer fails when the Vortex configuration directory does not exist.
-- Full end-to-end mod installation, deployment, launch, and purge still need verification.
 
 ## P0 — Required for daily use
 
@@ -178,6 +180,31 @@ Completion criteria:
 
 - startup logs prominently show actionable Linux problems;
 - expected Windows-only exclusions do not flood the log with stack traces.
+
+### 12. Integrated In-App Mod Browser for Nexus Mods
+
+Enhance the existing `browse_nexus` extension by replacing the "Coming Soon" placeholder in the
+`Mods` tab with an integrated mod browser.
+
+Architecture candidates:
+
+- **Option A (Embedded Webview Browser):**
+    - Embed `https://www.nexusmods.com/{game}/mods` via Electron `<webview>` (`WebviewEmbed`).
+    - Add standard browser navigation controls (back, forward, reload, home, URL/search input).
+    - Intercept in-page `nxm://` ("Mod Manager Download") triggers directly via Electron
+      `will-navigate` / webContents listeners, starting downloads seamlessly inside Vortex without
+      opening external browser windows.
+- **Option B (Native GraphQL/REST Mod Catalog):**
+    - Query Nexus Mods API / GraphQL for game mods (`trending`, `latest`, `most endorsed`).
+    - Render native React mod tiles with cover art, description, endorsement counts, and direct
+      1-click install button.
+    - Implement full-text search and category filtering matching the Collections tab styling.
+
+Completion criteria:
+
+- users can search, browse, and initiate mod downloads directly inside the Vortex window;
+- no external browser window is required for regular browsing and 1-click downloads;
+- memory and process lifecycle of the embedded view are properly managed upon tab switching.
 
 ## Automated testing plan
 
