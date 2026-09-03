@@ -152,7 +152,7 @@ export function gameSupported(gameMode: string): boolean {
  * Returns undefined when the game is not a Proton install, so callers fall back to the normal
  * documents path -- that covers Windows, and native Linux titles.
  */
-const protonDocumentsCache = new Map<string, string | undefined>();
+const protonDocumentsCache = new Map<string, string>();
 
 function protonDocumentsPath(gameMode: string): string | undefined {
   if (process.platform === "win32") return undefined;
@@ -166,6 +166,7 @@ function protonDocumentsPath(gameMode: string): string | undefined {
     if (discovery?.path !== undefined && discovery.store === "steam") {
       const steamApps = path.dirname(path.dirname(discovery.path));
       const installDir = path.basename(discovery.path);
+      const escapedInstallDir = installDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
       // Map the install directory back to its appId via Steam's own manifests rather than
       // hardcoding ids, so this keeps working for every supported game.
@@ -174,7 +175,7 @@ function protonDocumentsPath(gameMode: string): string | undefined {
         .filter((entry) => entry.startsWith("appmanifest_") && entry.endsWith(".acf"))
         .find((entry) => {
           const content = fs.readFileSync(path.join(steamApps, entry), "utf8");
-          return new RegExp(`"installdir"\\s+"${installDir}"`, "i").test(content);
+          return new RegExp(`"installdir"\\s+"${escapedInstallDir}"`, "i").test(content);
         });
 
       if (manifest !== undefined) {
@@ -203,7 +204,11 @@ function protonDocumentsPath(gameMode: string): string | undefined {
     });
   }
 
-  protonDocumentsCache.set(gameMode, result);
+  // Discovery may not be populated yet when this is first called. Only cache a successful
+  // resolution so a later call can retry once Steam discovery has completed.
+  if (result !== undefined) {
+    protonDocumentsCache.set(gameMode, result);
+  }
   return result;
 }
 

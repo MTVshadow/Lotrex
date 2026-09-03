@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import * as path from "path";
 
 import format from "string-template";
@@ -173,7 +174,45 @@ const gameSupport = makeOverlayableDictionary<string, IGameSupport>(
 );
 
 export function iniFiles(gameMode: string, discovery: IDiscoveryResult) {
-  const mygames = path.join(getVortexPath("documents"), "My Games");
+  let documents = getVortexPath("documents");
+  if (
+    process.platform !== "win32" &&
+    discovery?.path !== undefined &&
+    discovery.store === "steam"
+  ) {
+    try {
+      const steamApps = path.dirname(path.dirname(discovery.path));
+      const installDir = path.basename(discovery.path);
+      const escapedInstallDir = installDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const manifest = fs
+        .readdirSync(steamApps)
+        .filter((entry) => entry.startsWith("appmanifest_") && entry.endsWith(".acf"))
+        .find((entry) => {
+          const content = fs.readFileSync(path.join(steamApps, entry), "utf8");
+          return new RegExp(`"installdir"\\s+"${escapedInstallDir}"`, "i").test(content);
+        });
+
+      if (manifest !== undefined) {
+        const appId = manifest.slice("appmanifest_".length, -".acf".length);
+        const protonDocuments = path.join(
+          steamApps,
+          "compatdata",
+          appId,
+          "pfx",
+          "drive_c",
+          "users",
+          "steamuser",
+          "Documents",
+        );
+        if (fs.existsSync(protonDocuments)) {
+          documents = protonDocuments;
+        }
+      }
+    } catch {
+      // Keep the native Documents fallback if the Steam library cannot be inspected.
+    }
+  }
+  const mygames = path.join(documents, "My Games");
 
   let store = discovery?.store;
 

@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import type { IParameters, ISetItem } from "@vortex/shared/cli";
@@ -175,6 +175,7 @@ export function updateStartupSettings(updater: (current: IParameters) => IParame
   const current = getStartupSettings();
   const updated = updater(current);
   const json = JSON.stringify(updated);
+  mkdirSync(path.dirname(filePath), { recursive: true });
   writeFileSync(filePath, json);
 }
 
