@@ -6,6 +6,9 @@ export interface IExtra {
 }
 
 export interface IModListItem {
+  modId?: number;
+  version?: string;
+  domainName?: string;
   name: string;
   summary: string;
   category: string;

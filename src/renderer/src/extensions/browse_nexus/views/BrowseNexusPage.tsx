@@ -11,6 +11,7 @@ import { useSelector } from "react-redux";
 
 import { CollectionsDownloadClickedEvent } from "@/extensions/analytics/mixpanel/MixpanelEvents";
 import { getGame } from "@/extensions/gamemode_management/util/getGame";
+import type { IModListItem } from "@/extensions/news_dashlet/types";
 import { buildNXMCollectionUrl } from "@/extensions/nexus_integration/NXMUrl";
 import { nexusGameId } from "@/extensions/nexus_integration/util/convertGameId";
 import type { IExtensionApi } from "@/types/IExtensionContext";
@@ -20,6 +21,8 @@ import { CollectionTile } from "@/ui/components/collection_tile/CollectionTile";
 import { CollectionTileSkeleton } from "@/ui/components/collection_tile/CollectionTile.skeleton";
 import { Input } from "@/ui/components/form/input/Input";
 import { Listing } from "@/ui/components/listing/Listing";
+import { ModTile } from "@/ui/components/mod_tile/ModTile";
+import { ModTileSkeleton } from "@/ui/components/mod_tile/ModTile.skeleton";
 import { NoResults } from "@/ui/components/no_results/NoResults";
 import { Pagination } from "@/ui/components/pagination/Pagination";
 import { Picker } from "@/ui/components/picker/Picker";
@@ -233,6 +236,109 @@ function BrowseNexusPage(props: IBrowseNexusPageProps) {
       });
   }, [gameId, sortBy, activeSearch, currentPage, api, refreshTrigger]);
 
+  // Mods tab state
+  const [mods, setMods] = useState<IModListItem[]>([]);
+  const [modsLoading, setModsLoading] = useState<boolean>(false);
+  const [modsError, setModsError] = useState<Error | null>(null);
+  const [modSortType, setModSortType] = useState<"trending" | "latest">("trending");
+  const [modsSearchQuery, setModsSearchQuery] = useState<string>("");
+  const [modsActiveSearch, setModsActiveSearch] = useState<string>("");
+  const [modsRefreshTrigger, setModsRefreshTrigger] = useState<number>(0);
+
+  const handleDownloadMod = async (mod: IModListItem) => {
+    if (!isLoggedIn) {
+      api.showDialog(
+        "info",
+        "Login Required",
+        {
+          text: "You must be logged in to Nexus Mods to download files directly through Vortex.",
+        },
+        [
+          { label: "Cancel" },
+          {
+            label: "Log In",
+            action: () => {
+              api.ext.nexusRequestNexusLogin?.(() => undefined);
+            },
+          },
+        ],
+      );
+      return;
+    }
+
+    if (!mod.modId) {
+      window.api.shell.openUrl(mod.link);
+      return;
+    }
+
+    try {
+      if (api.ext.nexusGetModFiles) {
+        const files = await api.ext.nexusGetModFiles(gameDomainName, mod.modId);
+        const activeFiles = files?.filter((f: any) => f.category_id === 1 || f.is_primary) ?? [];
+        const targetFile = activeFiles.length > 0 ? activeFiles[0] : files?.[0];
+
+        if (targetFile && api.ext.nexusDownload) {
+          await api.ext.nexusDownload(
+            gameDomainName,
+            mod.modId,
+            targetFile.file_id,
+            targetFile.name,
+            true,
+          );
+          api.sendNotification({
+            type: "success",
+            message: `Starting download: ${targetFile.name}`,
+          });
+          return;
+        }
+      }
+    } catch {
+      // Fallback
+    }
+
+    window.api.shell.openUrl(
+      `https://www.nexusmods.com/${gameDomainName}/mods/${mod.modId}?tab=files`,
+    );
+  };
+
+  useEffect(() => {
+    if (!gameId || selectedTab !== "mods") {
+      return;
+    }
+
+    setModsLoading(true);
+    setModsError(null);
+
+    const fetcher =
+      modSortType === "trending" ? api.ext.nexusGetTrendingMods : api.ext.nexusGetLatestMods;
+
+    if (!fetcher) {
+      setModsLoading(false);
+      return;
+    }
+
+    Promise.resolve(fetcher(gameId))
+      .then((result: { mods: IModListItem[] }) => {
+        setMods(result?.mods || []);
+        setModsLoading(false);
+      })
+      .catch((err: Error) => {
+        setModsError(err);
+        setModsLoading(false);
+      });
+  }, [gameId, selectedTab, modSortType, modsRefreshTrigger, api]);
+
+  const filteredMods = mods.filter((mod) => {
+    if (!modsActiveSearch) return true;
+    const q = modsActiveSearch.toLowerCase();
+    return (
+      mod.name?.toLowerCase().includes(q) ||
+      mod.author?.toLowerCase().includes(q) ||
+      mod.summary?.toLowerCase().includes(q) ||
+      mod.category?.toLowerCase().includes(q)
+    );
+  });
+
   if (!gameId) {
     return (
       <MainPage id="browse-collections-page">
@@ -260,7 +366,11 @@ function BrowseNexusPage(props: IBrowseNexusPageProps) {
               panelId="collections"
             />
 
-            <TabButton name={t("collection:browse.tabs.mods")} panelId="mods" />
+            <TabButton
+              count={mods.length > 0 ? mods.length : undefined}
+              name={t("collection:browse.tabs.mods")}
+              panelId="mods"
+            />
           </TabBar>
 
           <TabPanel id="collections">
@@ -383,23 +493,98 @@ function BrowseNexusPage(props: IBrowseNexusPageProps) {
           </TabPanel>
 
           <TabPanel id="mods">
-            <NoResults
-              className="py-16"
-              iconPath={mdiClockOutline}
-              message={t("collection:browse.modsComingSoon.description")}
-              title={t("collection:browse.modsComingSoon.title")}
-            >
-              <Button
-                appearance="moderate"
-                brand="neutral"
-                leftIconPath={mdiOpenInNew}
-                onClick={() =>
-                  window.api.shell.openUrl(`https://www.nexusmods.com/games/${gameDomainName}/mods`)
-                }
+            <div className="space-y-3 p-6">
+              <form
+                className="flex items-center gap-x-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setModsActiveSearch(modsSearchQuery.trim());
+                }}
               >
-                {t("collection:browse.modsComingSoon.openWebsite")}
-              </Button>
-            </NoResults>
+                <Input
+                  fieldClassName="max-w-60"
+                  hideLabel={true}
+                  label="Search mods..."
+                  placeholder="Search mods..."
+                  value={modsSearchQuery}
+                  onChange={(e) => setModsSearchQuery(e.target.value)}
+                />
+
+                <Button
+                  appearance="moderate"
+                  brand="neutral"
+                  leftIconPath={mdiMagnify}
+                  title={t("common:actions.search")}
+                  type="submit"
+                />
+              </form>
+
+              <div className="flex justify-between">
+                <div className="flex items-center gap-x-2">
+                  <Button
+                    appearance="moderate"
+                    brand="neutral"
+                    leftIconPath={mdiRefresh}
+                    title={t("collection:browse.refresh")}
+                    onClick={() => setModsRefreshTrigger((prev) => prev + 1)}
+                  />
+
+                  <Typography
+                    appearance="moderate"
+                    brand="neutral-translucent"
+                    typographyType="body-sm"
+                  >
+                    {filteredMods.length} mods
+                  </Typography>
+                </div>
+
+                <Picker
+                  options={[
+                    { label: "Trending Mods", value: "trending" },
+                    { label: "Latest Added", value: "latest" },
+                  ]}
+                  value={modSortType}
+                  onChange={(val: "trending" | "latest") => setModSortType(val)}
+                />
+              </div>
+
+              <Listing
+                className="grid grid-cols-[repeat(auto-fit,minmax(26rem,1fr))] gap-4"
+                entityCount={filteredMods.length}
+                isError={!!modsError}
+                isLoading={modsLoading}
+                noResultsChildren={
+                  <Button
+                    appearance="moderate"
+                    brand="neutral"
+                    leftIconPath={mdiOpenInNew}
+                    onClick={() =>
+                      window.api.shell.openUrl(
+                        `https://www.nexusmods.com/games/${gameDomainName}/mods`,
+                      )
+                    }
+                  >
+                    Open Nexus Mods Website
+                  </Button>
+                }
+                noResultsMessage="No mods matched your query. Try searching or browse on the website."
+                noResultsTitle="No mods found"
+                skeletonCount={12}
+                SkeletonTile={ModTileSkeleton}
+              >
+                {filteredMods.map((mod) => (
+                  <ModTile
+                    api={api}
+                    gameDomainName={gameDomainName}
+                    isLoggedIn={isLoggedIn}
+                    key={mod.modId ?? mod.link}
+                    mod={mod}
+                    onDownloadMod={handleDownloadMod}
+                    onViewPage={() => window.api.shell.openUrl(mod.link)}
+                  />
+                ))}
+              </Listing>
+            </div>
           </TabPanel>
         </TabProvider>
       </MainPage.Body>

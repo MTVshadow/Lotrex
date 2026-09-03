@@ -1207,8 +1207,11 @@ export function onEndorseDirect(api: IExtensionApi, nexus: Nexus) {
 
 function extractLatestModInfo(state: IState, gameId: string, input: IModInfo): IModListItem {
   return {
+    modId: input.mod_id,
+    version: input.version,
+    domainName: input.domain_name,
     name: input.name,
-    author: input.uploaded_by,
+    author: input.uploaded_by || input.author,
     category: resolveCategoryName(input.category_id.toString(), state),
     summary: input.summary,
     imageUrl: input.picture_url,
