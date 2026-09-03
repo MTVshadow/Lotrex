@@ -19,6 +19,15 @@ for regular use, initially focusing on Skyrim Special Edition running through St
 - NXM protocol integration fixed and tested on Linux desktop: direct URL extraction in CLI, FreeDesktop MIME registration via `xdg-mime`, and proper Electron app path resolution in desktop entry scripts.
 - Verified Skyrim Special Edition mod lifecycle under Proton: SKSE execution, SkyUI inventory management, and Ukrainian localization strings functioning with `bInvalidateOlderFiles=1`.
 - A clean first launch no longer fails when the Vortex configuration directory does not exist.
+- Typed game platform and deployment capabilities implemented (`IGameCapabilities`, `resolveGameSteamAppId`, `gamePlatformCapabilities`).
+- Game extension validation engine and CLI implemented (`pnpm run game-extension run validate <game>`) with contract verification and platform capability validation.
+- Linux filesystem assessment service (`linuxMounts.ts`): `/proc/mounts` parsing, detection of `ro`, `noexec`, cross-device hardlink barriers, and NTFS/exFAT Proton prefix warnings.
+- Structured filesystem error translation (`filesystemErrors.ts`): user-friendly actionable remediation for `EXDEV`, `EROFS`, `EACCES`, `ENOSPC`.
+- Case-sensitivity collision diagnostics (`caseCollisions.ts`): pre-deployment detection of case conflicts across mod files on Linux filesystems.
+- Privacy-safe diagnostic report exporter (`diagnosticReport.ts`): automated redaction of usernames, home paths, and secrets for troubleshooting.
+- Linux-aware Open Directory actions extended: direct shortcuts to Proton prefix folder and Vortex logs with actionable error notifications.
+- Linux staging path suggestion (`suggestStagingPath.ts`) ensuring staging and game reside on the same filesystem partition for hardlinks.
+- Heroic Games Launcher (Epic & GOG) and Lutris store discovery integrated on Linux.
 
 ## P0 — Required for daily use
 
@@ -205,6 +214,281 @@ Completion criteria:
 - users can search, browse, and initiate mod downloads directly inside the Vortex window;
 - no external browser window is required for regular browsing and 1-click downloads;
 - memory and process lifecycle of the embedded view are properly managed upon tab switching.
+
+## Linux daily-usability direction
+
+The following workstreams expand the earlier Skyrim-focused milestones into a general Linux user
+experience. They should be implemented as reusable platform services rather than per-game fixes.
+The existing `ProtonPaths`, typed game capabilities, Linux health-check infrastructure, and
+Heroic/Lutris discovery are foundations for this work, not substitutes for the completion criteria
+below.
+
+### Highest priority
+
+#### 13. Linux Environment Health Check
+
+Add a comprehensive pre-deployment assessment that checks:
+
+- write access to the game and staging directories;
+- whether staging and the game share a filesystem and therefore support hardlink deployment;
+- whether symlinks can be created and used at the destination;
+- available disk space;
+- native, Flatpak, and Snap Steam installations;
+- access to external disks, including sandbox restrictions;
+- the selected Proton prefix and runtime;
+- NTFS/exFAT filesystem type and relevant mount options.
+
+The result must identify problems before install or deployment begins, distinguish blocking issues
+from recommendations, and provide an actionable remediation for every failure.
+
+#### 14. First-class Flatpak Steam support
+
+Automatically discover and support:
+
+- `~/.var/app/com.valvesoftware.Steam/data/Steam`;
+- libraries configured by Flatpak Steam;
+- `compatdata` prefixes;
+- bundled, Experimental, GE-Proton, and custom Proton runtimes;
+- external disks made available through portals or Flatpak filesystem permissions.
+
+When access is missing, show the exact directory and a narrowly scoped Flatseal or
+`flatpak override` recommendation. Do not suggest broad filesystem access when a smaller permission
+is sufficient, and do not show Flatpak-specific advice for native Steam installations.
+
+#### 15. Linux first-run wizard
+
+Provide a short onboarding flow that displays:
+
+- the detected Steam installation type;
+- discovered libraries;
+- the recommended staging path;
+- the recommended deployment method;
+- Proton prefix and runtime status;
+- a **Check configuration** action;
+- a concise hardlink-versus-symlink explanation.
+
+The wizard should be safe to rerun from Settings and should reuse the same diagnostics and
+recommendation services used during deployment.
+
+#### 16. Automatic deployment-method selection
+
+Replace static priority-only selection on Linux with capability- and filesystem-aware selection:
+
+- use hardlinks when staging and the game share `st_dev` and the destination supports them;
+- use symlinks when the paths are on different filesystems and symlinks are supported;
+- offer move deployment only when the game explicitly declares support;
+- explain why a method was selected or rejected;
+- warn before changing the active method;
+- migrate staging safely, with rollback or recovery after interruption.
+
+### Launching and Proton
+
+#### 17. Unified Linux Launch Provider
+
+Consolidate launch decisions currently spread across Steam, `StarterInfo`, game extensions, and
+Proton helpers into one service:
+
+```text
+Game or tool
+  -> native executable, launcher URI, or Windows executable
+  -> environment, prefix, and runtime
+  -> structured launch result and diagnostics
+```
+
+The provider must support:
+
+- Steam URI launches;
+- an explicitly selected Proton version;
+- Proton Experimental and GE-Proton;
+- Flatpak Steam;
+- launcher and game launch options;
+- `STEAM_COMPAT_DATA_PATH` and related compatibility variables;
+- opt-in Wine/Proton logs with safe paths;
+- native Linux executables when available;
+- Heroic and Lutris launch contexts.
+
+#### 18. Per-game Proton runtime UI
+
+Allow users to choose:
+
+- Automatic;
+- Steam-selected;
+- Proton Experimental;
+- GE-Proton;
+- a manually selected runtime path.
+
+Show whether the selected runtime is installed and usable, its source, and an action to open its
+directory. Invalid manual overrides must produce an actionable validation error.
+
+#### 19. Safe Windows modding-tool launch
+
+LOOT, xEdit, Nemesis, FNIS, BodySlide, and similar tools should automatically use the same prefix,
+Steam App ID, runtime, and relevant environment as the managed game. This must also work for games
+discovered through Heroic and Lutris when their launch context is available.
+
+If an identical environment cannot be constructed, show which component is missing instead of a
+generic process error. Never silently launch a Windows tool as a native executable on Linux.
+
+### Filesystem compatibility
+
+#### 20. Case-sensitivity diagnostics
+
+Before deployment:
+
+- detect paths that differ only by case, such as `Textures/foo.dds` and `textures/Foo.dds`;
+- identify the involved mods and files;
+- show a blocking conflict when deployment would be ambiguous or destructive;
+- optionally offer deterministic normalization where it is safe and reversible.
+
+This should operate on the deployment plan so conflicts can be reported before files are written.
+
+#### 21. NTFS/exFAT mount-option assessment
+
+Detect and explain:
+
+- read-only mounts;
+- `noexec` where executable access is required;
+- incompatible `uid`/`gid` ownership;
+- unstable or unsuitable inode behavior;
+- unavailable or emulated symlink support;
+- Proton prefixes placed on filesystems that cannot reliably represent their structure.
+
+Vortex must not remount disks or edit `/etc/fstab`. It may provide a copyable, filesystem-specific
+example after clearly identifying the affected mount and warning the user to verify device IDs and
+ownership values.
+
+#### 22. Actionable `EXDEV`, `EACCES`, and `EROFS` handling
+
+Translate common filesystem failures into structured errors containing:
+
+- a human-readable problem name;
+- source and destination paths;
+- the active deployment method;
+- an action that opens staging settings;
+- a compatible fallback method when one is available;
+- a retry action after the underlying issue is corrected.
+
+Preserve the original error code and operation in diagnostic logs.
+
+### Daily Linux UX
+
+#### 23. Linux-aware **Open directory** actions
+
+Provide quick access to:
+
+- the game directory;
+- staging and downloads;
+- the Proton/Wine prefix and `drive_c`;
+- the Steam library;
+- Vortex logs.
+
+Use XDG portals when required and support Wayland, sandboxed packages, and common file managers.
+Opening a missing or inaccessible path should produce an actionable message rather than silently
+failing.
+
+#### 24. Privacy-safe diagnostic report export
+
+Generate a single copyable or exportable report containing:
+
+- distribution and kernel;
+- Wayland/X11 session type;
+- Steam installation type;
+- libraries, mounts, and filesystem types;
+- deployment method;
+- selected Proton runtime and prefix status;
+- relevant access checks;
+- recent related errors.
+
+Automatically redact tokens, API keys, user names, home-directory components, and other sensitive
+paths. Include a preview so the user can inspect the exact report before sharing it.
+
+#### 25. Platform-aware notifications and remediation
+
+Route advice through platform-specific resolution providers. Linux users must not receive
+instructions involving:
+
+- **Run as Administrator**;
+- the Windows registry;
+- drive-letter terminology;
+- Windows Defender exclusions.
+
+Shared errors should keep a common identity while their explanation, actions, and help links are
+resolved for the active platform and packaging format.
+
+### Game-extension architecture
+
+#### 26. Typed game capabilities
+
+Continue replacing implicit `details: any` conventions with a versioned, validated contract, for
+example:
+
+```ts
+platforms: {
+  linux?: {
+    launch: "native" | "steam-proton" | "wine";
+    steamAppId?: string;
+    supportsToolsInPrefix?: boolean;
+  };
+};
+
+deployment: {
+  hardlink?: boolean;
+  symlink?: boolean;
+  move?: boolean;
+};
+```
+
+Capabilities must be available to discovery, deployment, launch, health checks, and extension
+validation. Maintain compatibility adapters for existing extensions while logging deprecated
+implicit fields during development.
+
+#### 27. Game-extension validation CLI
+
+Add a command such as:
+
+```sh
+pnpm game-extension validate game-skyrimse
+```
+
+It should validate:
+
+- the `IGame` contract;
+- discovery results and store IDs;
+- executable definitions for every declared platform;
+- mod and data paths;
+- installer fixtures;
+- Linux capabilities;
+- accidental absolute Windows-only paths;
+- registered health-check providers.
+
+The command must be deterministic, suitable for CI, and produce both human-readable and optional
+machine-readable output.
+
+#### 28. New-game extension template
+
+Provide a generator containing:
+
+- a minimal typed `IGame` implementation;
+- Steam discovery and optional Heroic/Lutris identifiers;
+- Linux and Windows executable declarations;
+- an installer skeleton;
+- diagnostics providers;
+- fixtures and contract tests;
+- short extension documentation.
+
+Generated extensions should pass validation and type checking without modification. Platform-
+specific functionality should be explicit, so adding a game does not require copying hidden
+conventions or Windows-only assumptions.
+
+### Delivery sequence for the expanded direction
+
+1. Complete the environment assessment and Flatpak Steam discovery foundations.
+2. Reuse those services in first-run onboarding and automatic deployment selection.
+3. Introduce the unified launch provider and runtime-selection UI.
+4. Route Windows modding tools, Heroic, and Lutris through the unified launch context.
+5. Add case-collision, mount-option, and structured filesystem-error diagnostics.
+6. Add Linux-aware directory actions, diagnostic export, and platform-specific remediation.
+7. Stabilize the typed capability contract, then ship the validation CLI and extension template.
 
 ## Automated testing plan
 
