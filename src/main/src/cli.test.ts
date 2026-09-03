@@ -14,7 +14,7 @@ vi.mock("electron", () => ({
 vi.mock("./getVortexPath", () => ({ getVortexPath: vi.fn(() => "/tmp/vortex-config") }));
 vi.mock("./logging", () => ({ log: vi.fn() }));
 
-import { updateStartupSettings } from "./cli";
+import { parseCommandline, updateStartupSettings } from "./cli";
 
 describe("updateStartupSettings", () => {
   beforeEach(() => {
@@ -35,5 +35,19 @@ describe("updateStartupSettings", () => {
     expect(mkdirSync.mock.invocationCallOrder[0]).toBeLessThan(
       writeFileSync.mock.invocationCallOrder[0]!,
     );
+  });
+});
+
+describe("parseCommandline", () => {
+  it("extracts direct nxm URL when passed without -d / --download flags", () => {
+    const params = parseCommandline(
+      [
+        "/usr/bin/electron",
+        "/path/to/app",
+        "nxm://skyrimspecialedition/mods/123/files/456?key=abc",
+      ],
+      false,
+    );
+    expect(params.download).toBe("nxm://skyrimspecialedition/mods/123/files/456?key=abc");
   });
 });

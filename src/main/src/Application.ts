@@ -237,6 +237,15 @@ class Application {
       );
     });
 
+    // Підтримка системних URL-подій (macOS / Linux Desktop Portals)
+    app.on("open-url", (event, url) => {
+      event.preventDefault();
+      log("info", "open-url event received", { url });
+      this.applyArguments({ download: url }).catch((err: unknown) =>
+        log("error", "error applying open-url", unknownToError(err)),
+      );
+    });
+
     app.on("child-process-gone", (_event, details) => {
       log("error", "child process gone", {
         type: details.type,

@@ -809,7 +809,7 @@ abstract class LinkingActivator implements IDeploymentMethod {
       });
   }
 
-  private deployFile(
+  private async deployFile(
     key: string,
     installPathStr: string,
     dataPath: string,
@@ -821,13 +821,17 @@ abstract class LinkingActivator implements IDeploymentMethod {
       this.mContext.newDeployment[key].source,
       this.mContext.newDeployment[key].relPath,
     ].join(path.sep);
-    const fullOutputPath = [
+    const rawOutputPath = [
       dataPath,
       this.mContext.newDeployment[key].target || null,
       this.mContext.newDeployment[key].relPath,
     ]
       .filter((i) => i !== null)
       .join(path.sep);
+
+    // На Linux нормалізуємо шлях з урахуванням регістру існуючих каталогів (уникаємо дублювання Data/Textures vs Data/textures)
+    const resolvedDir = await this.resolveExistingCase(path.dirname(rawOutputPath));
+    const fullOutputPath = path.join(resolvedDir, path.basename(rawOutputPath));
 
     const backupProm: Promise<void> = replace
       ? Promise.resolve()

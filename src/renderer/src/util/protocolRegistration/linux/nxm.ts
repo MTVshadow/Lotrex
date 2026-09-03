@@ -54,11 +54,16 @@ export function registerLinuxNxmProtocolHandler(
   const desktopId = desktopIdForCurrentBuild();
 
   let didChangeDesktopFiles = false;
-  if (desktopId === DEV_DESKTOP_ID) {
+  const sysDesktopExists = fs.existsSync(path.join("/usr/share/applications", desktopId));
+  const userDesktopExists = fs.existsSync(path.join(applicationsDir, desktopId));
+
+  // Якщо desktop-файл відсутній у системі або це dev запуск, генеруємо локальний desktop entry
+  if (!sysDesktopExists || !userDesktopExists || desktopId === DEV_DESKTOP_ID) {
     didChangeDesktopFiles = ensureDevDesktopEntry(
       applicationsDir,
       options.executablePath,
       options.appPath,
+      desktopId,
     );
   }
 
@@ -73,6 +78,7 @@ export function registerLinuxNxmProtocolHandler(
   const previousHandler = getDefaultUrlSchemeHandler(NXM_PROTOCOL);
   const haveToRegister = previousHandler !== desktopId;
   setDefaultUrlSchemeHandler(NXM_PROTOCOL, desktopId);
+  setDefaultUrlSchemeHandler("vortex", desktopId);
 
   return haveToRegister;
 }
@@ -95,7 +101,11 @@ function isFlatpakBuild(): boolean {
 }
 
 function isDevelopmentBuild(): boolean {
-  return process.defaultApp === true || process.env.NODE_ENV === "development";
+  return (
+    process.defaultApp === true ||
+    process.env.NODE_ENV === "development" ||
+    process.execPath.includes("electron")
+  );
 }
 
 function desktopIdForCurrentBuild(): string {
@@ -216,9 +226,11 @@ function ensureDevDesktopEntry(
   applicationsDir: string,
   executablePath: string,
   appPath: string,
+  desktopId: string = DEV_DESKTOP_ID,
 ): boolean {
-  const wrapperPath = path.join(applicationsDir, DEV_WRAPPER_FILE_NAME);
-  const desktopFilePath = path.join(applicationsDir, DEV_DESKTOP_ID);
+  const wrapperFileName = desktopId === DEV_DESKTOP_ID ? DEV_WRAPPER_FILE_NAME : `${desktopId}.sh`;
+  const wrapperPath = path.join(applicationsDir, wrapperFileName);
+  const desktopFilePath = path.join(applicationsDir, desktopId);
 
   warnIfApplicationsPathNeedsEscaping(applicationsDir);
 
@@ -228,12 +240,11 @@ function ensureDevDesktopEntry(
   const wrapperContent = generateWrapperScript(executablePath, appPath);
   const wrapperChanged = writeFileIfChanged(wrapperPath, wrapperContent, 0o755);
 
-  // The wrapper script adds --download conditionally when %u is provided.
-  // This matches Windows behaviour where --download is only passed for protocol URLs.
+  const name = desktopId === DEV_DESKTOP_ID ? "Vortex (dev build)" : "Vortex";
   const desktopFileContent =
     "[Desktop Entry]\n" +
     "Type=Application\n" +
-    "Name=Vortex (dev build)\n" +
+    `Name=${name}\n` +
     "GenericName=Mod Manager\n" +
     "Comment=Mod manager for PC games from Nexus Mods\n" +
     "NoDisplay=true\n" +
@@ -242,7 +253,7 @@ function ensureDevDesktopEntry(
     "Icon=com.nexusmods.vortex\n" +
     "Terminal=false\n" +
     "Categories=Game;Utility;\n" +
-    "MimeType=x-scheme-handler/nxm;\n" +
+    "MimeType=x-scheme-handler/nxm;x-scheme-handler/vortex;\n" +
     "StartupWMClass=Vortex\n" +
     "StartupNotify=true\n" +
     "Keywords=mod;mods;modding;nexus;games;skyrim;fallout;\n";

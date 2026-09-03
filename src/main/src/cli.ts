@@ -271,6 +271,14 @@ export function parseCommandline(argv: string[], electronIsShitHack: boolean): I
     .parse(argv || [])
     .opts() as IParameters;
 
+  // Витягуємо прямі посилання nxm:// або vortex://, передані браузером або OS без прапорця -d/--download
+  const directUrl = (argv || []).find(
+    (arg) => typeof arg === "string" && (/^nxm:\/\//i.test(arg) || /^vortex:\/\//i.test(arg)),
+  );
+  if (directUrl && !commandLine.download && !commandLine.install) {
+    commandLine.download = directUrl;
+  }
+
   return {
     ...getStartupSettings(),
     ...commandLine,

@@ -84,6 +84,18 @@ function withFlatpakHostArgs(commandArgs: string[]): string[] {
  * In Flatpak, uses flatpak-spawn to query the host's settings.
  */
 export function getDefaultUrlSchemeHandler(protocol: string): string | undefined {
+  const mimeType = `x-scheme-handler/${protocol}`;
+  // 1. Стандартний запит FreeDesktop через xdg-mime
+  const mimeArgs = isFlatpak()
+    ? withFlatpakHostArgs(["xdg-mime", "query", "default", mimeType])
+    : ["query", "default", mimeType];
+  const mimeCommand = isFlatpak() ? "flatpak-spawn" : "xdg-mime";
+  const mimeResult = runCommand(mimeCommand, mimeArgs);
+  if (mimeResult.status === 0 && mimeResult.stdout.trim().length > 0) {
+    return mimeResult.stdout.trim();
+  }
+
+  // 2. Додаткова перевірка через xdg-settings
   const args = isFlatpak()
     ? withFlatpakHostArgs(["xdg-settings", "get", "default-url-scheme-handler", protocol])
     : ["get", "default-url-scheme-handler", protocol];
@@ -91,7 +103,6 @@ export function getDefaultUrlSchemeHandler(protocol: string): string | undefined
   const result = runCommand(command, args);
 
   if (result.error !== undefined || result.status !== 0) {
-    logCommandFailure(command, args, result);
     return undefined;
   }
 
@@ -105,6 +116,19 @@ export function getDefaultUrlSchemeHandler(protocol: string): string | undefined
  * ref: https://github.com/Nexus-Mods/NexusMods.App/blob/main/src/NexusMods.Backend/RuntimeDependency/XDGSettingsDependency.cs#L22-L34
  */
 export function setDefaultUrlSchemeHandler(protocol: string, desktopId: string): void {
+  const mimeType = `x-scheme-handler/${protocol}`;
+
+  // 1. Стандартний FreeDesktop механізм xdg-mime default (оновлює mimeapps.list)
+  const mimeArgs = isFlatpak()
+    ? withFlatpakHostArgs(["xdg-mime", "default", desktopId, mimeType])
+    : ["default", desktopId, mimeType];
+  const mimeCommand = isFlatpak() ? "flatpak-spawn" : "xdg-mime";
+  const mimeResult = runCommand(mimeCommand, mimeArgs);
+  if (mimeResult.status === 0) {
+    log("info", "xdg-mime set default handler successfully", { protocol, desktopId });
+  }
+
+  // 2. Додатковий виклик xdg-settings для середовищ (KDE/GNOME), де він підтримується
   const args = isFlatpak()
     ? withFlatpakHostArgs([
         "xdg-settings",
@@ -116,37 +140,7 @@ export function setDefaultUrlSchemeHandler(protocol: string, desktopId: string):
     : ["set", "default-url-scheme-handler", protocol, desktopId];
   const command = isFlatpak() ? "flatpak-spawn" : "xdg-settings";
   const fullCommand = [command, ...args].join(" ");
-  log("info", isFlatpak() ? "flatpak-spawn: setting nxm handler on host" : "setting nxm handler", {
-    command: fullCommand,
-  });
-  const result = runCommand(command, args);
-
-  // Log the result regardless of success/failure for debugging
-  if (result.error !== undefined) {
-    log("error", "linux protocol command failed to execute", {
-      command,
-      args,
-      fullCommand,
-      error: result.error.message,
-      code: result.error.code,
-    });
-  } else if (result.status !== 0) {
-    log("error", "linux protocol command returned non-zero exit code", {
-      command,
-      args,
-      fullCommand,
-      status: result.status,
-      stderr: result.stderr.trim(),
-      stdout: result.stdout.trim(),
-    });
-  } else {
-    log("info", "linux protocol command succeeded", {
-      command,
-      args,
-      fullCommand,
-      stdout: result.stdout.trim(),
-    });
-  }
+  runCommand(command, args);
 }
 
 function runCommand(command: string, args: string[]): ICommandResult {
