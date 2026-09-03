@@ -173,6 +173,20 @@ function main(context) {
     name: "Skyrim Special Edition",
     shortName: "Skyrim SE",
     mergeMods: true,
+    capabilities: {
+      platforms: {
+        linux: {
+          launch: "steam-proton",
+          steamAppId: STEAM_ID,
+          protonRuntimeSelection: true,
+          toolsInGamePrefix: true,
+        },
+      },
+      deployment: {
+        hardlink: true,
+        symlink: true,
+      },
+    },
     queryArgs: {
       // prefer steam because it was released first and users may have pre-1.6.12 installs with store not saved in state
       steam: [{ name: "The Elder Scrolls V: Skyrim Special Edition", prefer: 0 }],

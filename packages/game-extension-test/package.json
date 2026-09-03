@@ -5,6 +5,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "pnpm tsx src/cli.ts",
+    "validate": "pnpm tsx src/validateCli.ts",
     "build": "pnpm tsc",
     "typecheck": "pnpm tsc",
     "test": "pnpm vitest run"
