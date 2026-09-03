@@ -38,10 +38,24 @@ export function registerLinuxProtocolHandler(options: IProtocolRegistrationOptio
     return false;
   }
 
+  let appPath = getVortexPath("package");
+  try {
+    const fs = require("fs");
+    const path = require("path");
+    if (
+      !fs.existsSync(path.join(appPath, "package.json")) &&
+      fs.existsSync(path.join(path.dirname(appPath), "package.json"))
+    ) {
+      appPath = path.dirname(appPath);
+    }
+  } catch {
+    // nop
+  }
+
   return registerLinuxNxmProtocolHandler({
     setAsDefault: options.setAsDefault,
     executablePath: process.execPath,
-    appPath: getVortexPath("package"),
+    appPath,
   });
 }
 
