@@ -17,8 +17,10 @@ import { getNormalizeFunc } from "../../util/api";
 import { ProcessCanceled, SetupError, UserCanceled } from "../../util/CustomErrors";
 import EpicGamesLauncher from "../../util/EpicGamesLauncher";
 import * as fs from "../../util/fs";
-import GameStoreHelper, { normalizeStoreQuery } from "../../util/GameStoreHelper";
+import GameStoreHelper from "../../util/GameStoreHelper";
+import { heroicGameStores } from "../../util/HeroicGamesLauncher";
 import { log } from "../../util/log";
+import { lutrisGameStore } from "../../util/Lutris";
 import { activeProfile, discoveryByGame } from "../../util/selectors";
 import Steam from "../../util/Steam";
 import { getSafe } from "../../util/storeHelper";
@@ -37,6 +39,7 @@ import {
   quickDiscoveryTools,
   searchDiscovery,
 } from "./util/discovery";
+import { resolveGameSteamAppId } from "./util/gameCapabilities";
 import { getGame } from "./util/getGame";
 
 export interface IGameStub {
@@ -69,7 +72,13 @@ class GameModeManager {
     this.mStore = null;
     this.mKnownGames = extensionGames;
     this.mGameStubs = gameStubs;
-    this.mKnownGameStores = [Steam, EpicGamesLauncher, ...gameStoreExtensions].filter(Boolean);
+    this.mKnownGameStores = [
+      Steam,
+      EpicGamesLauncher,
+      ...heroicGameStores,
+      lutrisGameStore,
+      ...gameStoreExtensions,
+    ].filter(Boolean);
     this.mActiveSearch = null;
     this.mOnGameModeActivated = onGameModeActivated;
   }
@@ -457,6 +466,7 @@ class GameModeManager {
       executable: game.executable(),
       environment,
       details,
+      capabilities: game.capabilities,
       shell: game.shell,
       contributed: game.contributed,
       final: game.final,
@@ -464,8 +474,7 @@ class GameModeManager {
   };
 
   private extractSteamId(game: IGame): string | undefined {
-    const [first] = normalizeStoreQuery(game.queryArgs?.steam);
-    return first?.id;
+    return resolveGameSteamAppId(game, process.platform);
   }
 
   private storeTool(tool: ITool): IToolStored {

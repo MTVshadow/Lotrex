@@ -62,6 +62,7 @@ import { getGame, getGameStore, getGameStores } from "./util/getGame";
 import { getModType, getModTypeExtensions, registerModType } from "./util/modTypeExtensions";
 import ProcessMonitor from "./util/ProcessMonitor";
 import queryGameInfo from "./util/queryGameInfo";
+import { validateGameRegistration } from "./util/validateGameRegistration";
 import {} from "./views/GamePicker";
 import HideGameIcon from "./views/HideGameIcon";
 import ModTypeWidget from "./views/ModTypeWidget";
@@ -732,6 +733,13 @@ function init(context: IExtensionContext): boolean {
   //   is only added internally and not part of the public api
   context.registerGame = ((game: IGame, extensionPath: string) => {
     try {
+      const validationErrors = validateGameRegistration(
+        game,
+        new Set($.extensionGames.map((registered) => registered.id)),
+      );
+      if (validationErrors.length > 0) {
+        throw new Error(`Invalid game definition:\n- ${validationErrors.join("\n- ")}`);
+      }
       game.extensionPath = extensionPath;
       const infoPath = path.join(extensionPath, "info.json");
       if (fsExtra.existsSync(infoPath)) {

@@ -27,6 +27,7 @@ import { modPathsForGame } from "../../mod_management/selectors";
 import type { IDiscoveryResult } from "../types/IDiscoveryResult";
 import type { IToolStored } from "../types/IToolStored";
 import Progress from "./Progress";
+import { suggestStagingPathPattern } from "./suggestStagingPath";
 
 export type DiscoveredCB = (gameId: string, result: IDiscoveryResult) => void;
 export type DiscoveredToolCB = (gameId: string, result: IDiscoveredTool) => void;
@@ -758,16 +759,18 @@ export async function suggestStagingPath(api: IExtensionApi, gameId: string): Pr
   await idModPath(modPaths[""]);
   const statUserData = await fs.statAsync(getVortexPath("userData"));
 
-  let suggestion: string;
+  const sameFileSystem = statModPath.dev === statUserData.dev;
+  const gamePath = state.settings.gameMode.discovered[gameId]?.path ?? modPaths[""];
+  const volume =
+    process.platform === "win32" && !sameFileSystem
+      ? winapi.GetVolumePathName(modPaths[""])
+      : undefined;
 
-  if (statModPath.dev === statUserData.dev || process.platform !== "win32") {
-    // main mod folder is on same drive as userdata, use a subdirectory below that
-    suggestion = path.join("{USERDATA}", "{game}", "mods");
-  } else {
-    // different drives, suggest path on same drive
-    const volume = winapi.GetVolumePathName(modPaths[""]);
-    suggestion = path.join(volume, state.settings.mods.suggestInstallPathDirectory, "{game}");
-  }
-
-  return suggestion;
+  return suggestStagingPathPattern(
+    process.platform,
+    sameFileSystem,
+    gamePath,
+    state.settings.mods.suggestInstallPathDirectory,
+    volume,
+  );
 }

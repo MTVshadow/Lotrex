@@ -1,3 +1,4 @@
+import type { IGameCapabilities } from "../../../types/IGame";
 import type { IToolStored } from "./IToolStored";
 
 /**
@@ -21,6 +22,7 @@ export interface IGameStored {
   supportedTools?: IToolStored[];
   environment?: { [key: string]: string };
   details?: { [key: string]: any };
+  capabilities?: IGameCapabilities;
   shell?: boolean;
   contributed?: string;
   final?: boolean;
