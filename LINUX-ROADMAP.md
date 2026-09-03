@@ -28,6 +28,10 @@ for regular use, initially focusing on Skyrim Special Edition running through St
 - Linux-aware Open Directory actions extended: direct shortcuts to Proton prefix folder and Vortex logs with actionable error notifications.
 - Linux staging path suggestion (`suggestStagingPath.ts`) ensuring staging and game reside on the same filesystem partition for hardlinks.
 - Heroic Games Launcher (Epic & GOG) and Lutris store discovery integrated on Linux.
+- Flatpak Steam detection and minimal permission remediation (`flatpakSupport.ts`): directory access validation and scoped `flatpak override` generation without broad filesystem access.
+- Unified Linux Launch Provider (`unifiedLaunchProvider.ts`): centralized orchestration for native Linux binaries, Steam Proton, Heroic URI, and Lutris URI launches with environment configuration.
+- Proton runtime discovery and validation service (`protonRuntimes.ts`): dynamic detection of Proton, Experimental, GE-Proton, and custom runner directories with executable script checks.
+- Platform-aware remediation provider (`platformRemediation.ts`): automatic filtering of Windows-specific terminology (run as administrator, registry, drive letters, defender) into Linux POSIX guidance.
 
 ## P0 — Required for daily use
 
