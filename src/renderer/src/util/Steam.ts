@@ -10,8 +10,12 @@ import type { ICustomExecutionInfo, IExecInfo, IGameStore, IGameStoreEntry } fro
 import type { IExtensionApi } from "../types/IExtensionContext";
 import { GameEntryNotFound } from "../types/IGameStore";
 import * as fs from "./fs";
-import getVortexPath from "./getVortexPath";
-import { getProtonInfo, buildProtonEnvironment, buildProtonCommand } from "./linux/proton";
+import {
+  getProtonInfo,
+  buildProtonEnvironment,
+  buildProtonCommand,
+  findLatestProton,
+} from "./linux/proton";
 import { findLinuxSteamPath } from "./linux/steamPaths";
 import { log } from "./log";
 import opn from "./opn";
@@ -382,17 +386,30 @@ class Steam implements IGameStore {
     options: any,
     gameEntry: ISteamEntry,
   ): Promise<void> {
-    if (!gameEntry.usesProton || !gameEntry.protonPath || !gameEntry.compatDataPath) {
+    const steamPath = await this.mBaseFolder;
+    let protonPath = gameEntry.protonPath;
+    if (!protonPath && steamPath) {
+      protonPath = await findLatestProton(steamPath);
+    }
+    const compatDataPath = gameEntry.compatDataPath;
+
+    if (!gameEntry.usesProton || !protonPath || !compatDataPath) {
+      log("warn", "Cannot run Windows tool through Proton: missing proton runtime or prefix", {
+        exePath,
+        protonPath,
+        compatDataPath,
+      });
       return api.runExecutable(exePath, args, options);
     }
 
-    const steamPath = await this.mBaseFolder;
-    const { executable, args: protonArgs } = buildProtonCommand(
-      gameEntry.protonPath,
-      exePath,
-      args,
+    const { executable, args: protonArgs } = buildProtonCommand(protonPath, exePath, args);
+    const protonEnv = buildProtonEnvironment(
+      compatDataPath,
+      steamPath,
+      options.env,
+      protonPath,
+      gameEntry.gamePath,
     );
-    const protonEnv = buildProtonEnvironment(gameEntry.compatDataPath, steamPath, options.env);
 
     return api.runExecutable(executable, protonArgs, {
       ...options,

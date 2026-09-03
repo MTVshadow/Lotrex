@@ -34,14 +34,19 @@ export function buildCopyInstructions(
   files: readonly string[],
   opts: { stripCommonRoot: boolean; modType?: string },
 ): IInstallResult {
-  const dataFiles = files.filter((f) => !f.endsWith(path.sep));
+  // Фільтруємо каталоги, що закінчуються як на '/', так і на '\' (Windows архіви)
+  const dataFiles = files.filter((f) => !/[\\/]$/.test(f));
   const commonPrefix = opts.stripCommonRoot ? findCommonRootDir(dataFiles) : undefined;
 
-  const instructions: IInstruction[] = dataFiles.map((file) => ({
-    type: "copy" as const,
-    source: file,
-    destination: commonPrefix ? file.substring(commonPrefix.length + 1) : file,
-  }));
+  const instructions: IInstruction[] = dataFiles.map((file) => {
+    const rawDest = commonPrefix ? file.substring(commonPrefix.length + 1) : file;
+    return {
+      type: "copy" as const,
+      source: file,
+      // Нормалізуємо зворотні слеші у прямі для уникнення некоректних імен файлів на Linux
+      destination: rawDest.replace(/\\/g, "/"),
+    };
+  });
   if (opts.modType !== undefined) {
     instructions.push({ type: "setmodtype" as const, value: opts.modType });
   }
@@ -74,7 +79,7 @@ export function matchesAnyStopPattern(files: readonly string[], gameId: string):
 }
 
 function evaluateMatch(match: IInstallerMatch, files: readonly string[], gameId: string): boolean {
-  const dataFiles = files.filter((f) => !f.endsWith(path.sep));
+  const dataFiles = files.filter((f) => !/[\\/]$/.test(f));
   if (dataFiles.length === 0 && match.kind !== "custom") return false;
 
   switch (match.kind) {

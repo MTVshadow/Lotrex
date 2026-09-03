@@ -116,12 +116,14 @@ class DeploymentMethod extends LinkingDeployment {
           order: 5,
           solution: (t) => {
             let displayPath = modPaths[typeId];
-            try {
-              displayPath = winapi.GetVolumePathName(modPaths[typeId]);
-            } catch {
-              log("warn", "Failed to resolve volume path", {
-                path: modPaths[typeId],
-              });
+            if (process.platform === "win32") {
+              try {
+                displayPath = winapi.GetVolumePathName(modPaths[typeId]);
+              } catch {
+                log("warn", "Failed to resolve volume path", {
+                  path: modPaths[typeId],
+                });
+              }
             }
             return t(
               "Please go to Settings->Mods and set the mod staging folder to be on " +

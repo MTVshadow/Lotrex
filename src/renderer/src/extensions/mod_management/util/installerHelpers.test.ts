@@ -39,11 +39,27 @@ describe("findCommonRootDir", () => {
 });
 
 describe("buildCopyInstructions", () => {
-  test("filters out directory entries", () => {
-    const sep = require("path").sep;
-    const result = buildCopyInstructions([`dir${sep}`, "a.xml"], { stripCommonRoot: false });
+  test("filters out directory entries with both forward and backslash", () => {
+    const result = buildCopyInstructions(["dir/", "win_dir\\", "a.xml"], {
+      stripCommonRoot: false,
+    });
     expect(result.instructions).toHaveLength(1);
-    expect(result.instructions[0]).toMatchObject({ type: "copy", source: "a.xml" });
+    expect(result.instructions[0]).toMatchObject({
+      type: "copy",
+      source: "a.xml",
+      destination: "a.xml",
+    });
+  });
+
+  test("normalizes backslashes to forward slashes in destination paths", () => {
+    const result = buildCopyInstructions(["textures\\armor\\iron.dds"], { stripCommonRoot: false });
+    expect(result.instructions).toEqual([
+      {
+        type: "copy",
+        source: "textures\\armor\\iron.dds",
+        destination: "textures/armor/iron.dds",
+      },
+    ]);
   });
 
   test("preserves paths when stripCommonRoot=false", () => {

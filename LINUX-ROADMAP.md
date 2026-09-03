@@ -13,6 +13,8 @@ for regular use, initially focusing on Skyrim Special Edition running through St
 - All 7 consumers migrated from direct Linux paths to `ProtonPaths` (local game settings, INI preparation, plugin management, save-game management, archive invalidation, script extender logs, open-directory).
 - Robust Proton prefix detection: manifest parsing without regex, multi-library & Flatpak/Snap layouts, dynamic Wine user resolution, case-insensitive directory lookups, caching & invalidation.
 - Stable application identity (`app.name = "Vortex"`) set to guarantee consistent `userData` location (`~/.config/Vortex`) across dev and packaged releases.
+- Proton tool launcher upgraded: external mod tools (LOOT, xEdit, BodySlide, Nemesis, Pandora) and SKSE automatically launched inside the game's Proton prefix; multi-location GE-Proton/UMU-Proton detection and semver scoring implemented; `STEAM_COMPAT_TOOL_PATHS` and `STEAM_COMPAT_MOUNTS` configured.
+- Mod archive extraction & installer normalized: directory markers with forward/backslashes handled, destination paths normalized to prevent backslash file naming on Linux filesystems.
 - A clean first launch no longer fails when the Vortex configuration directory does not exist.
 - Full end-to-end mod installation, deployment, launch, and purge still need verification.
 

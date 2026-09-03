@@ -132,11 +132,19 @@ export async function resolveProtonPath(
   steamPath: string,
   protonName: string,
 ): Promise<string | undefined> {
-  // 1. Check custom compatibility tools directory (GE-Proton, etc.)
-  // Custom tools use their config name as the folder name directly
-  const customToolPath = path.join(steamPath, "compatibilitytools.d", protonName);
-  if (await pathExists(customToolPath)) {
-    return customToolPath;
+  // 1. Check custom compatibility tools directory (GE-Proton, etc.) across possible Steam paths
+  const home = process.env.HOME || "";
+  const customToolCandidates = [
+    path.join(steamPath, "compatibilitytools.d", protonName),
+    path.join(home, ".local", "share", "Steam", "compatibilitytools.d", protonName),
+    path.join(home, ".steam", "root", "compatibilitytools.d", protonName),
+    path.join(home, ".steam", "steam", "compatibilitytools.d", protonName),
+  ];
+
+  for (const candidate of customToolCandidates) {
+    if (await pathExists(candidate)) {
+      return candidate;
+    }
   }
 
   const commonPath = path.join(steamPath, "steamapps", "common");
@@ -170,23 +178,60 @@ export async function resolveProtonPath(
 }
 
 /**
+ * Оцінка пріоритету версії Proton для вибору найновішої стабільної версії
+ */
+function scoreProtonVersion(name: string): number {
+  const match = name.match(/(?:Proton|GE-Proton|UMU-Proton)[\s-]*(\d+)(?:[.-](\d+))?/i);
+  if (match) {
+    const major = parseInt(match[1], 10);
+    const minor = match[2] ? parseInt(match[2], 10) : 0;
+    return major * 1000 + minor;
+  }
+  if (/experimental/i.test(name)) return 500;
+  if (/hotfix/i.test(name)) return 100;
+  return 0;
+}
+
+/**
  * Find the latest installed Proton version (fallback)
  */
 export async function findLatestProton(steamPath: string): Promise<string | undefined> {
-  const commonPath = path.join(steamPath, "steamapps", "common");
-  try {
-    const entries = await fs.readdirAsync(commonPath);
-    const protonDirs = entries
-      .filter((e) => e.toLowerCase().startsWith("proton"))
-      .sort()
-      .reverse();
+  const home = process.env.HOME || "";
+  const candidateDirs: string[] = [
+    path.join(steamPath, "steamapps", "common"),
+    path.join(steamPath, "compatibilitytools.d"),
+    path.join(home, ".local", "share", "Steam", "compatibilitytools.d"),
+    path.join(home, ".steam", "root", "compatibilitytools.d"),
+  ];
 
-    if (protonDirs.length > 0) {
-      return path.join(commonPath, protonDirs[0]);
+  const foundRuntimes: { path: string; score: number }[] = [];
+
+  for (const parentDir of candidateDirs) {
+    try {
+      if (!(await pathExists(parentDir))) {
+        continue;
+      }
+      const entries = await fs.readdirAsync(parentDir);
+      for (const entry of entries) {
+        const fullPath = path.join(parentDir, entry);
+        const protonBin = path.join(fullPath, "proton");
+        if (await pathExists(protonBin)) {
+          foundRuntimes.push({
+            path: fullPath,
+            score: scoreProtonVersion(entry),
+          });
+        }
+      }
+    } catch {
+      // Ігноруємо недоступні каталоги
     }
-  } catch (err: any) {
-    log("debug", "Could not scan for Proton versions", { error: err?.message });
   }
+
+  if (foundRuntimes.length > 0) {
+    foundRuntimes.sort((a, b) => b.score - a.score);
+    return foundRuntimes[0].path;
+  }
+
   return undefined;
 }
 
@@ -235,13 +280,24 @@ export function buildProtonEnvironment(
   compatDataPath: string,
   steamPath: string,
   existingEnv?: Record<string, string>,
+  protonPath?: string,
+  gamePath?: string,
 ): Record<string, string> {
-  return {
+  const env: Record<string, string> = {
     ...existingEnv,
     STEAM_COMPAT_DATA_PATH: compatDataPath,
     STEAM_COMPAT_CLIENT_INSTALL_PATH: steamPath,
     WINEPREFIX: getWinePrefixPath(compatDataPath),
   };
+  if (protonPath) {
+    // Вказуємо шлях до рантайму Proton для коректної роботи сучасних збірок Proton
+    env.STEAM_COMPAT_TOOL_PATHS = protonPath;
+  }
+  if (gamePath) {
+    // Для запуску ігор/інструментів з додаткових розділів або зовнішніх дисків
+    env.STEAM_COMPAT_MOUNTS = gamePath;
+  }
+  return env;
 }
 
 /**

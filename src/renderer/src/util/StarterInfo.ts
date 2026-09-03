@@ -27,6 +27,8 @@ import { emitGameLaunched, recordLaunchExit } from "./gameLaunchAnalytics";
 import GameStoreHelper from "./GameStoreHelper";
 import getVortexPath from "./getVortexPath";
 import { isWindowsExecutable } from "./linux/proton";
+import ProtonPaths from "./linux/ProtonPaths";
+import * as selectors from "./selectors";
 import type { Steam, ISteamEntry } from "./Steam";
 import { getSafe } from "./storeHelper";
 
@@ -87,7 +89,11 @@ async function shouldRunWithProton(
   if (!isWindowsExecutable(info.exePath)) {
     return undefined;
   }
-  if (info.store !== "steam") {
+  if (
+    info.store !== "steam" &&
+    !process.env.VORTEX_PROTON_PREFIX &&
+    !process.env.STEAM_COMPAT_DATA_PATH
+  ) {
     return undefined;
   }
 
@@ -95,12 +101,46 @@ async function shouldRunWithProton(
     const steamStore = GameStoreHelper.getGameStore("steam") as Steam;
     const games = await steamStore.allGames();
 
-    // Find the game entry that matches this executable's location
-    return games.find(
+    // 1. Пошук гри за збігом шляху запуску/робочого каталогу
+    const byPath = games.find(
       (g) =>
-        info.workingDirectory?.toLowerCase().startsWith(g.gamePath.toLowerCase()) ||
-        info.exePath.toLowerCase().startsWith(g.gamePath.toLowerCase()),
+        (info.workingDirectory &&
+          g.gamePath &&
+          info.workingDirectory.toLowerCase().startsWith(g.gamePath.toLowerCase())) ||
+        (info.exePath &&
+          g.gamePath &&
+          info.exePath.toLowerCase().startsWith(g.gamePath.toLowerCase())),
     );
+    if (byPath !== undefined && byPath.usesProton) {
+      return byPath;
+    }
+
+    // 2. Для інструментів зовні каталогу гри (LOOT, xEdit, BodySlide тощо) шукаємо за AppID гри
+    const state = api?.store?.getState?.();
+    const game = state ? selectors.gameById(state, info.gameId) : undefined;
+    const discovery = state ? selectors.discoveryByGame(state, info.gameId) : undefined;
+    const appId = ProtonPaths.resolveAppId(discovery, game);
+
+    if (appId) {
+      const byAppId = games.find((g) => g.appid === appId);
+      if (byAppId !== undefined && byAppId.usesProton) {
+        return byAppId;
+      }
+    }
+
+    // 3. Fallback: використання централізованого сервісу ProtonPaths
+    const protonPaths = ProtonPaths.resolve({ gameMode: info.gameId, discovery, game });
+    if (protonPaths?.prefixPath) {
+      return {
+        appid: protonPaths.appId || appId || "",
+        gameStoreId: "steam",
+        name: info.gameId,
+        gamePath: protonPaths.gamePath || path.dirname(info.exePath),
+        usesProton: true,
+        compatDataPath: path.dirname(protonPaths.prefixPath),
+        protonPath: protonPaths.protonPath,
+      };
+    }
   } catch (err: any) {
     log("debug", "Could not check for Proton execution", {
       error: err?.message,
