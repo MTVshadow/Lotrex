@@ -23,6 +23,7 @@ import {
   hiddenFileRequirements,
   hiddenModRequirements,
   isHealthCheckRunning,
+  linuxProtonCheckResult,
   modRequirementsCheckResult,
 } from "../selectors";
 import { selectListedEntries } from "../utils/shared/listedEntries";
@@ -85,6 +86,7 @@ function HealthCheckDetailPage({
   // is mid-run) return to the listing. Mirrors HealthCheckPage's slice subscriptions.
   const fileResult = useSelector(fileRequirementsCheckResult);
   const modResult = useSelector(modRequirementsCheckResult);
+  const linuxProtonResult = useSelector(linuxProtonCheckResult);
   const hiddenFile = useSelector(hiddenFileRequirements);
   const hiddenMod = useSelector(hiddenModRequirements);
   // Only the entry's own check can bring its requirements back, so waiting on the other one
@@ -94,7 +96,7 @@ function HealthCheckDetailPage({
   const liveEntry = useMemo(
     () => content.selectEntries(api.getState()).find((candidate) => candidate.id === entry.id),
     // eslint-disable-next-line @eslint-react/exhaustive-deps
-    [api, content, entry.id, fileResult, modResult, hiddenFile, hiddenMod],
+    [api, content, entry.id, fileResult, modResult, linuxProtonResult, hiddenFile, hiddenMod],
   );
 
   useEffect(() => {

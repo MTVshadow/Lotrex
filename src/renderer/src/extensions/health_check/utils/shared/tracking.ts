@@ -14,7 +14,7 @@ import type {
 export type IssueType = "warning" | "suggestion";
 
 /** The resolution flow an issue offers. */
-export type ResolutionType = "install" | "enable" | "pick" | "update";
+export type ResolutionType = "install" | "enable" | "pick" | "update" | "configure";
 
 /** Which listing tab is active. */
 export type HealthCheckTab = "active" | "hidden";
@@ -25,7 +25,7 @@ export type HealthCheckTab = "active" | "hidden";
  * break reporting, and it is the discriminator the KPIs split on — `issue_type` only
  * has two values, so a third check would have to reuse one and collide.
  */
-export type CheckName = "file_requirements" | "mod_requirements";
+export type CheckName = "file_requirements" | "mod_requirements" | "linux_proton";
 
 /**
  * Exhaustive by construction: registering a third check widens `HealthCheckId` and
@@ -35,6 +35,7 @@ export type CheckName = "file_requirements" | "mod_requirements";
 const CHECK_NAMES: Record<HealthCheckId, CheckName> = {
   "check-file-level-requirements": "file_requirements",
   "check-nexus-mod-requirements": "mod_requirements",
+  "check-linux-proton": "linux_proton",
 };
 
 /** check_id for an entry — the reliable per-check key on every issue-scoped event. */
@@ -48,6 +49,7 @@ export const checkNameForCheck = (checkId: HealthCheckId): CheckName => CHECK_NA
 const ISSUE_TYPES: Record<HealthCheckId, IssueType> = {
   "check-file-level-requirements": "warning",
   "check-nexus-mod-requirements": "suggestion",
+  "check-linux-proton": "warning",
 };
 
 export const issueTypeForCheck = (checkId: HealthCheckId): IssueType => ISSUE_TYPES[checkId];

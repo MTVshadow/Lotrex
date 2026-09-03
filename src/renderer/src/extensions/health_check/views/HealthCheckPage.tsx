@@ -43,6 +43,7 @@ import {
   hiddenModRequirements,
   isAnyHealthCheckRunning,
   lastHealthCheckRun,
+  linuxProtonCheckResult,
   modRequirementsCheckResult,
 } from "../selectors";
 import { countIssues, type IListedEntry, selectListedEntries } from "../utils/shared/listedEntries";
@@ -129,6 +130,7 @@ const HealthCheckPage = ({ api, onRefresh, active, registerReset }: IHealthCheck
   // subscription lives in LastUpdated.
   const fileResult = useSelector(fileRequirementsCheckResult);
   const modResult = useSelector(modRequirementsCheckResult);
+  const linuxProtonResult = useSelector(linuxProtonCheckResult);
   const hiddenFile = useSelector(hiddenFileRequirements);
   const hiddenMod = useSelector(hiddenModRequirements);
   const showPremiumAd = useSelector(shouldShowPremiumAd);
@@ -144,12 +146,12 @@ const HealthCheckPage = ({ api, onRefresh, active, registerReset }: IHealthCheck
   const items = useMemo(
     () => selectListedEntries(api.getState()),
     // eslint-disable-next-line @eslint-react/exhaustive-deps
-    [api, fileResult, modResult, hiddenFile, hiddenMod],
+    [api, fileResult, modResult, linuxProtonResult, hiddenFile, hiddenMod],
   );
   const installAllItems = useMemo(
     () => collectInstallAllItems(api.getState(), api),
     // eslint-disable-next-line @eslint-react/exhaustive-deps
-    [api, fileResult, modResult, hiddenFile, hiddenMod],
+    [api, fileResult, modResult, linuxProtonResult, hiddenFile, hiddenMod],
   );
 
   const activeItems = useMemo(() => items.filter((item) => !item.hidden), [items]);

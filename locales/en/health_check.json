@@ -117,6 +117,37 @@
     "mod_requirements": "Missing mod requirements suggestions",
     "file_requirements": "Missing file requirements warnings"
   },
+  "linux_proton": {
+    "title": "Proton setup for {{gameName}}",
+    "diagnostics": {
+      "app_id": "Steam App ID",
+      "executable": "Executable",
+      "steam": "Steam installation",
+      "prefix": "Proton prefix"
+    },
+    "issues": {
+      "steam-not-found": {
+        "title": "Steam installation not found",
+        "summary": "Vortex cannot locate this game's Steam installation.",
+        "details": "Make sure Steam is installed and has been started at least once. Vortex supports native, Flatpak and Snap Steam installations, including custom XDG data directories."
+      },
+      "app-id-not-found": {
+        "title": "Steam App ID not found",
+        "summary": "Vortex cannot associate this game with its Steam library entry.",
+        "details": "Rescan your games. If the problem remains, the game extension needs a Steam App ID in its store metadata."
+      },
+      "prefix-not-found": {
+        "title": "Proton prefix not initialized",
+        "summary": "Steam has not created the Windows environment used by this game.",
+        "details": "Start the game once from Steam, wait until it reaches the main menu, then close it and refresh Health Check."
+      },
+      "runtime-not-found": {
+        "title": "Proton runtime not found",
+        "summary": "Vortex cannot find an installed Proton runtime for this game.",
+        "details": "Open the game's Steam Properties, enable a compatibility tool, install or select Proton, then refresh Health Check."
+      }
+    }
+  },
   "premium": {
     "modal": {
       "title": {

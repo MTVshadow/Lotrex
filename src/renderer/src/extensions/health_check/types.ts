@@ -10,7 +10,29 @@ import type { ICustomCheckApi, ILegacyApi, IResultsApi } from "./api";
 /**
  * Known health check IDs
  */
-export type HealthCheckId = "check-nexus-mod-requirements" | "check-file-level-requirements";
+export type HealthCheckId =
+  | "check-nexus-mod-requirements"
+  | "check-file-level-requirements"
+  | "check-linux-proton";
+
+export type LinuxProtonIssueReason =
+  | "steam-not-found"
+  | "app-id-not-found"
+  | "prefix-not-found"
+  | "runtime-not-found";
+
+export interface ILinuxProtonIssue {
+  reason: LinuxProtonIssueReason;
+  appId?: string;
+  executablePath?: string;
+  gameName?: string;
+  prefixPath?: string;
+  steamPath?: string;
+}
+
+export interface ILinuxProtonCheckMetadata {
+  issue?: ILinuxProtonIssue;
+}
 
 /**
  * A subset of IModRequiring representing the mod that requires a missing mod.

@@ -7,6 +7,7 @@ import type {
   IModMissingRequirements,
   IModRequirementsCheckMetadata,
   IModRequirementExt,
+  ILinuxProtonCheckMetadata,
 } from "./types";
 import type {
   IFileLevelRequirements,
@@ -65,6 +66,9 @@ export const fileRequirementsCheckResult = (
   );
   return result?.metadata?.fileRequirements;
 };
+
+export const linuxProtonCheckResult = (state: IState): ILinuxProtonCheckMetadata | undefined =>
+  healthCheckResult<ILinuxProtonCheckMetadata>(state, "check-linux-proton")?.metadata;
 
 /**
  * Get all missing mod requirements without filtering
