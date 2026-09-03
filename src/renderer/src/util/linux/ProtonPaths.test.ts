@@ -90,6 +90,16 @@ describe("ProtonPaths", () => {
     expect(result?.prefixPath).toBe(pfx);
   });
 
+  it("prefers the typed Linux capability over legacy metadata", () => {
+    expect(
+      ProtonPaths.resolveAppId(undefined, {
+        capabilities: { platforms: { linux: { steamAppId: 489830 } } },
+        details: { steamAppId: 1 },
+        environment: { SteamAPPId: "2" },
+      }),
+    ).toBe("489830");
+  });
+
   it("handles non-steamuser custom Wine username", () => {
     const customUserDir = path.join(pfx, "drive_c", "users", "customgamer");
     fs.mkdirSync(path.join(customUserDir, "Documents", "My Games"), { recursive: true });

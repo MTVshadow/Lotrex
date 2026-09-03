@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import type { IDiscoveryResult } from "../../extensions/gamemode_management/types/IDiscoveryResult";
+import { resolveGameSteamAppId } from "../../extensions/gamemode_management/util/gameCapabilities";
 import type { IGame } from "../../types/IGame";
 import { findLinuxSteamPath, getLinuxSteamPaths } from "./steamPaths";
 
@@ -39,7 +40,7 @@ export interface IProtonResolveOptions {
   /** Результат виявлення гри (discovery) */
   discovery?: IDiscoveryResult;
   /** Метадані гри з розширення або сховища стану */
-  game?: IGame | any;
+  game?: Pick<IGame, "capabilities" | "details" | "environment" | "queryArgs">;
   /** Стан Redux (для селекторів) */
   state?: any;
   /** Явний Steam AppID (перевизначає автоматичний пошук) */
@@ -151,30 +152,11 @@ export class ProtonPaths {
       return explicitAppId;
     }
 
-    // 1. Перевірка змінних середовища discovery
-    const envAppId = discovery?.environment?.SteamAPPId;
-    if (envAppId) {
-      return String(envAppId);
-    }
+    // Typed capability is authoritative, followed by discovery and legacy metadata.
+    const metadataAppId = resolveGameSteamAppId(game, "linux", discovery?.environment?.SteamAPPId);
+    if (metadataAppId !== undefined) return metadataAppId;
 
-    // 2. Перевірка зареєстрованого середовища або details гри
-    const gameEnvAppId = game?.environment?.SteamAPPId;
-    if (gameEnvAppId) {
-      return String(gameEnvAppId);
-    }
-
-    const gameDetailsAppId = (game?.details as any)?.steamAppId;
-    if (gameDetailsAppId) {
-      return String(gameDetailsAppId);
-    }
-
-    // 3. Перевірка steam queryArgs
-    const queryArgsSteam = (game?.queryArgs as any)?.steam;
-    if (Array.isArray(queryArgsSteam) && queryArgsSteam.length > 0 && queryArgsSteam[0].id) {
-      return String(queryArgsSteam[0].id);
-    }
-
-    // 4. Сканування маніфестів у steamapps, якщо є discovery.path
+    // Fall back to scanning manifests when the extension has no metadata.
     if (discovery?.path) {
       try {
         const steamAppsDir = path.dirname(path.dirname(discovery.path));
