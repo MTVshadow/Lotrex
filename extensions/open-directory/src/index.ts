@@ -1,15 +1,69 @@
 import * as path from "path";
 
-import { fs, selectors, types, util } from "@nexusmods/vortex-api";
+import { fs, selectors, types, util, ProtonPaths } from "@nexusmods/vortex-api";
 import Promise from "bluebird";
 
 import { appDataPath, initGameSupport, settingsPath } from "./gameSupport";
 
+let gApi: types.IExtensionApi | undefined;
+
 function init(context: types.IExtensionContext) {
+  gApi = context.api;
   initGameSupport(context.api);
   context.registerAction("mod-icons", 300, "open-ext", {}, "Open Mod Staging Folder", () => {
     const store = context.api.store;
     util.opn(selectors.installPath(store.getState())).catch((err) => undefined);
+  });
+
+  context.registerAction(
+    "mod-icons",
+    305,
+    "open-ext",
+    {},
+    "Open Proton Prefix Folder",
+    () => {
+      const state = context.api.getState();
+      const gameId = selectors.activeGameId(state);
+      const game = util.getGame(gameId);
+      const discovery = selectors.discoveryByGame(state, gameId);
+      const proton = (ProtonPaths ?? util.ProtonPaths)?.resolve({
+        gameMode: gameId,
+        discovery,
+        game,
+      });
+      if (proton?.prefixPath) {
+        openPath(proton.prefixPath);
+      } else {
+        context.api.showErrorNotification(
+          "Proton prefix not found",
+          "The Proton prefix for this game has not been initialized yet or cannot be found.",
+          { allowReport: false },
+        );
+      }
+    },
+    () => {
+      if (process.platform === "win32") return false;
+      const state = context.api.getState();
+      const gameId = selectors.activeGameId(state);
+      const game = util.getGame(gameId);
+      const discovery = selectors.discoveryByGame(state, gameId);
+      const proton = (ProtonPaths ?? util.ProtonPaths)?.resolve({
+        gameMode: gameId,
+        discovery,
+        game,
+      });
+      return Boolean(proton?.prefixPath);
+    },
+  );
+
+  context.registerAction("mod-icons", 310, "open-ext", {}, "Open Vortex Logs Folder", () => {
+    let logsPath: string;
+    try {
+      logsPath = path.join(util.getVortexPath("userData"), "logs");
+    } catch {
+      logsPath = path.join(process.env.HOME || "", ".config", "Vortex", "logs");
+    }
+    openPath(logsPath);
   });
 
   context.registerAction("mod-icons", 300, "open-ext", {}, "Open Game Folder", () => {
@@ -190,11 +244,22 @@ function getGameInstallPath(state: any, gameId: string): Promise<string> {
 
 function openPath(mainPath: string, fallbackPath?: string) {
   fs.statAsync(mainPath)
-    .then(() => util.opn(mainPath).catch(() => undefined))
-    .catch(() =>
-      fallbackPath !== undefined ? util.opn(fallbackPath).catch(() => undefined) : undefined,
-    )
-    .then(() => null);
+    .then(() => util.opn(mainPath))
+    .catch((err) => {
+      if (fallbackPath !== undefined) {
+        return fs.statAsync(fallbackPath).then(() => util.opn(fallbackPath));
+      }
+      return Promise.reject(err);
+    })
+    .catch((err: any) => {
+      if (gApi) {
+        gApi.showErrorNotification(
+          "Failed to open directory",
+          err?.message || `Directory could not be found or accessed: ${mainPath}`,
+          { allowReport: false },
+        );
+      }
+    });
 }
 
 export default init;

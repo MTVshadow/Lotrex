@@ -1,0 +1,74 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  detectCaseCollisions,
+  formatCaseCollisionReport,
+  normalizeCasePath,
+} from "./caseCollisions";
+
+describe("caseCollisions", () => {
+  it("normalizes paths to lowercase posix format", () => {
+    expect(normalizeCasePath("Data\\Textures\\Wood.DDS")).toBe("data/textures/wood.dds");
+    expect(normalizeCasePath("data/textures/wood.dds")).toBe("data/textures/wood.dds");
+  });
+
+  it("identifies case collisions between different mod files", () => {
+    const items = [
+      {
+        modId: "mod-a",
+        relPath: "Textures/Armor/Iron.dds",
+        sourcePath: "/staging/mod-a/Textures/Armor/Iron.dds",
+      },
+      {
+        modId: "mod-b",
+        relPath: "textures/armor/iron.dds",
+        sourcePath: "/staging/mod-b/textures/armor/iron.dds",
+      },
+      {
+        modId: "mod-c",
+        relPath: "Meshes/Armor/Iron.nif",
+        sourcePath: "/staging/mod-c/Meshes/Armor/Iron.nif",
+      },
+    ];
+
+    const collisions = detectCaseCollisions(items);
+    expect(collisions.length).toBe(1);
+    expect(collisions[0].normalizedPath).toBe("textures/armor/iron.dds");
+    expect(collisions[0].variants).toEqual(["Textures/Armor/Iron.dds", "textures/armor/iron.dds"]);
+    expect(collisions[0].sources.length).toBe(2);
+  });
+
+  it("does not report identical casing as a collision", () => {
+    const items = [
+      {
+        modId: "mod-a",
+        relPath: "Textures/Armor/Iron.dds",
+      },
+      {
+        modId: "mod-b",
+        relPath: "Textures/Armor/Iron.dds",
+      },
+    ];
+
+    const collisions = detectCaseCollisions(items);
+    expect(collisions.length).toBe(0);
+  });
+
+  it("formats human-readable diagnostic report", () => {
+    const collisions = [
+      {
+        normalizedPath: "textures/wood.dds",
+        sources: [
+          { modId: "mod-1", relPath: "Textures/Wood.dds" },
+          { modId: "mod-2", relPath: "textures/wood.dds" },
+        ],
+        variants: ["Textures/Wood.dds", "textures/wood.dds"],
+      },
+    ];
+
+    const report = formatCaseCollisionReport(collisions);
+    expect(report).toContain("колізій регістру");
+    expect(report).toContain("Textures/Wood.dds (мод: mod-1)");
+    expect(report).toContain("textures/wood.dds (мод: mod-2)");
+  });
+});
