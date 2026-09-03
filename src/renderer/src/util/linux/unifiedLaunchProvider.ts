@@ -134,21 +134,12 @@ export function resolveUnifiedLaunch(request: IUnifiedLaunchRequest): IUnifiedLa
 
   if (!effectivePrefix) {
     diagnostics.push(`Префікс Proton для гри '${gameName || gameId}' не знайдено.`);
-    throw new ProtonUnavailable({
-      gameName: gameName || gameId,
-      reason: "prefix-not-found",
-      executablePath,
-    });
+    throw new ProtonUnavailable("prefix-not-found", proton?.appId);
   }
 
   if (!effectiveProtonRuntime) {
     diagnostics.push(`Виконуване середовище Proton для гри '${gameName || gameId}' не знайдено.`);
-    throw new ProtonUnavailable({
-      gameName: gameName || gameId,
-      reason: "runtime-not-found",
-      executablePath,
-      prefixPath: effectivePrefix,
-    });
+    throw new ProtonUnavailable("runtime-not-found", proton?.appId);
   }
 
   // Формування оточення сумісності Steam Proton
