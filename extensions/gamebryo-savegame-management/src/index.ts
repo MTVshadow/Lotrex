@@ -81,9 +81,7 @@ function updateSaves(store: Redux.Store<any>, savesPath: string): Promise<string
   return refreshSavegames(
     savesPath,
     (save: ISavegame): void => {
-      if (store.getState().session.saves[save.id] === undefined) {
-        newSavegames.push(save);
-      }
+      newSavegames.push(save);
     },
     true,
   )
@@ -95,7 +93,7 @@ function updateSaves(store: Redux.Store<any>, savesPath: string): Promise<string
       });
 
       const state = store.getState();
-      const oldSaves: { [id: string]: ISavegame } = state.session.saves.saves;
+      const oldSaves: { [id: string]: ISavegame } = state.session?.saves?.saves ?? {};
 
       if (!saveDictEqual(oldSaves, savesDict)) {
         store.dispatch(setSavegames(savesDict, result.truncated));
@@ -106,10 +104,6 @@ function updateSaves(store: Redux.Store<any>, savesPath: string): Promise<string
 
 function genUpdateSavegameHandler(api: types.IExtensionApi) {
   return (profileId: string, savesPath: string) => {
-    if (!util.getApplication().isFocused) {
-      return Promise.resolve();
-    }
-
     api.store.dispatch(actions.startActivity("savegames", "Loading"));
 
     return updateSaves(api.store, savesPath)
@@ -206,12 +200,13 @@ function onProfileChange(api: types.IExtensionApi, profileId: string, update: ut
   }
 
   const prof = selectors.profileById(state, profileId);
-  if (!gameSupported(prof.gameId)) {
+  if (!prof || !gameSupported(prof.gameId)) {
     return;
   }
 
   const savePath = profileSavePath(prof);
   store.dispatch(setSavegamePath(savePath));
+  update.schedule(undefined, prof.id, getSavesPath(prof));
 }
 
 function onProfilesModified(
@@ -329,6 +324,16 @@ function once(context: types.IExtensionContext, update: util.Debouncer) {
     onProfileChange(context.api, profileId, update),
   );
 
+  context.api.events.on("gamemode-activated", () => {
+    updateSavegames(context.api, update);
+  });
+
+  context.api.events.on("did-change-active-page", (pageId: string) => {
+    if (pageId === "savegame" || pageId === "gamebryo-savegames") {
+      updateSavegames(context.api, update);
+    }
+  });
+
   const onFocus = () => {
     updateSavegames(context.api, update);
   };
@@ -342,6 +347,7 @@ function once(context: types.IExtensionContext, update: util.Debouncer) {
     if (profile !== undefined) {
       const savePath = profileSavePath(profile);
       store.dispatch(setSavegamePath(savePath));
+      updateSavegames(context.api, update);
     }
   }
 }

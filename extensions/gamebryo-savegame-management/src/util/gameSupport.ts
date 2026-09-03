@@ -159,7 +159,7 @@ export function initGameSupport(api: types.IExtensionApi) {
 }
 
 export function gameSupported(gameMode: string): boolean {
-  return gameSupport[gameMode] !== undefined;
+  return gameSupport.has(gameMode);
 }
 
 export function mygamesPath(gameMode: string): string {

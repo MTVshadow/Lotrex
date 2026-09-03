@@ -20,7 +20,7 @@
     "yarn": "1.22.19"
   },
   "scripts": {
-    "prepare": "husky",
+    "prepare": "husky && node ./scripts/patch-winapi-stub.mjs",
     "preinstall": "node ./scripts/create-env-file.mjs",
     "dev": "pnpm nx run @vortex/main:dev",
     "start": "pnpm nx run @vortex/main:start",

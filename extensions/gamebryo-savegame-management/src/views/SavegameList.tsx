@@ -113,6 +113,10 @@ class SavegameList extends ComponentEx<Props, IComponentState> {
     );
   }
 
+  public componentDidMount() {
+    this.props.onRefresh();
+  }
+
   public UNSAFE_componentWillReceiveProps(newProps: Props) {
     if (this.props.showTransfer !== newProps.showTransfer) {
       this.nextState.importProfileId = undefined;

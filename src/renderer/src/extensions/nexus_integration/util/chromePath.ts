@@ -37,12 +37,24 @@ function chromePath(): PromiseBB<string> {
           ? PromiseBB.resolve(path.join(userData, "Default", "Preferences"))
           : PromiseBB.reject(err),
       );
+  } else if (process.platform === "linux") {
+    const home = process.env.HOME || "";
+    const candidates = [
+      path.join(appPath, "google-chrome", "Default", "Preferences"),
+      path.join(appPath, "chromium", "Default", "Preferences"),
+      path.join(appPath, "BraveSoftware", "Brave-Browser", "Default", "Preferences"),
+      path.join(home, ".config", "google-chrome", "Default", "Preferences"),
+      path.join(home, ".config", "chromium", "Default", "Preferences"),
+    ];
+
+    return PromiseBB.filter(candidates, (cand) =>
+      fs
+        .statAsync(cand)
+        .then(() => true)
+        .catch(() => false),
+    ).then((existing) => existing[0] ?? candidates[0]);
   } else {
-    return PromiseBB.resolve(
-      process.platform === "linux"
-        ? path.resolve(appPath, "google-chrome", "Local State")
-        : path.resolve(appPath, "Google", "Chrome", "Local State"),
-    );
+    return PromiseBB.resolve(path.resolve(appPath, "Google", "Chrome", "Default", "Preferences"));
   }
 }
 

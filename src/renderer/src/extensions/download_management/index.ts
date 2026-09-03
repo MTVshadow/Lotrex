@@ -1,3 +1,4 @@
+import * as child_process from "child_process";
 import * as path from "path";
 
 import { mdiDownload } from "@mdi/js";
@@ -755,13 +756,21 @@ let shutdownInitiated: boolean = false;
 function updateShutdown(downloads: { [key: string]: IDownload }) {
   if (shutdownInitiated && (Object.keys(downloads).length > 0 || !shutdownPending)) {
     // cancel shutdown if the conditions for it are no longer met
-    winapi.AbortSystemShutdown();
+    if (process.platform === "win32") {
+      winapi.AbortSystemShutdown();
+    } else if (process.platform === "linux") {
+      child_process.spawn("shutdown", ["-c"]).on("error", () => {});
+    }
     shutdownInitiated = false;
   }
 
   if (!shutdownInitiated && shutdownPending && Object.keys(downloads).length === 0) {
     // schedule shutdown if conditions are met
-    winapi.InitiateSystemShutdown("Vortex downloads finished", 30, false, false);
+    if (process.platform === "win32") {
+      winapi.InitiateSystemShutdown("Vortex downloads finished", 30, false, false);
+    } else if (process.platform === "linux") {
+      child_process.spawn("shutdown", ["+1", "Vortex downloads finished"]).on("error", () => {});
+    }
     shutdownInitiated = true;
   }
 }
@@ -1068,7 +1077,7 @@ function init(context: IExtensionContext): boolean {
       activeDownloads: selectors.activeDownloads(context.api.getState()),
       toggleShutdown: () => toggleShutdown(context.api),
     }),
-    () => process.platform === "win32",
+    () => process.platform === "win32" || process.platform === "linux",
   );
 
   context.registerTest("verify-downloads-transfers", "gamemode-activated", () =>
