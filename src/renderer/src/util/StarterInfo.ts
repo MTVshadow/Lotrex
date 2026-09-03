@@ -10,6 +10,7 @@ import { emitModListSnapshot } from "../extensions/analytics/utils/modListSnapsh
 import type { IDiscoveryResult } from "../extensions/gamemode_management/types/IDiscoveryResult";
 import type { IGameStored } from "../extensions/gamemode_management/types/IGameStored";
 import type { IToolStored } from "../extensions/gamemode_management/types/IToolStored";
+import { gamePlatformCapabilities } from "../extensions/gamemode_management/util/gameCapabilities";
 import { getGame } from "../extensions/gamemode_management/util/getGame";
 import { log } from "../logging";
 import type { IDiscoveredTool } from "../types/IDiscoveredTool";
@@ -28,6 +29,7 @@ import GameStoreHelper from "./GameStoreHelper";
 import getVortexPath from "./getVortexPath";
 import { isWindowsExecutable } from "./linux/proton";
 import ProtonPaths from "./linux/ProtonPaths";
+import { ProtonUnavailable, protonUnavailableMessage } from "./linux/ProtonUnavailable";
 import * as selectors from "./selectors";
 import type { Steam, ISteamEntry } from "./Steam";
 import { getSafe } from "./storeHelper";
@@ -86,6 +88,16 @@ async function shouldRunWithProton(
   if (process.platform === "win32") {
     return undefined;
   }
+  const state = api?.store?.getState?.();
+  const game = state ? selectors.gameById(state, info.gameId) : undefined;
+  const discovery = state ? selectors.discoveryByGame(state, info.gameId) : undefined;
+  const capabilities = gamePlatformCapabilities(game, process.platform);
+  if (capabilities?.launch === "native" || capabilities?.launch === "steam") {
+    return undefined;
+  }
+  if (!info.isGame && capabilities?.toolsInGamePrefix === false) {
+    return undefined;
+  }
   if (!isWindowsExecutable(info.exePath)) {
     return undefined;
   }
@@ -111,19 +123,16 @@ async function shouldRunWithProton(
           g.gamePath &&
           info.exePath.toLowerCase().startsWith(g.gamePath.toLowerCase())),
     );
-    if (byPath !== undefined && byPath.usesProton) {
+    if (byPath !== undefined) {
       return byPath;
     }
 
     // 2. Для інструментів зовні каталогу гри (LOOT, xEdit, BodySlide тощо) шукаємо за AppID гри
-    const state = api?.store?.getState?.();
-    const game = state ? selectors.gameById(state, info.gameId) : undefined;
-    const discovery = state ? selectors.discoveryByGame(state, info.gameId) : undefined;
     const appId = ProtonPaths.resolveAppId(discovery, game);
 
     if (appId) {
       const byAppId = games.find((g) => g.appid === appId);
-      if (byAppId !== undefined && byAppId.usesProton) {
+      if (byAppId !== undefined) {
         return byAppId;
       }
     }
@@ -298,7 +307,7 @@ class StarterInfo implements IStarterInfo {
 
     // Check if game/tool should run through Proton on Linux
     const protonGameEntry = await shouldRunWithProton(info, api);
-    if (protonGameEntry?.usesProton) {
+    if (protonGameEntry !== undefined) {
       // On Linux with Proton, we can't track when the process exits (ProcessMonitor
       // only works on Windows), so don't set tool as running to avoid stuck spinner
       const protonSpawned = () => {
@@ -310,20 +319,40 @@ class StarterInfo implements IStarterInfo {
       };
 
       const steamStore = GameStoreHelper.getGameStore("steam") as Steam;
-      return steamStore.runToolWithProton(
-        api,
-        info.exePath,
-        info.commandLine,
-        {
-          cwd: info.workingDirectory || path.dirname(info.exePath),
-          env: info.environment,
-          suggestDeploy: true,
-          shell: info.shell,
-          detach: info.detach || info.onStart === "close",
-          onSpawned: protonSpawned,
-        },
-        protonGameEntry,
-      );
+      try {
+        await steamStore.runToolWithProton(
+          api,
+          info.exePath,
+          info.commandLine,
+          {
+            cwd: info.workingDirectory || path.dirname(info.exePath),
+            env: info.environment,
+            suggestDeploy: true,
+            shell: info.shell,
+            detach: info.detach || info.onStart === "close",
+            onSpawned: protonSpawned,
+          },
+          protonGameEntry,
+        );
+      } catch (err) {
+        if (err instanceof ProtonUnavailable) {
+          onShowError(
+            "Proton setup required",
+            {
+              "Steam App ID": err.appId,
+              executable: info.exePath,
+              message: protonUnavailableMessage(err.reason),
+            },
+            false,
+          );
+          return;
+        }
+        onShowError("Failed to run tool through Proton", {
+          executable: info.exePath,
+          error: unknownToError(err),
+        });
+      }
+      return;
     }
 
     return api

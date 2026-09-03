@@ -9,12 +9,43 @@ export type { IModType };
 
 export type DirectoryCleaningMode = "tag" | "all";
 
+export type GameLaunchMode = "auto" | "native" | "steam" | "steam-proton" | "wine";
+
+export interface IGamePlatformCapabilities {
+  /** Preferred launch strategy on this platform. Defaults to automatic detection. */
+  launch?: GameLaunchMode;
+  /** Store application id used to locate the Steam library and Proton prefix. */
+  steamAppId?: string | number;
+  /** Whether Vortex should offer selection of an installed Proton runtime. */
+  protonRuntimeSelection?: boolean;
+  /** Whether Windows modding tools should share the game's Proton prefix. */
+  toolsInGamePrefix?: boolean;
+}
+
+export interface IGameDeploymentCapabilities {
+  hardlink?: boolean;
+  symlink?: boolean;
+  move?: boolean;
+}
+
+/**
+ * Typed, declarative capabilities used by platform and deployment services.
+ * All fields are optional so existing game extensions remain compatible.
+ */
+export interface IGameCapabilities {
+  platforms?: Partial<Record<"linux" | "win32" | "darwin", IGamePlatformCapabilities>>;
+  deployment?: IGameDeploymentCapabilities;
+}
+
 /**
  * interface for game extensions
  *
  * @interface IGame
  */
 export interface IGame extends ITool {
+  /** Platform and deployment behavior declared by the game extension. */
+  capabilities?: IGameCapabilities;
+
   /**
    * determine the default directory where mods for this game
    * should be stored.

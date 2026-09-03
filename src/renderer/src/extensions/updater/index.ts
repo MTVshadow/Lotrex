@@ -9,7 +9,7 @@ function init(context: IExtensionContext): boolean {
   context.once(() => {
     if (
       context.api.getState().app.installType !== "regular" &&
-      process.env.NODE_ENV !== "development"
+      (process.env.NODE_ENV !== "development" || process.platform !== "win32")
     ) {
       return;
     }

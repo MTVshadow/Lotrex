@@ -80,8 +80,17 @@ class SettingsUpdate extends ComponentEx<IProps, ISettingsUpdateState> {
 
     // managed or development
     if (installType === "managed") {
-      // managed and not development
-      if (process.env.NODE_ENV !== "development") {
+      if (process.env.NODE_ENV === "development" && process.platform !== "win32") {
+        return this.renderCallout(
+          t(
+            "Automatic updates are unavailable for this Linux development build. Update the source checkout with your development tools.",
+          ),
+        );
+      }
+
+      // Managed builds are updated by their package manager. Windows development
+      // keeps the updater UI available for testing the installer flow.
+      if (process.env.NODE_ENV !== "development" || process.platform !== "win32") {
         return this.renderCallout(
           t(
             "Vortex was installed through a third-party service which will take care of updating it.",

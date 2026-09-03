@@ -16,7 +16,8 @@ import {
   buildProtonCommand,
   findLatestProton,
 } from "./linux/proton";
-import { findLinuxSteamPath } from "./linux/steamPaths";
+import { ProtonUnavailable } from "./linux/ProtonUnavailable";
+import { extractSteamLibraryPaths, findLinuxSteamPath } from "./linux/steamPaths";
 import { log } from "./log";
 import opn from "./opn";
 import { getSafeCI } from "./storeHelper";
@@ -236,15 +237,8 @@ class Steam implements IGameStore {
             log("warn", "unable to parse steamfolders.vdf", err);
             return PromiseBB.resolve(steamPaths);
           }
-          const libObj: any = getSafeCI(parsedObj, ["libraryfolders"], {});
-          let counter = libObj.hasOwnProperty("0") ? 0 : 1;
-          while (libObj.hasOwnProperty(`${counter}`)) {
-            const libPath = libObj[`${counter}`]["path"];
-            if (libPath && !steamPaths.includes(libPath)) {
-              steamPaths.push(libObj[`${counter}`]["path"]);
-            }
-            ++counter;
-          }
+          const libObj: unknown = getSafeCI(parsedObj, ["libraryfolders"], {});
+          steamPaths.splice(0, steamPaths.length, ...extractSteamLibraryPaths(libObj, basePath));
           log("debug", "found steam install folders", { steamPaths });
           return PromiseBB.resolve(steamPaths);
         })
@@ -393,13 +387,19 @@ class Steam implements IGameStore {
     }
     const compatDataPath = gameEntry.compatDataPath;
 
-    if (!gameEntry.usesProton || !protonPath || !compatDataPath) {
-      log("warn", "Cannot run Windows tool through Proton: missing proton runtime or prefix", {
+    if (!gameEntry.usesProton || !compatDataPath) {
+      log("warn", "Cannot run Windows tool through Proton: missing Proton prefix", {
         exePath,
-        protonPath,
         compatDataPath,
       });
-      return api.runExecutable(exePath, args, options);
+      throw new ProtonUnavailable("prefix-not-found", gameEntry.appid);
+    }
+    if (!protonPath) {
+      log("warn", "Cannot run Windows tool through Proton: missing Proton runtime", {
+        exePath,
+        compatDataPath,
+      });
+      throw new ProtonUnavailable("runtime-not-found", gameEntry.appid);
     }
 
     const { executable, args: protonArgs } = buildProtonCommand(protonPath, exePath, args);

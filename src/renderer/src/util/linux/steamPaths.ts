@@ -18,15 +18,46 @@ export function getLinuxSteamPaths(): string[] {
   if (!home) {
     home = process.env.HOME || os.homedir();
   }
-  return [
-    path.join(home, ".local", "share", "Steam"), // XDG standard (native)
-    path.join(home, ".steam", "debian-installation"), // Debian/Ubuntu symlink
-    path.join(home, ".steam", "root"), // Arch Linux symlink
-    path.join(home, ".var", "app", "com.valvesoftware.Steam", "data", "Steam"), // Flatpak
-    path.join(home, ".var", "app", "com.valvesoftware.Steam", ".local", "share", "Steam"),
-    path.join(home, "snap", "steam", "common", ".local", "share", "Steam"), // Snap
-    path.join(home, ".steam", "steam"), // Legacy
-  ];
+  const xdgDataHome = process.env.XDG_DATA_HOME;
+  return Array.from(
+    new Set([
+      ...(xdgDataHome ? [path.join(xdgDataHome, "Steam")] : []),
+      path.join(home, ".local", "share", "Steam"), // XDG standard (native)
+      path.join(home, ".steam", "debian-installation"), // Debian/Ubuntu symlink
+      path.join(home, ".steam", "root"), // Arch Linux symlink
+      path.join(home, ".var", "app", "com.valvesoftware.Steam", "data", "Steam"), // Flatpak
+      path.join(home, ".var", "app", "com.valvesoftware.Steam", ".local", "share", "Steam"),
+      path.join(home, "snap", "steam", "common", ".local", "share", "Steam"), // Snap
+      path.join(home, ".steam", "steam"), // Legacy
+    ]),
+  );
+}
+
+/**
+ * Extract Steam library roots from either the current object-based VDF shape or
+ * the legacy string-based shape. Numeric keys are not guaranteed to be contiguous.
+ */
+export function extractSteamLibraryPaths(libraryFolders: unknown, basePath: string): string[] {
+  if (libraryFolders === null || typeof libraryFolders !== "object") {
+    return [basePath];
+  }
+
+  const discovered = Object.entries(libraryFolders)
+    .filter(([key]) => /^\d+$/.test(key))
+    .sort(([left], [right]) => Number(left) - Number(right))
+    .map(([, value]) => {
+      if (typeof value === "string") {
+        return value;
+      }
+      if (value !== null && typeof value === "object" && "path" in value) {
+        const libraryPath = value.path;
+        return typeof libraryPath === "string" ? libraryPath : undefined;
+      }
+      return undefined;
+    })
+    .filter((libraryPath): libraryPath is string => Boolean(libraryPath));
+
+  return Array.from(new Set([basePath, ...discovered]));
 }
 
 /**

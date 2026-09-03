@@ -8,6 +8,14 @@ import { getErrorMessageOrDefault } from "@vortex/shared";
 import { log } from "../logging";
 import { setupAutoUpdater } from "./autoupdater";
 
+export function shouldEnableAutoUpdater(
+  installType: string,
+  platform: NodeJS.Platform,
+  environment: string | undefined,
+): boolean {
+  return installType === "regular" || (environment === "development" && platform === "win32");
+}
+
 /**
  * Initialize the updater in the main process.
  * Should be called once during application startup.
@@ -15,8 +23,9 @@ import { setupAutoUpdater } from "./autoupdater";
  * @param installType Application install type ("regular", "managed", etc.)
  */
 export function initUpdater(installType: string): void {
+  const enabled = shouldEnableAutoUpdater(installType, process.platform, process.env.NODE_ENV);
   try {
-    if (installType === "regular" || process.env.NODE_ENV === "development") {
+    if (enabled) {
       setupAutoUpdater(installType);
     }
   } catch (err) {
@@ -26,5 +35,6 @@ export function initUpdater(installType: string): void {
   log("info", "updater initialized", {
     isPreviewBuild: process.env.IS_PREVIEW_BUILD,
     installType,
+    enabled,
   });
 }
