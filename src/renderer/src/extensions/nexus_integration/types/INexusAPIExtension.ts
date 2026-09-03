@@ -53,6 +53,13 @@ export interface INexusAPIExtension {
   nexusRateCollectionRevision?: (revisionId: number, rating: RatingOptions) => PromiseLike<any>;
   nexusGetLatestMods?: (gameId: string) => PromiseLike<any>;
   nexusGetTrendingMods?: (gameId: string) => PromiseLike<any>;
+  nexusSearchMods?: (options: {
+    count?: number;
+    gameId: string;
+    offset?: number;
+    search?: string;
+    sort?: "latest" | "trending";
+  }) => PromiseLike<{ mods: any[]; totalCount: number }>;
   nexusEndorseDirect?: (
     gameId: string,
     nexusId: number,

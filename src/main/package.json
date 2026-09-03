@@ -290,6 +290,7 @@
     "ini": "catalog:",
     "interweave": "catalog:",
     "is-admin": "catalog:",
+    "js-yaml": "catalog:",
     "json-socket": "catalog:",
     "jsonwebtoken": "catalog:",
     "leveldown": "catalog:",

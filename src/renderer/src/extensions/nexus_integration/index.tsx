@@ -921,6 +921,7 @@ function extendAPI(api: IExtensionApi, nexus: NexusT): INexusAPIExtension {
     nexusEndorseDirect: eh.onEndorseDirect(api, nexus),
     nexusGetLatestMods: eh.onGetLatestMods(api, nexus),
     nexusGetTrendingMods: eh.onGetTrendingMods(api, nexus),
+    nexusSearchMods: eh.onSearchMods(api, nexus),
     nexusEndorseMod: eh.onEndorseMod(api, nexus),
     nexusSubmitFeedback: eh.onSubmitFeedback(nexus),
     nexusSubmitCollection: eh.onSubmitCollection(api),
