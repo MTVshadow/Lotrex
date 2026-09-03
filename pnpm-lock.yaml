@@ -2435,6 +2435,12 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/vortex-api
 
+  extensions/games/game-stalkersoc:
+    devDependencies:
+      '@nexusmods/vortex-api':
+        specifier: workspace:*
+        version: link:../../../packages/vortex-api
+
   extensions/games/game-starbound:
     devDependencies:
       '@nexusmods/vortex-api':
