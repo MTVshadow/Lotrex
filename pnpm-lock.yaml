@@ -2180,6 +2180,15 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/vortex-api
 
+  extensions/games/game-gothic3:
+    devDependencies:
+      '@nexusmods/vortex-api':
+        specifier: workspace:*
+        version: link:../../../packages/vortex-api
+      '@vortex/extension-test-mocks':
+        specifier: workspace:*
+        version: link:../../../packages/extension-test-mocks
+
   extensions/games/game-greedfall:
     devDependencies:
       '@nexusmods/vortex-api':

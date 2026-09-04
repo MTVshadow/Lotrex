@@ -1,0 +1,35 @@
+{
+  "name": "game-gothic3",
+  "version": "1.0.0",
+  "description": "Support for Gothic 3",
+  "scripts": {
+    "_assets": "copyfiles -u 1 -f ./assets/* dist",
+    "build": "copyfiles -u 1 -f ./src/*.js dist && pnpm run _assets && pnpm extractInfo",
+    "test": "pnpm exec vitest run"
+  },
+  "author": "Community",
+  "license": "GPL-3.0",
+  "type": "commonjs",
+  "private": true,
+  "config": {
+    "game": "Gothic 3"
+  },
+  "devDependencies": {
+    "@nexusmods/vortex-api": "workspace:*",
+    "@vortex/extension-test-mocks": "workspace:*"
+  },
+  "nx": {
+    "tags": [
+      "vortex:extension"
+    ],
+    "targets": {
+      "build": {
+        "inputs": [
+          "default",
+          "typescript",
+          "vortex-api"
+        ]
+      }
+    }
+  }
+}
