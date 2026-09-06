@@ -19,6 +19,7 @@ import {
   type IStructuredFilesystemError,
   translateFilesystemError,
 } from "../../util/linux/filesystemErrors";
+import { assertLinuxPathHasNoSymlinkAncestors } from "../../util/linux/pathSafety";
 import { activeGameId } from "../../util/selectors";
 import { truthy } from "../../util/util";
 import type {
@@ -869,6 +870,7 @@ abstract class LinkingActivator implements IDeploymentMethod {
       this.mContext.previousDeployment[key].relPath,
     );
     try {
+      await assertLinuxPathHasNoSymlinkAncestors(dataPath, outputPath);
       let targetExists = true;
       try {
         await this.statLink(outputPath);
@@ -932,6 +934,8 @@ abstract class LinkingActivator implements IDeploymentMethod {
     const resolvedDir = await this.resolveExistingCase(path.dirname(rawOutputPath));
     const fullOutputPath = path.join(resolvedDir, path.basename(rawOutputPath));
 
+    await assertLinuxPathHasNoSymlinkAncestors(dataPath, fullOutputPath);
+
     const backupProm: Promise<void> = replace
       ? Promise.resolve()
       : Promise.resolve(this.isLink(fullOutputPath, fullPath))
@@ -951,6 +955,7 @@ abstract class LinkingActivator implements IDeploymentMethod {
 
     await backupProm;
     runDeploymentFaultPoint("after-backup");
+    await assertLinuxPathHasNoSymlinkAncestors(dataPath, fullOutputPath);
     await this.linkFile(fullOutputPath, fullPath, dirTags);
     runDeploymentFaultPoint("after-link");
     this.mContext.previousDeployment[key] = this.mContext.newDeployment[key];

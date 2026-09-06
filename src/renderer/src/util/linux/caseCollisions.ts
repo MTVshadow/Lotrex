@@ -7,9 +7,9 @@ export interface ICaseCollisionItem {
 }
 
 export interface ICaseCollisionGroup {
-  /** Нормалізований відносний шлях у нижньому регістрі */
+  /** Unicode- та case-нормалізований відносний POSIX-шлях. */
   normalizedPath: string;
-  /** Усі варіанти шляху, які відрізняються лише регістром символів */
+  /** Усі сирі варіанти, які зводяться до одного логічного шляху. */
   variants: string[];
   /** Моди та вихідні файли, що конфліктують */
   sources: ICaseCollisionItem[];
@@ -25,14 +25,17 @@ export class CaseCollisionError extends Error {
 }
 
 /**
- * Нормалізація шляху для порівняння без урахування регістру (case-folding).
+ * Normalize separators and dot segments before applying locale-independent Unicode casing.
+ * NFC is applied on both sides of lowercasing because mappings such as U+0130 may introduce a
+ * combining mark.
  */
 export function normalizeCasePath(relPath: string): string {
-  return path.normalize(relPath).replace(/\\/g, "/").toLowerCase();
+  const posixPath = path.posix.normalize(relPath.replace(/\\/g, "/"));
+  return posixPath.normalize("NFC").toLowerCase().normalize("NFC");
 }
 
 /**
- * Виявлення колізій регістру (Case-sensitivity collisions) у плані розгортання файлів.
+ * Detect case and canonical-Unicode collisions in a deployment plan.
  * На файлових системах Linux (ext4, btrfs, xfs) файли `Textures/icon.dds` та `textures/Icon.dds`
  * є різними файлами в різних папках, що призводить до дублювання або ігнорування грою.
  */
@@ -63,7 +66,7 @@ export function detectCaseCollisions(items: ICaseCollisionItem[]): ICaseCollisio
     }
   }
 
-  return collisions;
+  return collisions.sort((lhs, rhs) => lhs.normalizedPath.localeCompare(rhs.normalizedPath));
 }
 
 /**

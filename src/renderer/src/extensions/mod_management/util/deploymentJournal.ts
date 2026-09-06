@@ -6,6 +6,8 @@ import { getErrorCode, getErrorMessageOrDefault } from "@vortex/shared";
 
 import * as fs from "../../../util/fs";
 import { writeFileAtomic } from "../../../util/fsAtomic";
+import { assertLinuxPathLimits } from "../../../util/linux/pathLimits";
+import { assertLinuxPathHasNoSymlinkAncestors } from "../../../util/linux/pathSafety";
 
 export const DEPLOYMENT_JOURNAL_FILE = ".vortex-deployment-journal.json";
 export const DEPLOYMENT_JOURNAL_VERSION = 1;
@@ -219,6 +221,7 @@ export async function beginDeploymentOperation(input: {
   stagingPath: string;
   targetPaths: string[];
 }): Promise<IDeploymentJournalEntry> {
+  assertLinuxPathLimits([input.stagingPath, journalPath(input.stagingPath), ...input.targetPaths]);
   const previous = await readDeploymentJournal(input.stagingPath);
   if (previous !== undefined && previous.phase !== "committed") {
     const err = new Error(
@@ -268,6 +271,15 @@ export async function recordPlannedFileOperations(
   stagingPath: string,
   operations: IDeploymentFileOperation[],
 ): Promise<IDeploymentJournalEntry | undefined> {
+  assertLinuxPathLimits([
+    stagingPath,
+    journalPath(stagingPath),
+    ...operations.flatMap((operation) => [
+      operation.sourcePath,
+      operation.targetPath,
+      operation.backupPath,
+    ]),
+  ]);
   const entry = await readDeploymentJournal(stagingPath);
   if (entry === undefined || entry.phase === "committed") {
     return undefined;
@@ -285,6 +297,17 @@ export async function recordPlannedFileOperations(
   if (invalidOperation !== undefined) {
     throw new Error(`Refusing to journal a file operation outside its managed roots`);
   }
+
+  await Promise.all(
+    operations.flatMap((operation) => {
+      const targetRoot = entry.targetPaths.find((root) => isWithinPath(root, operation.targetPath));
+      return [
+        assertLinuxPathHasNoSymlinkAncestors(stagingPath, operation.sourcePath),
+        assertLinuxPathHasNoSymlinkAncestors(targetRoot!, operation.targetPath),
+        assertLinuxPathHasNoSymlinkAncestors(targetRoot!, operation.backupPath),
+      ];
+    }),
+  );
 
   const knownIds = new Set((entry.fileOperations ?? []).map((operation) => operation.id));
   if (operations.some((operation) => knownIds.has(operation.id))) {

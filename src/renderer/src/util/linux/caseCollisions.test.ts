@@ -10,6 +10,38 @@ describe("caseCollisions", () => {
   it("normalizes paths to lowercase posix format", () => {
     expect(normalizeCasePath("Data\\Textures\\Wood.DDS")).toBe("data/textures/wood.dds");
     expect(normalizeCasePath("data/textures/wood.dds")).toBe("data/textures/wood.dds");
+    expect(normalizeCasePath("Data\\Meshes/../Textures\\Wood.DDS")).toBe("data/textures/wood.dds");
+  });
+
+  it("collides canonically equivalent NFC and NFD names", () => {
+    const collisions = detectCaseCollisions([
+      { modId: "nfc", relPath: "Textures/Café.dds" },
+      { modId: "nfd", relPath: "Textures/Cafe\u0301.dds" },
+    ]);
+
+    expect(collisions).toHaveLength(1);
+    expect(collisions[0].normalizedPath).toBe("textures/café.dds");
+  });
+
+  it("uses stable locale-independent casing for Turkish-I variants", () => {
+    expect(normalizeCasePath("INTERFACE/ICON.DDS")).toBe("interface/icon.dds");
+    expect(normalizeCasePath("İNTERFACE/İCON.DDS")).toBe("i\u0307nterface/i\u0307con.dds");
+    expect(normalizeCasePath("ınterface/ıcon.dds")).toBe("ınterface/ıcon.dds");
+  });
+
+  it("detects non-Latin case variants", () => {
+    expect(
+      detectCaseCollisions([{ relPath: "ТЕКСТУРЫ/БРОНЯ.DDS" }, { relPath: "текстуры/броня.dds" }]),
+    ).toHaveLength(1);
+  });
+
+  it("collides mixed Windows and POSIX separators after dot-segment normalization", () => {
+    expect(
+      detectCaseCollisions([
+        { relPath: "Data\\Meshes\\..\\Textures\\Armor.dds" },
+        { relPath: "data/textures/armor.dds" },
+      ]),
+    ).toHaveLength(1);
   });
 
   it("identifies case collisions between different mod files", () => {

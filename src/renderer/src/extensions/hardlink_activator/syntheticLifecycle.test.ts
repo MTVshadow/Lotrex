@@ -30,12 +30,25 @@ vi.mock("../../util/fs", async () => {
         await onCreated?.(dirPath);
       }
     },
+    linkAsync: native.link,
     lstatAsync: native.lstat,
+    readFileAsync: native.readFile,
+    readlinkAsync: native.readlink,
     readdirAsync: native.readdir,
     removeAsync: (filePath: string) => native.rm(filePath, { force: true, recursive: true }),
     renameAsync: native.rename,
     statAsync: native.stat,
+    symlinkAsync: native.symlink,
+    unlinkAsync: native.unlink,
     writeFileAsync: native.writeFile,
+  };
+});
+
+vi.mock("../../util/fsAtomic", async () => {
+  const native = await import("node:fs/promises");
+  return {
+    writeFileAtomic: (filePath: string, input: string | Buffer) =>
+      native.writeFile(filePath, input),
   };
 });
 
@@ -116,10 +129,11 @@ describe("synthetic Skyrim deployment lifecycle", () => {
     await fs.unlink(pluginPath);
     await fs.writeFile(pluginPath, "steam-validated");
 
-    await expect(activator.finalize("skyrimse", dataPath, stagingPath)).rejects.toMatchObject({
-      code: "EDEPLOYMENTTARGETCHANGED",
-      path: pluginPath,
-    });
+    const afterPurge = await activator.finalize("skyrimse", dataPath, stagingPath);
+
+    expect(afterPurge).toEqual(
+      expect.arrayContaining([expect.objectContaining({ relPath: "Synthetic.esp" })]),
+    );
     await expect(fs.readFile(pluginPath, "utf8")).resolves.toBe("steam-validated");
   });
 });

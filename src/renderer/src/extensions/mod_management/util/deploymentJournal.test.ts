@@ -269,7 +269,7 @@ describe("deployment journal", () => {
   it("rejects planned operations outside managed source and target roots", async () => {
     const stagingPath = await temporaryDirectory();
     const targetRoot = await temporaryDirectory();
-    let entry = await beginDeploymentOperation({
+    const entry = await beginDeploymentOperation({
       operation: "deploy",
       gameId: "skyrimse",
       instanceId: "instance-1",
@@ -293,6 +293,43 @@ describe("deployment journal", () => {
         },
       ]),
     ).rejects.toThrow("outside its managed roots");
+  });
+
+  it("rejects a planned target below a symlinked directory inside the managed root", async () => {
+    const stagingPath = await temporaryDirectory();
+    const targetRoot = await temporaryDirectory();
+    const outside = await temporaryDirectory();
+    const sourcePath = path.join(stagingPath, "mod", "asset.dds");
+    await fs.mkdir(path.dirname(sourcePath), { recursive: true });
+    await fs.writeFile(sourcePath, "asset");
+    await fs.symlink(outside, path.join(targetRoot, "textures"));
+    const entry = await beginDeploymentOperation({
+      operation: "deploy",
+      gameId: "skyrimse",
+      instanceId: "instance-1",
+      deploymentMethod: "hardlink_activator",
+      stagingPath,
+      targetPaths: [targetRoot],
+    });
+    await advanceDeploymentOperation(entry, "applying");
+    const targetPath = path.join(targetRoot, "textures", "asset.dds");
+
+    await expect(
+      recordPlannedFileOperations(stagingPath, [
+        {
+          id: `deploy:${targetPath}`,
+          action: "deploy",
+          sourcePath,
+          targetPath,
+          backupPath: targetPath + ".vortex_backup",
+          replace: false,
+          restoreBackup: false,
+        },
+      ]),
+    ).rejects.toMatchObject({
+      code: "EDEPLOYMENTSYMLINK",
+      path: path.join(targetRoot, "textures"),
+    });
   });
 
   it("reconciles applied and not-started hardlink operations from disk state", async () => {
