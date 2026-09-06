@@ -11,6 +11,7 @@ import type { IHealthCheckSessionState } from "../extensions/health_check/reduce
 import type { IHistoryPersistent, IHistoryState } from "../extensions/history_management/reducers";
 import type { IMod } from "../extensions/mod_management/types/IMod";
 import type { IProfile } from "../extensions/profile_management/types/IProfile";
+import type { IProtonRuntimePreference } from "../util/linux/protonRuntimeSelection";
 import type { ICollectionInstallState } from "./collections/ICollectionInstallSession";
 import type { ExtensionType, IAvailableExtension, IExtension } from "./extensions";
 import type { IAttributeState } from "./IAttributeState";
@@ -271,6 +272,8 @@ export interface ISettingsMods {
   installPath: { [gameId: string]: string };
   modlistState: { [id: string]: IAttributeState };
   activator: { [gameId: string]: string };
+  protonRuntime: { [gameId: string]: IProtonRuntimePreference };
+  linuxSetupCompleted: boolean;
   installPathMode: InstallPathMode;
   suggestInstallPathDirectory: string;
   showDropzone: boolean;

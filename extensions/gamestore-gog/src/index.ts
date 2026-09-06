@@ -2,7 +2,12 @@ import * as path from "path";
 
 import { fs, log, types } from "@nexusmods/vortex-api";
 import Bluebird from "bluebird";
-import * as winapi from "winapi-bindings";
+
+import { supportsPlatform } from "./platform";
+
+const winapi = (
+  process.platform === "win32" ? require("winapi-bindings") : undefined
+) as typeof import("winapi-bindings");
 
 const STORE_ID = "gog";
 const STORE_NAME = "GOG";
@@ -193,12 +198,11 @@ class GoGLauncher implements types.IGameStore {
 }
 
 function main(context: types.IExtensionContext) {
-  const instance: types.IGameStore = process.platform === "win32" ? new GoGLauncher() : undefined;
-
-  if (instance !== undefined) {
-    context.registerGameStore(instance);
+  if (!supportsPlatform(process.platform)) {
+    return false;
   }
 
+  context.registerGameStore(new GoGLauncher());
   return true;
 }
 

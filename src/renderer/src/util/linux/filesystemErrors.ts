@@ -46,75 +46,71 @@ export function translateFilesystemError(
   switch (code) {
     case "EXDEV":
       return {
-        title: "Неможливо створити хардлінк між різними дисками",
+        title: "Hardlink deployment crosses filesystems",
         problemName: "Cross-device link (EXDEV)",
         code,
         sourcePath,
         destPath,
         activeMethod,
         fallbackMethod: activeMethod === "hardlink" ? "symlink" : undefined,
-        message:
-          "Хардлінки в Linux підтримуються лише в межах одного розділу/диска файлової системи. Спроба зв'язати файли між різними дисками призводить до системної помилки EXDEV.",
+        message: "Linux hardlinks can only be created within one filesystem.",
         remediation:
-          "Перейдіть у Налаштування -> Моди та вкажіть каталог Mod Staging на тому ж розділі диска, де встановлена гра, або змініть метод розгортання на 'Symlink'.",
+          "Move the Mod Staging folder to the game's filesystem or select the supported Symlink deployment method in Settings -> Mods.",
         openSettingsAction: true,
       };
 
     case "EROFS":
       return {
-        title: "Файлова система доступна лише для читання",
+        title: "Filesystem is read-only",
         problemName: "Read-only file system (EROFS)",
         code,
         sourcePath,
         destPath,
         activeMethod,
-        message:
-          "Розділ або диск, де розташована гра чи каталог модів, змонтований у режимі лише для читання (ro).",
+        message: "The game or staging directory is on a filesystem mounted read-only.",
         remediation:
-          "Перемонтуйте розділ із правами запису (sudo mount -o remount,rw <mountpoint>) або перевірте параметри розділу у файлі /etc/fstab.",
+          "Mount the filesystem with write access or move the game and staging folders to a writable location.",
         openSettingsAction: false,
       };
 
     case "EACCES":
     case "EPERM":
       return {
-        title: "Відмовлено в доступі до каталогу",
+        title: "Directory access denied",
         problemName: "Permission denied (EACCES/EPERM)",
         code,
         sourcePath,
         destPath,
         activeMethod,
-        message:
-          "Vortex не має достатніх прав для створення або зміни файлів у каталозі призначення.",
+        message: "Vortex cannot create or modify files in the destination directory.",
         remediation:
-          "Перевірте права власності на каталог гри або staging (наприклад, chown -R $USER:$USER <директорія>) та дозволи запису (chmod -R u+rwX <директорія>).",
+          "Correct the ownership or user permissions for the affected directory without granting broader access than necessary.",
         openSettingsAction: false,
       };
 
     case "ENOSPC":
       return {
-        title: "Недостатньо вільного місця на диску",
+        title: "Not enough free disk space",
         problemName: "No space left on device (ENOSPC)",
         code,
         sourcePath,
         destPath,
         activeMethod,
-        message: "На цільовому диску вичерпано вільне місце для завершення розгортання файлів.",
-        remediation: "Звільніть місце на відповідному диску та спробуйте повторити операцію.",
+        message: "The destination filesystem has no space left to finish deployment.",
+        remediation: "Free space on the affected filesystem and retry deployment.",
         openSettingsAction: false,
       };
 
     default:
       return {
-        title: "Помилка файлової системи",
+        title: "Filesystem error",
         problemName: `Filesystem Error (${code})`,
         code,
         sourcePath,
         destPath,
         activeMethod,
         message: rawMessage,
-        remediation:
-          "Перевірте стан файлової системи та наявність прав доступу до зазначених файлів.",
+        remediation: "Check the filesystem state and access permissions for the affected paths.",
         openSettingsAction: false,
       };
   }

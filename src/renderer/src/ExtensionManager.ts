@@ -104,6 +104,7 @@ import getVortexPath from "./util/getVortexPath";
 import type { i18n } from "./util/i18n";
 import { TString } from "./util/i18n";
 import lazyRequire from "./util/lazyRequire";
+import { signalManagedProcessTree } from "./util/linux/processTree";
 import { showError } from "./util/message";
 import { deregisterProtocolHandler, registerProtocolHandler } from "./util/protocolRegistration";
 import runElevatedCustomTool from "./util/runElevatedCustomTool";
@@ -2372,12 +2373,23 @@ class ExtensionManager {
         })
         .then(
           () =>
-            new PromiseBB<void>((resolve, reject) => {
+            new PromiseBB<void>((resolve, reject, onCancel) => {
               const runExe = options.shell ? `"${executable}"` : executable;
+              const processLayer = options.processLayer ?? "helper";
+              const managesProcessTree =
+                (options.terminateProcessTree === true ||
+                  options.processShutdownPolicy === "managed-tree") &&
+                (process.platform === "linux" || process.platform === "darwin");
+              const policyDetached =
+                options.processShutdownPolicy !== undefined
+                  ? options.processShutdownPolicy !== "tracked-child"
+                  : undefined;
               const spawnOptions: SpawnOptions = {
                 cwd,
                 env,
-                detached: options.detach !== undefined ? options.detach : true,
+                detached:
+                  managesProcessTree ||
+                  (policyDetached ?? (options.detach !== undefined ? options.detach : true)),
                 shell: options.shell ?? false,
               };
 
@@ -2398,10 +2410,69 @@ class ExtensionManager {
                   options.shell ? args : args.map((arg) => arg.replace(/"/g, "")),
                   spawnOptions,
                 );
+                let forceKillTimer: NodeJS.Timeout | undefined;
+                let processTimeoutTimer: NodeJS.Timeout | undefined;
+                const signalTree = (signal: "SIGTERM" | "SIGKILL") => {
+                  if (managesProcessTree && child.pid !== undefined) {
+                    try {
+                      signalManagedProcessTree(child.pid, signal);
+                    } catch (err: unknown) {
+                      log("warn", "failed to signal managed process tree", {
+                        error: getErrorMessageOrDefault(err),
+                        pid: child.pid,
+                        signal,
+                      });
+                    }
+                  }
+                };
+                const onVortexExit = () => signalTree("SIGTERM");
+                const clearSupervision = () => {
+                  if (forceKillTimer !== undefined) {
+                    clearTimeout(forceKillTimer);
+                    forceKillTimer = undefined;
+                  }
+                  if (processTimeoutTimer !== undefined) {
+                    clearTimeout(processTimeoutTimer);
+                    processTimeoutTimer = undefined;
+                  }
+                  process.removeListener("exit", onVortexExit);
+                };
+                const terminateTree = () => {
+                  signalTree("SIGTERM");
+                  forceKillTimer = setTimeout(() => signalTree("SIGKILL"), 5000);
+                  forceKillTimer.unref();
+                };
+                if (managesProcessTree && child.pid !== undefined) {
+                  process.once("exit", onVortexExit);
+                  onCancel(terminateTree);
+                  if (
+                    options.processTimeoutMS !== undefined &&
+                    Number.isSafeInteger(options.processTimeoutMS) &&
+                    options.processTimeoutMS > 0
+                  ) {
+                    processTimeoutTimer = setTimeout(() => {
+                      processTimeoutTimer = undefined;
+                      terminateTree();
+                      const err = new TimeoutError();
+                      err["code"] = "EPROCESSTIMEOUT";
+                      err["processLayer"] = processLayer;
+                      err["pid"] = child.pid;
+                      err["timeoutMS"] = options.processTimeoutMS;
+                      reject(err);
+                    }, options.processTimeoutMS);
+                    processTimeoutTimer.unref();
+                  }
+                }
                 if (truthy(child["exitCode"])) {
+                  clearSupervision();
                   // brilliant, apparently there is no way for me to get at the stdout/stderr when running
                   // through a shell if starting the application fails immediately
-                  return reject(new Error(`Failed to start (exit code ${child["exitCode"]})`));
+                  const err = new Error(
+                    `Failed to start ${processLayer} (exit code ${child["exitCode"]})`,
+                  );
+                  err["exitCode"] = child["exitCode"];
+                  err["processLayer"] = processLayer;
+                  return reject(err);
                 }
                 if (options.onSpawned !== undefined) {
                   options.onSpawned(child.pid);
@@ -2415,13 +2486,17 @@ class ExtensionManager {
                 let errOut: string;
                 child
                   .on("error", (err) => {
+                    clearSupervision();
                     reject(err);
                   })
                   .on("close", (code, signal) => {
+                    clearSupervision();
                     options.onExit?.(code);
                     const game = activeGameId(this.mApi.store.getState());
                     if (code === null) {
                       log("warn", "child process terminated by signal", {
+                        executable,
+                        processLayer,
                         signal,
                       });
                       if (options.expectSuccess) {
@@ -2429,6 +2504,7 @@ class ExtensionManager {
                           `Process terminated by signal ${signal ?? "unknown"}`,
                         );
                         err["signal"] = signal;
+                        err["processLayer"] = processLayer;
                         reject(err);
                         return;
                       }
@@ -2458,7 +2534,12 @@ class ExtensionManager {
                       // TODO: the child process returns an exit code of 53 for SSE and
                       // FO4, and an exit code of 1 for Skyrim. We don't know why but it
                       // doesn't seem to affect anything
-                      log("warn", "child process exited with code: " + code.toString(16), {});
+                      log("warn", "child process exited with non-zero code", {
+                        executable,
+                        exitCode: code,
+                        exitCodeHex: code.toString(16),
+                        processLayer,
+                      });
                       if (errOut !== undefined) {
                         log("warn", "child output", errOut.trim());
                       }
@@ -2480,9 +2561,10 @@ class ExtensionManager {
                           .substring(0, 500);
                         const exitCodeHex = code.toString(16);
 
-                        const errorMessage = `Failed to run "${sanitizedExecutable}": "${sanitizedLastLine} (${exitCodeHex})"`;
+                        const errorMessage = `Failed to run ${processLayer} "${sanitizedExecutable}": "${sanitizedLastLine} (${exitCodeHex})"`;
                         const err = new Error(errorMessage);
                         err["exitCode"] = code;
+                        err["processLayer"] = processLayer;
                         reject(err);
                         return;
                       }

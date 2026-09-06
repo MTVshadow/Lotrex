@@ -31,6 +31,7 @@ import type { ITableAttribute } from "../../types/ITableAttribute";
 import type { ITestResult } from "../../types/ITestResult";
 import { nxmModOutline } from "../../ui/icon-paths";
 import { opn } from "../../util/api";
+import calculateFolderSize from "../../util/calculateFolderSize";
 import { ProcessCanceled, TemporaryError, UserCanceled } from "../../util/CustomErrors";
 import Debouncer from "../../util/Debouncer";
 import { withTrackedActivity } from "../../util/errorHandling";
@@ -38,6 +39,8 @@ import * as fs from "../../util/fs";
 import getNormalizeFunc from "../../util/getNormalizeFunc";
 import getVortexPath from "../../util/getVortexPath";
 import { laterT, type TFunction } from "../../util/i18n";
+import { assessLinuxEnvironment } from "../../util/linux/environmentAssessment";
+import { findLinuxSteamPath } from "../../util/linux/steamPaths";
 import { showError } from "../../util/message";
 import onceCB from "../../util/onceCB";
 import {
@@ -116,6 +119,17 @@ import allTypesSupported from "./util/allTypesSupported";
 import * as basicInstaller from "./util/basicInstaller";
 import BlacklistSet from "./util/BlacklistSet";
 import { genSubDirFunc, purgeMods, purgeModsInPath } from "./util/deploy";
+import { runDeploymentFaultPoint } from "./util/deploymentFaultInjection";
+import {
+  advanceDeploymentOperation,
+  beginDeploymentOperation,
+  buildDeploymentRecoveryPlan,
+  completeDeploymentRecovery,
+  inspectDeploymentJournal,
+  rollbackApplyingDeployment,
+  type IDeploymentJournalInspection,
+} from "./util/deploymentJournal";
+import { withDeploymentLock } from "./util/deploymentLock";
 import {
   getAllActivators,
   getCurrentActivator,
@@ -319,6 +333,7 @@ async function deployModType(
       },
       [],
     );
+    throw err;
   }
   return newActivation;
 }
@@ -626,6 +641,44 @@ function deployableModTypes(modPaths: { [typeId: string]: string }) {
   return Object.keys(modPaths).filter((typeId) => truthy(modPaths[typeId]));
 }
 
+async function estimateCrossDeviceMoveBytes(
+  activatorId: string,
+  stagingPath: string,
+  modPaths: { [typeId: string]: string },
+  sortedModList: IMod[],
+): Promise<Record<string, number>> {
+  if (process.platform !== "linux" || activatorId !== "move_activator") {
+    return {};
+  }
+
+  const requiredBytesByPath: Record<string, number> = {};
+  for (const typeId of deployableModTypes(modPaths)) {
+    const destinationPath = modPaths[typeId];
+    try {
+      if (fs.statSync(stagingPath).dev === fs.statSync(destinationPath).dev) {
+        continue;
+      }
+    } catch {
+      // The regular filesystem assessment reports inaccessible destinations.
+      continue;
+    }
+
+    const sourcePaths = sortedModList
+      .filter((mod) => (mod.type || "") === typeId)
+      .map((mod) => path.join(stagingPath, mod.installationPath));
+    const mergePath = truthy(typeId) ? MERGED_PATH + "." + typeId : MERGED_PATH;
+    sourcePaths.push(path.join(stagingPath, mergePath));
+    const requiredBytes = (await Promise.all(sourcePaths.map(calculateFolderSize))).reduce(
+      (sum, size) => sum + size,
+      0,
+    );
+    requiredBytesByPath[destinationPath] =
+      (requiredBytesByPath[destinationPath] ?? 0) + requiredBytes;
+  }
+
+  return requiredBytesByPath;
+}
+
 function genUpdateModDeployment(installManager: InstallManager) {
   return (
     api: IExtensionApi,
@@ -721,6 +774,49 @@ function genUpdateModDeployment(installManager: InstallManager) {
       return Promise.resolve();
     }
 
+    const deploymentPaths = Object.values(modPaths).filter(
+      (entry): entry is string => typeof entry === "string" && entry.length > 0,
+    );
+    const environment = assessLinuxEnvironment({
+      deploymentMethodId: activator.id,
+      deploymentPaths,
+      gamePath: gameDiscovery.path,
+      platform: process.platform,
+      stagingPath,
+      steamPath: process.platform === "linux" ? findLinuxSteamPath() : undefined,
+    });
+    if (environment.blocking) {
+      const issue = environment.issues.find((candidate) => candidate.severity === "error");
+      api.showErrorNotification(
+        t("Deployment not possible"),
+        {
+          command: issue?.command,
+          message: issue
+            ? t(`linux_proton::issues::${issue.code}::details`, {
+                fsType: issue.fsType,
+                mountPoint: issue.mountPoint,
+                ns: "health_check",
+                path: issue.path,
+              })
+            : undefined,
+          path: issue?.path,
+          remediation: issue
+            ? t(`linux_proton::issues::${issue.code}::remediation`, {
+                fsType: issue.fsType,
+                mountPoint: issue.mountPoint,
+                ns: "health_check",
+                path: issue.path,
+              })
+            : undefined,
+        },
+        {
+          allowReport: false,
+          id: "linux-environment-deployment-blocked",
+        },
+      );
+      return Promise.resolve();
+    }
+
     const newDeployment: { [typeId: string]: IDeployedFile[] } = {};
 
     // will contain all mods fully overwritten (this also includes mods that didn't
@@ -755,110 +851,175 @@ function genUpdateModDeployment(installManager: InstallManager) {
           notification.id = api.sendNotification(notification);
 
           try {
-            await withActivationLock(async () => {
-              log("debug", "deploying mods", {
-                game: gameId,
-                profile: profile?.id,
-                method: activator.name,
-              });
-
-              // Wait for active mod installations to complete before deploying
-              // so we don't deploy half-installed mods.
-              if (installManager.getActiveInstallationCount() > 0) {
-                log("debug", "waiting for active installations before deploying");
-                await installManager.waitForIdle();
-              }
-
-              // Consume the set of installation paths whose mods finished
-              // installing or were removed since the last deployment. Their
-              // external changes (refchange / srcdeleted) are expected and
-              // will be auto-resolved per-mod.
-              const recentChanges = installManager.consumeRecentChanges();
-
-              let mergeResult: { [modType: string]: IMergeResultByType };
-              const lastDeployment: { [typeId: string]: IDeployedFile[] } = {};
-              const mods: Record<string, IMod> = state.persistent.mods?.[profile?.gameId] ?? {};
-              notification.message = t("Deploying mods");
-              api.sendNotification(notification);
-              api.store.dispatch(startActivity("mods", "deployment"));
-              progress(t("Loading deployment manifest"), 0);
-
-              // sequential: load activation order matters per mod type
-              for (const typeId of deployableModTypes(modPaths)) {
-                const deployedFiles = await loadActivation(
-                  api,
-                  gameId,
-                  typeId,
-                  modPaths[typeId],
-                  stagingPath,
-                  activator,
-                );
-                lastDeployment[typeId] = deployedFiles;
-              }
-
-              progress(t("Running pre-deployment events"), 2);
-              await api.emitAndAwait("will-deploy", profile.id, lastDeployment, deployOptions);
-
-              // need to update the profile so that if a will-deploy handler disables a mod, that
-              // actually has an affect on this deployment
-              const updatedState = api.getState();
-              const updatedProfile = updatedState.persistent.profiles[profile.id];
-              if (updatedProfile !== undefined) {
-                profile = updatedProfile;
-              } else {
-                // I don't think this can happen
-                log("warn", "profile no longer found?", profileId);
-              }
-
-              progress(t("Checking for external changes"), 5);
-              await dealWithExternalChanges(
-                api,
-                activator,
-                profileId,
+            await withActivationLock(() =>
+              withDeploymentLock(
                 stagingPath,
-                modPaths,
-                lastDeployment,
-                recentChanges,
-              );
+                deployableModTypes(modPaths).map((typeId) => modPaths[typeId]),
+                async () => {
+                  log("debug", "deploying mods", {
+                    game: gameId,
+                    profile: profile?.id,
+                    method: activator.name,
+                  });
 
-              progress(t("Checking for mod incompatibilities"), 25);
-              await checkIncompatibilities(api, profile, mods);
+                  // Wait for active mod installations to complete before deploying
+                  // so we don't deploy half-installed mods.
+                  if (installManager.getActiveInstallationCount() > 0) {
+                    log("debug", "waiting for active installations before deploying");
+                    await installManager.waitForIdle();
+                  }
 
-              progress(t("Sorting mods"), 30);
-              sortedModList = await doSortMods(api, profile, mods);
+                  // Consume the set of installation paths whose mods finished
+                  // installing or were removed since the last deployment. Their
+                  // external changes (refchange / srcdeleted) are expected and
+                  // will be auto-resolved per-mod.
+                  const recentChanges = installManager.consumeRecentChanges();
 
-              progress(t("Merging mods"), 35);
-              mergeResult = await doMergeMods(
-                api,
-                game,
-                gameDiscovery,
-                stagingPath,
-                sortedModList,
-                modPaths,
-                lastDeployment,
-              );
+                  let mergeResult: { [modType: string]: IMergeResultByType };
+                  const lastDeployment: { [typeId: string]: IDeployedFile[] } = {};
+                  const mods: Record<string, IMod> = state.persistent.mods?.[profile?.gameId] ?? {};
+                  notification.message = t("Deploying mods");
+                  api.sendNotification(notification);
+                  api.store.dispatch(startActivity("mods", "deployment"));
+                  progress(t("Loading deployment manifest"), 0);
 
-              progress(t("Starting deployment"), 35);
-              const deployProgress = (name, percent) =>
-                progress(t("Deploying: ") + name, 50 + percent / 2);
+                  // sequential: load activation order matters per mod type
+                  for (const typeId of deployableModTypes(modPaths)) {
+                    const deployedFiles = await loadActivation(
+                      api,
+                      gameId,
+                      typeId,
+                      modPaths[typeId],
+                      stagingPath,
+                      activator,
+                    );
+                    lastDeployment[typeId] = deployedFiles;
+                  }
 
-              const undiscovered = Object.keys(modPaths).filter(
-                (typeId) => !truthy(modPaths[typeId]),
-              );
-              await validateDeploymentTarget(api, undiscovered);
-              await deployAllModTypes(
-                api,
-                activator,
-                profile,
-                sortedModList,
-                stagingPath,
-                mergeResult,
-                modPaths,
-                lastDeployment,
-                newDeployment,
-                deployProgress,
-              );
-            });
+                  progress(t("Running pre-deployment events"), 2);
+                  await api.emitAndAwait("will-deploy", profile.id, lastDeployment, deployOptions);
+
+                  // need to update the profile so that if a will-deploy handler disables a mod, that
+                  // actually has an affect on this deployment
+                  const updatedState = api.getState();
+                  const updatedProfile = updatedState.persistent.profiles[profile.id];
+                  if (updatedProfile !== undefined) {
+                    profile = updatedProfile;
+                  } else {
+                    // I don't think this can happen
+                    log("warn", "profile no longer found?", profileId);
+                  }
+
+                  progress(t("Checking for external changes"), 5);
+                  await dealWithExternalChanges(
+                    api,
+                    activator,
+                    profileId,
+                    stagingPath,
+                    modPaths,
+                    lastDeployment,
+                    recentChanges,
+                  );
+
+                  progress(t("Checking for mod incompatibilities"), 25);
+                  await checkIncompatibilities(api, profile, mods);
+
+                  progress(t("Sorting mods"), 30);
+                  sortedModList = await doSortMods(api, profile, mods);
+
+                  progress(t("Merging mods"), 35);
+                  mergeResult = await doMergeMods(
+                    api,
+                    game,
+                    gameDiscovery,
+                    stagingPath,
+                    sortedModList,
+                    modPaths,
+                    lastDeployment,
+                  );
+
+                  const requiredBytesByDeploymentPath = await estimateCrossDeviceMoveBytes(
+                    activator.id,
+                    stagingPath,
+                    modPaths,
+                    sortedModList,
+                  );
+                  if (Object.keys(requiredBytesByDeploymentPath).length > 0) {
+                    const diskAssessment = assessLinuxEnvironment({
+                      deploymentPaths: Object.keys(requiredBytesByDeploymentPath),
+                      platform: process.platform,
+                      requiredBytesByDeploymentPath,
+                    });
+                    const diskIssue = diskAssessment.issues.find(
+                      (issue) => issue.code === "insufficient-disk-space",
+                    );
+                    if (diskIssue !== undefined) {
+                      api.showErrorNotification(
+                        t("Deployment not possible"),
+                        {
+                          message: t(`linux_proton::issues::${diskIssue.code}::details`, {
+                            availableBytes: diskIssue.availableBytes,
+                            ns: "health_check",
+                            path: diskIssue.path,
+                            requiredBytes: diskIssue.requiredBytes,
+                          }),
+                          path: diskIssue.path,
+                          remediation: t(`linux_proton::issues::${diskIssue.code}::remediation`, {
+                            ns: "health_check",
+                          }),
+                        },
+                        {
+                          allowReport: false,
+                          id: "linux-deployment-insufficient-disk-space",
+                        },
+                      );
+                      throw new UserCanceled();
+                    }
+                  }
+
+                  progress(t("Starting deployment"), 35);
+                  const deployProgress = (name, percent) =>
+                    progress(t("Deploying: ") + name, 50 + percent / 2);
+
+                  const undiscovered = Object.keys(modPaths).filter(
+                    (typeId) => !truthy(modPaths[typeId]),
+                  );
+                  await validateDeploymentTarget(api, undiscovered);
+                  let deploymentOperation = await beginDeploymentOperation({
+                    operation: "deploy",
+                    gameId,
+                    profileId: profile.id,
+                    instanceId: state.app.instanceId,
+                    deploymentMethod: activator.id,
+                    stagingPath,
+                    targetPaths: deployableModTypes(modPaths).map((typeId) => modPaths[typeId]),
+                  });
+                  deploymentOperation = await advanceDeploymentOperation(
+                    deploymentOperation,
+                    "applying",
+                  );
+                  await deployAllModTypes(
+                    api,
+                    activator,
+                    profile,
+                    sortedModList,
+                    stagingPath,
+                    mergeResult,
+                    modPaths,
+                    lastDeployment,
+                    newDeployment,
+                    deployProgress,
+                  );
+                  deploymentOperation = await advanceDeploymentOperation(
+                    deploymentOperation,
+                    "manifest-written",
+                  );
+                  runDeploymentFaultPoint("after-manifest-write");
+                  await advanceDeploymentOperation(deploymentOperation, "committed");
+                  runDeploymentFaultPoint("after-commit");
+                },
+              ),
+            );
 
             // at this point the deployment lock gets released so another deployment
             // can be started during post-deployment
@@ -994,7 +1155,7 @@ function doSaveActivation(
       .then((result) =>
         result.action === "Retry"
           ? doSaveActivation(api, gameId, typeId, deployPath, stagingPath, files, activatorId)
-          : Promise.resolve(),
+          : Promise.reject(err),
       );
   });
 }
@@ -1386,8 +1547,144 @@ function onNeedToDeploy(api: IExtensionApi, current: any) {
   }
 }
 
+function showDeploymentRecoveryDetails(
+  api: IExtensionApi,
+  gameId: string,
+  inspection: IDeploymentJournalInspection,
+) {
+  const entry = inspection.entry;
+  const text =
+    inspection.status === "invalid"
+      ? "The deployment journal could not be validated. Vortex will not start another deployment " +
+        "or purge in this staging folder until the journal is repaired or reviewed."
+      : "Vortex found a deployment operation that did not reach its committed state. " +
+        "No automatic recovery has been attempted.";
+  const details =
+    inspection.status === "invalid"
+      ? inspection.error?.message
+      : [
+          `Operation: ${entry.operation}`,
+          `Operation ID: ${entry.operationId}`,
+          `Phase: ${entry.phase}`,
+          `Game: ${entry.gameId}`,
+          `Staging: ${inspection.stagingPath}`,
+          `Targets: ${entry.targetPaths.join(", ")}`,
+          inspection.reconciliation !== undefined
+            ? `Files: ${inspection.reconciliation.counts.applied} applied, ${inspection.reconciliation.counts["backed-up"]} backed up, ${inspection.reconciliation.counts["not-started"]} not started, ${inspection.reconciliation.counts["rolled-back"]} rolled back, ${inspection.reconciliation.counts.ambiguous} ambiguous, ${inspection.reconciliation.counts.unsafe} unsafe`
+            : undefined,
+        ]
+          .filter(truthy)
+          .join("\n");
+
+  return api.showDialog(
+    "error",
+    "Deployment recovery required",
+    { text, message: details, parameters: { gameId } },
+    [{ label: "Close" }],
+  );
+}
+
+async function checkDeploymentJournalsAtStartup(api: IExtensionApi): Promise<void> {
+  const state = api.getState();
+  const configuredGameIds = Object.keys(state.settings.mods.installPath ?? {});
+  const stagingPaths = new Map<string, string>();
+  for (const gameId of configuredGameIds) {
+    const stagingPath = installPathForGame(state, gameId);
+    if (truthy(stagingPath) && !stagingPaths.has(stagingPath)) {
+      stagingPaths.set(stagingPath, gameId);
+    }
+  }
+
+  const inspections = await Promise.all(
+    Array.from(stagingPaths.entries()).map(async ([stagingPath, gameId]) => ({
+      gameId,
+      inspection: await inspectDeploymentJournal(stagingPath),
+    })),
+  );
+
+  for (const { gameId, inspection } of inspections) {
+    if (inspection === undefined) {
+      continue;
+    }
+    const entry = inspection.entry;
+    const recoveryPlan =
+      entry !== undefined
+        ? buildDeploymentRecoveryPlan(entry, inspection.reconciliation)
+        : undefined;
+    const recoveryActions =
+      recoveryPlan?.safe === true && recoveryPlan.action !== undefined
+        ? [
+            {
+              action: (dismiss: () => void) => {
+                void api
+                  .showDialog(
+                    "question",
+                    recoveryPlan.action === "rollback"
+                      ? "Roll back interrupted deployment?"
+                      : "Finish interrupted deployment?",
+                    {
+                      text: recoveryPlan.reason,
+                      message: `Operation ID: ${recoveryPlan.operationId}\nAffected paths: ${recoveryPlan.affectedPaths.join(", ")}`,
+                    },
+                    [{ label: "Cancel" }, { label: "Continue" }],
+                  )
+                  .then(async (result) => {
+                    if (result.action !== "Continue") {
+                      return;
+                    }
+                    await withActivationLock(() =>
+                      entry.phase === "applying"
+                        ? rollbackApplyingDeployment(entry)
+                        : completeDeploymentRecovery(entry, recoveryPlan.action),
+                    );
+                    dismiss();
+                    api.sendNotification({
+                      id: `deployment-recovery-complete-${entry.operationId}`,
+                      message:
+                        recoveryPlan.action === "rollback"
+                          ? "The prepared operation was rolled back without changing managed files."
+                          : "The completed manifests were accepted and the operation was committed.",
+                      title: "Deployment recovery completed",
+                      type: "success",
+                    });
+                  })
+                  .catch((err) =>
+                    api.showErrorNotification("Deployment recovery failed", err, {
+                      allowReport: false,
+                    }),
+                  );
+              },
+              title: recoveryPlan.action === "rollback" ? "Roll back" : "Finish recovery",
+            },
+          ]
+        : [];
+    api.sendNotification({
+      actions: [
+        ...recoveryActions,
+        {
+          action: () => showDeploymentRecoveryDetails(api, gameId, inspection),
+          title: "Details",
+        },
+      ],
+      id: `deployment-recovery-${entry?.operationId ?? gameId}`,
+      message:
+        inspection.status === "invalid"
+          ? "A deployment journal is damaged. Deployment and purge are blocked for this staging folder."
+          : `An interrupted ${entry.operation} operation was found at phase ${entry.phase}.`,
+      title: "Deployment recovery required",
+      type: "warning",
+    });
+  }
+}
+
 function once(api: IExtensionApi) {
   const store: Redux.Store<IState> = api.store;
+
+  if (process.platform === "linux") {
+    void checkDeploymentJournalsAtStartup(api).catch((err) => {
+      log("error", "failed to inspect deployment journals at startup", err);
+    });
+  }
 
   if (installManager === undefined) {
     installManager = new InstallManager(api, (gameId: string) =>
@@ -1506,9 +1803,27 @@ function once(api: IExtensionApi) {
 
   api.events.on("mods-enabled", onModsEnabled(api, deploymentTimer));
 
-  api.events.on("gamemode-activated", (newMode: string) =>
-    onGameModeActivated(api, getAllActivators(), newMode),
-  );
+  api.events.on("gamemode-activated", (newMode: string) => {
+    if (process.platform === "linux" && api.getState().settings.mods.linuxSetupCompleted !== true) {
+      api.sendNotification({
+        actions: [
+          {
+            action: (dismiss) => {
+              api.store.dispatch(setSettingsPage("Mods"));
+              api.events.emit("show-main-page", "application_settings");
+              dismiss();
+            },
+            title: "Review",
+          },
+        ],
+        id: "linux-first-run-setup",
+        message: "Review Steam, staging, deployment, and Proton before the first deployment.",
+        title: "Linux setup",
+        type: "info",
+      });
+    }
+    return onGameModeActivated(api, getAllActivators(), newMode);
+  });
 
   api.events.on(
     "install-dependencies",
@@ -2180,6 +2495,13 @@ function init(context: IExtensionContext): boolean {
     () => ({ activators: getAllActivators() }),
     () => activeGameId(context.api.getState()) !== undefined,
     75,
+  );
+  context.registerSettings(
+    "Mods",
+    LazyComponent(() => require("./views/LinuxSetup")),
+    () => ({ api: context.api, activators: getAllActivators() }),
+    () => process.platform === "linux" && activeGameId(context.api.getState()) !== undefined,
+    76,
   );
   context.registerSettings("Workarounds", Workarounds, undefined, undefined, 1000);
 

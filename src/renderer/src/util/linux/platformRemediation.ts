@@ -1,8 +1,4 @@
-/**
- * Фільтрація та адаптація інструкцій та порад під конкретну ОС (Linux vs Windows).
- * На Linux неприпустимо показувати поради штибу "Запустіть як Адміністратор", "Вимкніть Windows Defender",
- * "Змініть диск C: на D:" або звернення до реєстру Windows.
- */
+/** Adapt shared remediation text to the current platform. */
 
 export function sanitizePlatformMessage(
   text: string,
@@ -14,14 +10,12 @@ export function sanitizePlatformMessage(
 
   let result = text;
 
-  // 1. Заміна порад щодо запуску від імені адміністратора
   result = result.replace(
     /run(?:\s+\w+)?\s+as\s+administrator/gi,
     "verify folder permissions (chmod/chown)",
   );
   result = result.replace(/administrator\s+privileges/gi, "appropriate Linux user permissions");
 
-  // 2. Заміна порад щодо антивірусів Windows / Windows Defender
   result = result.replace(
     /windows\s+defender(?:\s+exclusions?)?/gi,
     "Linux filesystem permissions or security policies",
@@ -31,11 +25,9 @@ export function sanitizePlatformMessage(
     "filesystem mount options and permissions",
   );
 
-  // 3. Заміна термінології дисків Windows на розділи/монтування
   result = result.replace(/same\s+drive(?:\s+letter)?/gi, "same filesystem partition");
   result = result.replace(/drive\s+letter/gi, "mount point");
 
-  // 4. Заміна звернень до Windows Registry
   result = result.replace(/windows\s+registry/gi, "Wine prefix registry (user.reg)");
 
   return result;
@@ -49,9 +41,7 @@ export interface IRemediationAdvice {
   commandSnippet?: string;
 }
 
-/**
- * Отримання платформово-адаптованої поради щодо вирішення проблеми.
- */
+/** Return structured, platform-appropriate remediation. */
 export function getPlatformRemediation(
   issueCode: string,
   context: { path?: string; appId?: string } = {},
@@ -72,41 +62,38 @@ export function getPlatformRemediation(
     case "EPERM":
       return {
         code: issueCode,
-        title: "Помилка доступу до каталогу",
-        message: `Vortex не має прав запису до каталогу: ${context.path || "вказаний шлях"}`,
+        title: "Directory access error",
+        message: `Vortex cannot write to: ${context.path || "the selected path"}`,
         remediation:
-          "Перевірте власника каталогу та права доступу. Не запускайте Vortex через sudo.",
-        commandSnippet: context.path ? `chown -R $USER:$USER "${context.path}"` : undefined,
+          "Review the directory ownership and permissions. Do not run Vortex through sudo.",
       };
 
     case "cross-device-hardlink":
     case "EXDEV":
       return {
         code: issueCode,
-        title: "Розбіжність розділів файлової системи",
-        message:
-          "Каталог модів (staging) та гра розташовані на різних точках монтування файлової системи.",
+        title: "Filesystem device mismatch",
+        message: "The staging directory and game are on different filesystem mount points.",
         remediation:
-          "Хардлінки в Linux підтримуються лише в межах одного розділу. Перенесіть staging на той самий розділ або увімкніть Symlink Deployment.",
+          "Linux hardlinks work only within one filesystem. Move staging to the game filesystem or select Symlink Deployment.",
       };
 
     case "antivirus-blocked":
       return {
         code: issueCode,
-        title: "Блокування виконання бінарного файлу",
+        title: "Executable access blocked",
         message:
-          "Файлова система не дозволяє виконання файлів або відсутні права на виконання (+x).",
+          "The filesystem does not allow execution, or the file is missing executable permission (+x).",
         remediation:
-          "Перевірте, чи не змонтовано розділ з опцією 'noexec' у /etc/fstab, та додайте права на виконання.",
-        commandSnippet: context.path ? `chmod +x "${context.path}"` : undefined,
+          "Review the mount's 'noexec' option and the file permissions before making changes.",
       };
 
     default:
       return {
         code: issueCode,
-        title: "Діагностичне повідомлення",
-        message: `Виявлено системну подію: ${issueCode}`,
-        remediation: "Перевірте журнали Vortex у ~/.config/Vortex/logs для деталей.",
+        title: "Diagnostic message",
+        message: `A system event was detected: ${issueCode}`,
+        remediation: "Review the Vortex logs for details.",
       };
   }
 }

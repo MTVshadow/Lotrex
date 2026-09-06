@@ -36,6 +36,7 @@ import type {
   IUnavailableReason,
 } from "../mod_management/types/IDeploymentMethod";
 import { enableUserSymlinks } from "./actions";
+import { supportsElevatedSymlinkPlatform } from "./platform";
 import reducer from "./reducers";
 import { remoteCode } from "./remoteCode";
 import Settings from "./Settings";
@@ -1092,6 +1093,10 @@ function giveSymlinkRight(enable: boolean) {
 }
 
 function init(context: IExtensionContextEx): boolean {
+  if (!supportsElevatedSymlinkPlatform(process.platform)) {
+    return false;
+  }
+
   context.registerReducer(["settings", "workarounds"], reducer);
 
   const method = new DeploymentMethod(context.api);

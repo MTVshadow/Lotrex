@@ -14,6 +14,11 @@ import type { IState } from "../../types/IState";
 import { getGame, UserCanceled } from "../../util/api";
 import * as fs from "../../util/fs";
 import type { Normalize } from "../../util/getNormalizeFunc";
+import { CaseCollisionError, detectCaseCollisions } from "../../util/linux/caseCollisions";
+import {
+  type IStructuredFilesystemError,
+  translateFilesystemError,
+} from "../../util/linux/filesystemErrors";
 import { activeGameId } from "../../util/selectors";
 import { truthy } from "../../util/util";
 import type {
@@ -23,6 +28,11 @@ import type {
   IUnavailableReason,
 } from "./types/IDeploymentMethod";
 import type BlacklistSet from "./util/BlacklistSet";
+import { runDeploymentFaultPoint } from "./util/deploymentFaultInjection";
+import {
+  type IDeploymentFileOperation,
+  recordPlannedFileOperations,
+} from "./util/deploymentJournal";
 
 export interface IDeployment {
   [relPath: string]: IDeployedFile;
@@ -172,6 +182,19 @@ abstract class LinkingActivator implements IDeploymentMethod {
     let contentChanged: string[];
 
     let errorCount: number = 0;
+    const structuredErrors = new Map<string, IStructuredFilesystemError>();
+
+    const recordFilesystemError = (err: unknown, key: string) => {
+      const entry = context.newDeployment[key] ?? context.previousDeployment[key];
+      const structured = translateFilesystemError(err, {
+        activeMethod: this.id.replace(/_activator$/, ""),
+        destPath: entry ? path.join(dataPath, entry.target || "", entry.relPath) : dataPath,
+        sourcePath: entry
+          ? path.join(installationPath, entry.source, entry.relPath)
+          : installationPath,
+      });
+      structuredErrors.set(structured.code, structured);
+    };
 
     this.mDirCache = new Set<string>();
 
@@ -202,27 +225,87 @@ abstract class LinkingActivator implements IDeploymentMethod {
     const directoryCleaning = game.directoryCleaning || "tag";
     const dirTags = directoryCleaning === "tag";
 
+    const caseCollisions =
+      process.platform === "linux"
+        ? detectCaseCollisions(
+            Object.values(context.newDeployment).map((entry) => ({
+              modId: entry.source,
+              relPath: path.join(entry.target || "", entry.relPath),
+              sourcePath: path.join(installationPath, entry.source, entry.relPath),
+            })),
+          )
+        : [];
+
+    const removalOperation = (key: string, restoreBackup: boolean): IDeploymentFileOperation => {
+      const entry = context.previousDeployment[key];
+      const targetPath = path.join(dataPath, entry.target || "", entry.relPath);
+      return {
+        id: `remove:${targetPath}`,
+        action: "remove",
+        sourcePath: path.join(installationPath, entry.source, entry.relPath),
+        targetPath,
+        backupPath: targetPath + BACKUP_TAG,
+        replace: false,
+        restoreBackup,
+      };
+    };
+    const deploymentOperation = (key: string, replace: boolean): IDeploymentFileOperation => {
+      const entry = context.newDeployment[key];
+      const targetPath = path.join(dataPath, entry.target || "", entry.relPath);
+      return {
+        id: `deploy:${targetPath}`,
+        action: "deploy",
+        sourcePath: path.join(installationPath, entry.source, entry.relPath),
+        targetPath,
+        backupPath: targetPath + BACKUP_TAG,
+        replace,
+        restoreBackup: false,
+      };
+    };
+
     return (
-      mapWithConcurrency(
-        removed,
-        (key) =>
-          this.removeDeployedFile(installationPath, dataPath, key, true).catch((err: unknown) => {
-            log("warn", "failed to remove deployed file", {
-              link: context.newDeployment[key].relPath,
-              error: getErrorMessageOrDefault(err),
-            });
-            ++errorCount;
-          }),
-        50,
-      )
+      Promise.resolve()
+        .then(() => {
+          if (caseCollisions.length > 0) {
+            throw new CaseCollisionError(caseCollisions);
+          }
+        })
+        .then(() =>
+          recordPlannedFileOperations(installationPath, [
+            ...removed.map((key) => removalOperation(key, true)),
+            ...sourceChanged.map((key) => removalOperation(key, false)),
+            ...contentChanged.map((key) => removalOperation(key, false)),
+            ...added.map((key) => deploymentOperation(key, false)),
+            ...sourceChanged.map((key) => deploymentOperation(key, true)),
+            ...contentChanged.map((key) => deploymentOperation(key, true)),
+          ]),
+        )
+        .then(() =>
+          mapWithConcurrency(
+            removed,
+            (key) =>
+              this.removeDeployedFile(installationPath, dataPath, key, true).catch(
+                (err: unknown) => {
+                  recordFilesystemError(err, key);
+                  log("warn", "failed to remove deployed file", {
+                    link: (context.newDeployment[key] ?? context.previousDeployment[key])?.relPath,
+                    error: getErrorMessageOrDefault(err),
+                  });
+                  ++errorCount;
+                },
+              ),
+            50,
+          ),
+        )
         .then(() =>
           mapWithConcurrency(
             sourceChanged,
             (key: string, idx: number) =>
               this.removeDeployedFile(installationPath, dataPath, key, false).catch(
                 (err: unknown) => {
+                  recordFilesystemError(err, key);
                   log("warn", "failed to remove deployed file", {
-                    link: context.newDeployment[key].relPath,
+                    link: (context.newDeployment[key] ?? context.previousDeployment[key])?.relPath,
                     error: getErrorMessageOrDefault(err),
                   });
                   ++errorCount;
@@ -238,8 +321,9 @@ abstract class LinkingActivator implements IDeploymentMethod {
             (key: string, idx: number) =>
               this.removeDeployedFile(installationPath, dataPath, key, false).catch(
                 (err: unknown) => {
+                  recordFilesystemError(err, key);
                   log("warn", "failed to remove deployed file", {
-                    link: context.newDeployment[key].relPath,
+                    link: (context.newDeployment[key] ?? context.previousDeployment[key])?.relPath,
                     error: getErrorMessageOrDefault(err),
                   });
                   ++errorCount;
@@ -256,6 +340,7 @@ abstract class LinkingActivator implements IDeploymentMethod {
             (key) =>
               this.deployFile(key, installationPath, dataPath, false, dirTags)
                 .catch((err: unknown) => {
+                  recordFilesystemError(err, key);
                   log("warn", "failed to link", {
                     link: context.newDeployment[key].relPath,
                     source: context.newDeployment[key].source,
@@ -278,6 +363,7 @@ abstract class LinkingActivator implements IDeploymentMethod {
             (key: string) =>
               this.deployFile(key, installationPath, dataPath, true, dirTags)
                 .catch((err: unknown) => {
+                  recordFilesystemError(err, key);
                   log("warn", "failed to link", {
                     link: context.newDeployment[key].relPath,
                     source: context.newDeployment[key].source,
@@ -293,17 +379,23 @@ abstract class LinkingActivator implements IDeploymentMethod {
         )
         .then(() => {
           if (errorCount > 0) {
+            const structured = structuredErrors.values().next().value;
             this.mApi.store.dispatch(
               addNotification({
                 type: "error",
-                title: this.mApi.translate("Deployment failed"),
-                message: this.mApi.translate(
-                  "{{count}} files were not correctly deployed (see log for details).\n" +
-                    "The most likely reason is that files were locked by external applications " +
-                    "so please ensure no other application has a mod file open, then repeat " +
-                    "deployment.",
-                  { replace: { count: errorCount } },
-                ),
+                title: structured
+                  ? this.mApi.translate(structured.title)
+                  : this.mApi.translate("Deployment failed"),
+                message:
+                  structured !== undefined
+                    ? `${this.mApi.translate(structured.message)}\n${this.mApi.translate(structured.remediation)}`
+                    : this.mApi.translate(
+                        "{{count}} files were not correctly deployed (see log for details).\n" +
+                          "The most likely reason is that files were locked by external applications " +
+                          "so please ensure no other application has a mod file open, then repeat " +
+                          "deployment.",
+                        { replace: { count: errorCount } },
+                      ),
               }),
             );
           }
@@ -757,7 +849,7 @@ abstract class LinkingActivator implements IDeploymentMethod {
     return Object.values(changeMap);
   }
 
-  private removeDeployedFile(
+  private async removeDeployedFile(
     installationPath: string,
     dataPath: string,
     key: string,
@@ -776,37 +868,44 @@ abstract class LinkingActivator implements IDeploymentMethod {
       this.mContext.previousDeployment[key].source,
       this.mContext.previousDeployment[key].relPath,
     );
-    return Promise.resolve(this.unlinkFile(outputPath, sourcePath))
-      .catch((err: unknown) =>
-        // duck-typing is unavoidable here: symlink_activator_elevate rejects
-        // with deserialized IPC objects that are not Error instances, so
-        // getErrorCode() (which requires instanceof Error) would miss the code.
-        (err as any)?.code !== "ENOENT"
-          ? // treat an ENOENT error for the unlink as if it was a success.
-            // The end result either way is the link doesn't exist now.
-            Promise.reject(err)
-          : Promise.resolve(),
-      )
-      .then(() =>
-        restoreBackup
-          ? fs.renameAsync(outputPath + BACKUP_TAG, outputPath).catch(() => undefined)
-          : Promise.resolve(),
-      )
-      .then(() => {
-        delete this.mContext.previousDeployment[key];
-      })
-      .catch((err: unknown) => {
-        log("warn", "failed to unlink", {
-          path: this.mContext.previousDeployment[key].relPath,
-          error: getErrorMessageOrDefault(err),
-        });
-        // need to make sure the deployment manifest
-        // reflects the actual state, otherwise we may
-        // leave files orphaned
-        this.mContext.newDeployment[key] = this.mContext.previousDeployment[key];
+    try {
+      let targetExists = true;
+      try {
+        await this.statLink(outputPath);
+      } catch (err: unknown) {
+        if (!["ENOENT", "ENOTFOUND"].includes(getErrorCode(err))) {
+          throw err;
+        }
+        targetExists = false;
+      }
 
-        return Promise.reject(err);
+      if (targetExists && !(await this.isLink(outputPath, sourcePath))) {
+        const err = new Error(
+          `Refusing to remove a deployment target that changed on disk: ${outputPath}`,
+        );
+        err["code"] = "EDEPLOYMENTTARGETCHANGED";
+        err["path"] = outputPath;
+        throw err;
+      }
+
+      if (targetExists) {
+        await this.unlinkFile(outputPath, sourcePath);
+      }
+      runDeploymentFaultPoint("after-unlink");
+      if (restoreBackup) {
+        await fs.renameAsync(outputPath + BACKUP_TAG, outputPath).catch(() => undefined);
+      }
+      delete this.mContext.previousDeployment[key];
+    } catch (err: unknown) {
+      log("warn", "failed to unlink", {
+        path: this.mContext.previousDeployment[key].relPath,
+        error: getErrorMessageOrDefault(err),
       });
+      // Keep the previous entry in the next manifest: a validator or another process may have
+      // replaced the target after external-change detection but before this unlink boundary.
+      this.mContext.newDeployment[key] = this.mContext.previousDeployment[key];
+      throw err;
+    }
   }
 
   private async deployFile(
@@ -829,7 +928,7 @@ abstract class LinkingActivator implements IDeploymentMethod {
       .filter((i) => i !== null)
       .join(path.sep);
 
-    // На Linux нормалізуємо шлях з урахуванням регістру існуючих каталогів (уникаємо дублювання Data/Textures vs Data/textures)
+    // On Linux, reuse the spelling of existing directories instead of creating a case-only fork.
     const resolvedDir = await this.resolveExistingCase(path.dirname(rawOutputPath));
     const fullOutputPath = path.join(resolvedDir, path.basename(rawOutputPath));
 
@@ -850,12 +949,12 @@ abstract class LinkingActivator implements IDeploymentMethod {
               : Promise.reject(err),
           );
 
-    return backupProm
-      .then(() => this.linkFile(fullOutputPath, fullPath, dirTags))
-      .then(() => {
-        this.mContext.previousDeployment[key] = this.mContext.newDeployment[key];
-        return this.mContext.newDeployment[key];
-      });
+    await backupProm;
+    runDeploymentFaultPoint("after-backup");
+    await this.linkFile(fullOutputPath, fullPath, dirTags);
+    runDeploymentFaultPoint("after-link");
+    this.mContext.previousDeployment[key] = this.mContext.newDeployment[key];
+    return this.mContext.newDeployment[key];
   }
 
   private diffActivation(before: IDeployment, after: IDeployment) {

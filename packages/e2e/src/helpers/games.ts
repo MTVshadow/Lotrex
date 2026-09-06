@@ -9,7 +9,7 @@ import { Timeouts } from "./timeouts";
 
 // VORTEX_E2E=1 disables automatic discovery, so all games go through the
 // "Game not discovered" dialog and have their path set via a dialog.showOpenDialog stub.
-export type ManagedGameId = "stardewvalley";
+export type ManagedGameId = "skyrimse" | "stardewvalley";
 
 export interface ManagedGame {
   basePath: string;
@@ -31,7 +31,10 @@ export async function manageGame(
     // First interaction after a cold app launch — allow the nav to finish
     // mounting rather than racing the default 5s UI budget.
     await expect(navbar.gamesLink).toBeVisible({ timeout: Timeouts.NETWORK });
-    await navbar.gamesLink.click();
+    // The hidden-headless Electron window can continuously report compositor movement on
+    // Wayland even though the navigation button is visible and enabled. Bypass only the
+    // stability wait; the visibility assertion above still guards the interaction.
+    await navbar.gamesLink.click({ force: true });
 
     await stubOpenDialog(electronApp, fakeGame.gamePath);
 

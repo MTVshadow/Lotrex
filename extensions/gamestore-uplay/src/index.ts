@@ -2,7 +2,12 @@ import * as path from "path";
 
 import { log, types, util } from "@nexusmods/vortex-api";
 import Bluebird from "bluebird";
-import * as winapi from "winapi-bindings";
+
+import { supportsPlatform } from "./platform";
+
+const winapi = (
+  process.platform === "win32" ? require("winapi-bindings") : undefined
+) as typeof import("winapi-bindings");
 
 const STORE_ID = "uplay";
 const STORE_NAME = "Uplay";
@@ -159,12 +164,11 @@ class UPlayLauncher implements types.IGameStore {
 }
 
 function main(context: types.IExtensionContext) {
-  const instance: types.IGameStore = process.platform === "win32" ? new UPlayLauncher() : undefined;
-
-  if (instance !== undefined) {
-    context.registerGameStore(instance);
+  if (!supportsPlatform(process.platform)) {
+    return false;
   }
 
+  context.registerGameStore(new UPlayLauncher());
   return true;
 }
 

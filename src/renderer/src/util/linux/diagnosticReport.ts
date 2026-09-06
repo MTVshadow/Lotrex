@@ -46,6 +46,10 @@ export function redactTokensAndSecrets(text: string): string {
     /([?&](?:api_?key|token|password|secret|auth)=)([^&\s]+)/gi,
     "$1[REDACTED]",
   );
+  result = result.replace(
+    /(\b(?:api_?key|token|password|secret|auth)\s*[:=]\s*)([^,;\s]+)/gi,
+    "$1[REDACTED]",
+  );
   // Маскування Bearer токенів
   result = result.replace(/(Bearer\s+)[A-Za-z0-9._~+/-]+=*/gi, "$1[REDACTED]");
   // Маскування довгих hex/base64 токенів (довжиною від 32 символів)
@@ -72,6 +76,11 @@ export function redactUserPaths(
     const userRegex = new RegExp(`(/home/)${userName}([/\\\\]|$)`, "g");
     result = result.replace(userRegex, "$1<user>$2");
   }
+
+  result = result.replace(/\/(?:home|Users)\/[^/\\\s]+/g, (match) => {
+    const root = match.startsWith("/Users/") ? "/Users" : "/home";
+    return `${root}/<user>`;
+  });
 
   return redactTokensAndSecrets(result);
 }
@@ -107,10 +116,10 @@ export function generateLinuxDiagnosticReport(options: IDiagnosticReportOptions 
     `*Generated on: ${new Date().toISOString()}*`,
     "",
     "## 1. System Environment",
-    `- **Kernel:** ${kernel}`,
-    `- **Architecture:** ${arch}`,
-    `- **Session Type:** ${sessionType}`,
-    `- **Desktop Environment:** ${desktop}`,
+    `- **Kernel:** ${clean(kernel)}`,
+    `- **Architecture:** ${clean(arch)}`,
+    `- **Session Type:** ${clean(sessionType)}`,
+    `- **Desktop Environment:** ${clean(desktop)}`,
     "",
     "## 2. Steam & Proton Tooling",
     `- **Steam Type:** ${options.steam?.installType ?? inferSteamInstallType(options.steam?.steamPath)}`,
@@ -129,25 +138,27 @@ export function generateLinuxDiagnosticReport(options: IDiagnosticReportOptions 
   lines.push(
     "",
     "## 3. Active Game & Deployment",
-    `- **Game ID:** ${options.game?.gameId ?? "None"}`,
-    `- **Game Name:** ${options.game?.gameName ?? "None"}`,
+    `- **Game ID:** ${clean(options.game?.gameId) || "None"}`,
+    `- **Game Name:** ${clean(options.game?.gameName) || "None"}`,
     `- **Game Directory:** ${clean(options.game?.gamePath) || "Unknown"}`,
     `- **Staging Directory:** ${clean(options.game?.stagingPath) || "Unknown"}`,
-    `- **Active Deployment Method:** ${options.game?.deploymentMethod ?? "Default"}`,
+    `- **Active Deployment Method:** ${clean(options.game?.deploymentMethod) || "Default"}`,
   );
 
   if (options.mounts && options.mounts.length > 0) {
     lines.push("", "## 4. Relevant Filesystem Mounts");
     for (const mount of options.mounts) {
-      const opts = mount.options.join(", ");
-      lines.push(`- \`${clean(mount.mountPoint)}\` (${mount.fsType}): [${opts}]`);
+      const opts = mount.options.map((option) => clean(option)).join(", ");
+      lines.push(`- \`${clean(mount.mountPoint)}\` (${clean(mount.fsType)}): [${opts}]`);
     }
   }
 
   if (options.issues && options.issues.length > 0) {
     lines.push("", "## 5. Detected Health & Configuration Issues");
     for (const issue of options.issues) {
-      lines.push(`- **[${issue.severity.toUpperCase()}] ${issue.code}:** ${issue.message}`);
+      lines.push(
+        `- **[${clean(issue.severity).toUpperCase()}] ${clean(issue.code)}:** ${clean(issue.message)}`,
+      );
     }
   } else {
     lines.push("", "## 5. Detected Health & Configuration Issues", "- No active issues reported.");

@@ -5,6 +5,7 @@ import { getGame } from "../../gamemode_management/util/getGame";
 import { activeGameId } from "../../profile_management/selectors";
 import type { IDeploymentMethod } from "../types/IDeploymentMethod";
 import allTypesSupported from "./allTypesSupported";
+import { rankAutomaticDeploymentMethods } from "./deploymentRecommendation";
 
 const activators: IDeploymentMethod[] = [];
 
@@ -77,24 +78,15 @@ export function getCurrentActivator(
   if (allowDefault && activator === undefined) {
     if (game !== undefined && gameDiscovery?.path !== undefined) {
       const modTypes = Object.keys(modPaths);
-
-      const hadWarnings = [];
-
-      activator = activators.find((act) => {
-        const problems = allTypesSupported(act, state, gameId, modTypes);
-        if (problems.errors.length === 0) {
-          if (problems.warnings.length > 0) {
-            hadWarnings.push(act);
-          } else {
-            return true;
-          }
-        }
-        return false;
-      });
-      // prefer an activator without warnings but if there is none, use one with warnings
-      if (activator === undefined && hadWarnings.length > 0) {
-        activator = hadWarnings[0];
-      }
+      const assessed = activators.map((candidate) => ({
+        activator: candidate,
+        ...allTypesSupported(candidate, state, gameId, modTypes),
+      }));
+      activator = rankAutomaticDeploymentMethods(
+        assessed,
+        process.platform,
+        game.capabilities?.deployment,
+      ).activator;
     }
   }
 

@@ -5,6 +5,7 @@ import type { IExtensionContext } from "../../types/IExtensionContext";
 import type { IInstallationDetails } from "../mod_management/types/InstallFunc";
 import type { ITestSupportedDetails } from "../mod_management/types/TestSupported";
 import { install } from "./installer";
+import { detectAppContainerSupport } from "./platform";
 import { settingsReducer } from "./reducers/sandbox";
 import { testSupported } from "./tester";
 import Sandbox from "./views/Sandbox";
@@ -15,10 +16,15 @@ import Sandbox from "./views/Sandbox";
 const main = (context: IExtensionContext): boolean => {
   context.registerReducer(["settings", "mods"], settingsReducer);
 
-  const osSupportsAppContainer = SupportsAppContainer?.() ?? false;
-  context.registerSettings("Workarounds", Sandbox, () => ({
-    osSupportsAppContainer,
-  }));
+  if (process.platform === "win32") {
+    const osSupportsAppContainer = detectAppContainerSupport(
+      process.platform,
+      SupportsAppContainer,
+    );
+    context.registerSettings("Workarounds", Sandbox, () => ({
+      osSupportsAppContainer,
+    }));
+  }
 
   context.registerInstaller(
     /*id:*/ `fomod`,

@@ -27,9 +27,16 @@ import {
 import { emitGameLaunched, recordLaunchExit } from "./gameLaunchAnalytics";
 import GameStoreHelper from "./GameStoreHelper";
 import getVortexPath from "./getVortexPath";
-import { isWindowsExecutable } from "./linux/proton";
+import {
+  resolveProcessShutdownPolicy,
+  shutdownPolicyUsesDetachedProcess,
+} from "./linux/processShutdownPolicy";
+import { parseManagedProcessTimeout } from "./linux/processTree";
+import { findLatestProton } from "./linux/proton";
+import { isWindowsExecutable } from "./linux/protonLaunch";
 import ProtonPaths from "./linux/ProtonPaths";
 import { ProtonUnavailable, protonUnavailableMessage } from "./linux/ProtonUnavailable";
+import { type IUnifiedProtonContext, resolveUnifiedLaunch } from "./linux/unifiedLaunchProvider";
 import * as selectors from "./selectors";
 import type { Steam, ISteamEntry } from "./Steam";
 import { getSafe } from "./storeHelper";
@@ -81,7 +88,7 @@ type OnShowErrorFunc = (
  * via `steam -applaunch`, allowing custom command-line arguments and running
  * different executables (like mod tools) with the game's Proton prefix.
  */
-async function shouldRunWithProton(
+async function resolveSteamProtonEntry(
   info: IStarterInfo,
   api: IExtensionApi,
 ): Promise<ISteamEntry | undefined> {
@@ -306,7 +313,7 @@ class StarterInfo implements IStarterInfo {
     };
 
     // Check if game/tool should run through Proton on Linux
-    const protonGameEntry = await shouldRunWithProton(info, api);
+    const protonGameEntry = await resolveSteamProtonEntry(info, api);
     if (protonGameEntry !== undefined) {
       // On Linux with Proton, we can't track when the process exits (ProcessMonitor
       // only works on Windows), so don't set tool as running to avoid stuck spinner
@@ -318,22 +325,78 @@ class StarterInfo implements IStarterInfo {
         }
       };
 
-      const steamStore = GameStoreHelper.getGameStore("steam") as Steam;
       try {
-        await steamStore.runToolWithProton(
-          api,
-          info.exePath,
-          info.commandLine,
-          {
-            cwd: info.workingDirectory || path.dirname(info.exePath),
-            env: info.environment,
-            suggestDeploy: true,
-            shell: info.shell,
-            detach: info.detach || info.onStart === "close",
-            onSpawned: protonSpawned,
+        const state = api.store.getState();
+        const game = selectors.gameById(state, info.gameId);
+        const discovery = selectors.discoveryByGame(state, info.gameId);
+        const resolvedPaths = ProtonPaths.resolve({ gameMode: info.gameId, discovery, game });
+        const steamPath = resolvedPaths?.steamPath;
+        const protonPath =
+          protonGameEntry.protonPath ??
+          (steamPath ? await findLatestProton(steamPath, protonGameEntry.appid) : undefined);
+        const runtimePreference = state.settings.mods.protonRuntime?.[info.gameId];
+        const protonContext: IUnifiedProtonContext = {
+          appId: protonGameEntry.appid,
+          gamePath: protonGameEntry.gamePath,
+          prefixPath:
+            resolvedPaths?.prefixPath ??
+            (protonGameEntry.compatDataPath
+              ? path.join(protonGameEntry.compatDataPath, "pfx")
+              : undefined),
+          protonPath,
+          steamPath,
+        };
+        const launch = resolveUnifiedLaunch({
+          commandLine: info.commandLine,
+          discovery,
+          environment: info.environment,
+          executablePath: info.exePath,
+          gameId: info.gameId,
+          gameMetadata: game,
+          gameName: info.name,
+          isGame: info.isGame,
+          protonContext,
+          protonRuntimePreference: runtimePreference,
+          protonRuntimeValidation: {
+            requireApproval: true,
+            untrustedRoots: [
+              selectors.installPathForGame(state, info.gameId),
+              discovery?.path,
+            ].filter((root): root is string => typeof root === "string" && root.length > 0),
           },
-          protonGameEntry,
-        );
+          store: info.store,
+          workingDirectory: info.workingDirectory,
+        });
+        log("debug", "Resolved Linux launch plan", {
+          diagnostics: launch.diagnostics,
+          gameId: info.gameId,
+          mode: launch.mode,
+        });
+        const processShutdownPolicy = resolveProcessShutdownPolicy({
+          detach: info.detach,
+          mode: launch.mode,
+          onStart: info.onStart,
+        });
+        const terminateProcessTree = processShutdownPolicy === "managed-tree";
+        const processTimeoutMS = terminateProcessTree
+          ? parseManagedProcessTimeout(
+              info.environment.VORTEX_PROTON_LAUNCH_TIMEOUT_MS ??
+                process.env.VORTEX_PROTON_LAUNCH_TIMEOUT_MS,
+            )
+          : undefined;
+        await api.runExecutable(launch.executable, launch.parameters, {
+          cwd: launch.workingDirectory,
+          detach: shutdownPolicyUsesDetachedProcess(processShutdownPolicy),
+          env: launch.environment,
+          onExit: (code) => recordLaunchExit(info.exePath, code),
+          onSpawned: protonSpawned,
+          processLayer: "proton-runtime",
+          processTimeoutMS,
+          processShutdownPolicy,
+          shell: false,
+          suggestDeploy: true,
+          terminateProcessTree,
+        });
       } catch (err) {
         if (err instanceof ProtonUnavailable) {
           onShowError(
@@ -355,15 +418,36 @@ class StarterInfo implements IStarterInfo {
       return;
     }
 
+    const directMode = info.exePath.startsWith("steam://")
+      ? "steam-uri"
+      : info.exePath.startsWith("heroic://")
+        ? "heroic-uri"
+        : info.exePath.startsWith("lutris:")
+          ? "lutris-uri"
+          : "native";
+    const processShutdownPolicy = resolveProcessShutdownPolicy({
+      detach: info.detach,
+      mode: directMode,
+      onStart: info.onStart,
+    });
+    const processLayer =
+      processShutdownPolicy === "launcher-handoff"
+        ? "launcher-handoff"
+        : info.isGame
+          ? "native-game"
+          : "native-tool";
+
     return api
       .runExecutable(info.exePath, info.commandLine, {
         cwd: info.workingDirectory || path.dirname(info.exePath),
         env: info.environment,
         suggestDeploy: true,
         shell: info.shell,
-        detach: info.detach || info.onStart === "close",
+        detach: shutdownPolicyUsesDetachedProcess(processShutdownPolicy),
         onSpawned: spawned,
         onExit: (code) => recordLaunchExit(info.exePath, code),
+        processLayer,
+        processShutdownPolicy,
       })
       .catch(ProcessCanceled, () => undefined)
       .catch(UserCanceled, () => undefined)

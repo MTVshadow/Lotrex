@@ -29,7 +29,7 @@ describe("translateFilesystemError", () => {
 
     expect(result.code).toBe("EROFS");
     expect(result.openSettingsAction).toBe(false);
-    expect(result.remediation).toContain("/etc/fstab");
+    expect(result.remediation).toContain("write access");
   });
 
   it("translates EACCES / EPERM error", () => {
@@ -41,7 +41,7 @@ describe("translateFilesystemError", () => {
     });
 
     expect(result.code).toBe("EACCES");
-    expect(result.remediation).toContain("chown");
+    expect(result.remediation).toContain("ownership");
   });
 
   it("translates ENOSPC error", () => {
@@ -51,6 +51,6 @@ describe("translateFilesystemError", () => {
     const result = translateFilesystemError(error);
 
     expect(result.code).toBe("ENOSPC");
-    expect(result.title).toContain("місця");
+    expect(result.title).toContain("disk space");
   });
 });

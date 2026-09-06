@@ -450,6 +450,15 @@ export interface IRunOptions {
   suggestDeploy?: boolean;
   shell?: boolean;
   detach?: boolean;
+  // On POSIX, start the child in a dedicated process group and terminate that exact group when
+  // the returned promise is canceled or Vortex exits. Intended for directly managed runtimes.
+  terminateProcessTree?: boolean;
+  // Optional maximum lifetime for a managed process. Ignored unless terminateProcessTree is true.
+  processTimeoutMS?: number;
+  // Records why this process is tracked, detached, handed to a launcher, or group-managed.
+  processShutdownPolicy?: "managed-tree" | "tracked-child" | "detached" | "launcher-handoff";
+  // Stable diagnostic layer used in logs and surfaced process errors.
+  processLayer?: "proton-runtime" | "native-game" | "native-tool" | "launcher-handoff" | "helper";
   // if true, a non-zero exit code will be treated as an error. default is false
   //   because too many windows applications don't report proper exit codes
   expectSuccess?: boolean;

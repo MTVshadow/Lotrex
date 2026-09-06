@@ -67,8 +67,8 @@ describe("caseCollisions", () => {
     ];
 
     const report = formatCaseCollisionReport(collisions);
-    expect(report).toContain("колізій регістру");
-    expect(report).toContain("Textures/Wood.dds (мод: mod-1)");
-    expect(report).toContain("textures/wood.dds (мод: mod-2)");
+    expect(report).toContain("case-sensitive filename collision");
+    expect(report).toContain("Textures/Wood.dds (mod: mod-1)");
+    expect(report).toContain("textures/wood.dds (mod: mod-2)");
   });
 });

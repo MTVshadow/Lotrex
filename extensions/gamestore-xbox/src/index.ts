@@ -3,8 +3,12 @@ import * as path from "path";
 
 import { fs, log, types, util } from "@nexusmods/vortex-api";
 import PromiseBB from "bluebird";
-import * as winapi from "winapi-bindings";
+import type * as WinApi from "winapi-bindings";
 import { parseStringPromise } from "xml2js";
+
+const winapi = (
+  process.platform === "win32" ? require("winapi-bindings") : undefined
+) as typeof import("winapi-bindings");
 
 import {
   IGNORABLE,
@@ -17,6 +21,7 @@ import {
   STORE_NAME,
   STORE_PRIORITY,
 } from "./common";
+import { supportsPlatform } from "./platform";
 import { GamePathMap, IXboxEntry } from "./types";
 import { findInstalledGames } from "./util";
 
@@ -185,14 +190,14 @@ class XboxLauncher implements types.IGameStore {
     }
   }
 
-  private getFirstKeyName(rootKey: winapi.REGISTRY_HIVE, keyPath: string): string {
+  private getFirstKeyName(rootKey: WinApi.REGISTRY_HIVE, keyPath: string): string {
     const keyNames = this.getKeyNames(rootKey, keyPath);
     return keyNames.length > 0 ? keyNames[0] : undefined;
   }
 
   // Please note that the filterList is aimed at EXCLUDING/IGNORING the provided strings.
   private getKeyNames(
-    rootKey: winapi.REGISTRY_HIVE,
+    rootKey: WinApi.REGISTRY_HIVE,
     keyPath: string,
     filterList?: string[],
   ): string[] {
@@ -440,13 +445,11 @@ class XboxLauncher implements types.IGameStore {
 }
 
 function main(context: types.IExtensionContext) {
-  const instance: types.IGameStore =
-    process.platform === "win32" ? new XboxLauncher(context.api) : undefined;
-
-  if (instance !== undefined) {
-    context.registerGameStore(instance);
+  if (!supportsPlatform(process.platform)) {
+    return false;
   }
 
+  context.registerGameStore(new XboxLauncher(context.api));
   return true;
 }
 

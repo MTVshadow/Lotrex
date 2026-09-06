@@ -42,6 +42,11 @@ import { settingsReducer } from "./reducers/settings";
 import { stateReducer } from "./reducers/state";
 import { transactionsReducer } from "./reducers/transactions";
 import type { DownloadState, IDownload } from "./types/IDownload";
+import {
+  diffDirectorySnapshots,
+  isWatcherLimitError,
+  snapshotDirectory,
+} from "./util/directoryPolling";
 import { ensureDownloadsDirectory } from "./util/downloadDirectory";
 import { isTempDownloadName } from "./util/downloadNames";
 import extendAPI from "./util/extendApi";
@@ -203,24 +208,82 @@ function genDownloadChangeHandler(
 }
 
 let currentWatch: fs.FSWatcher;
+let stopDownloadPolling: (() => void) | undefined;
 let watchEnabled: boolean = true;
+
+function stopWatchingDownloads(): void {
+  currentWatch?.close();
+  currentWatch = undefined;
+  stopDownloadPolling?.();
+  stopDownloadPolling = undefined;
+}
+
+async function startDownloadPolling(
+  api: IExtensionApi,
+  downloadPath: string,
+  onChange: (evt: string, fileName: string) => void,
+): Promise<void> {
+  stopDownloadPolling?.();
+  let stopped = false;
+  let scanning = false;
+  let previous = await snapshotDirectory(downloadPath);
+  const timer = setInterval(async () => {
+    if (stopped || scanning) return;
+    scanning = true;
+    try {
+      const current = await snapshotDirectory(downloadPath);
+      diffDirectorySnapshots(previous, current).forEach(({ event, fileName }) =>
+        onChange(event, fileName),
+      );
+      previous = current;
+    } catch (err: unknown) {
+      log("warn", "download directory polling failed", { downloadPath, error: err });
+    } finally {
+      scanning = false;
+    }
+  }, 5000);
+  timer.unref();
+  stopDownloadPolling = () => {
+    stopped = true;
+    clearInterval(timer);
+  };
+  api.sendNotification({
+    id: "download-watch-polling-fallback",
+    message:
+      "The Linux file-watcher limit was reached. Download changes will be checked every 5 seconds.",
+    title: "Using download polling fallback",
+    type: "warning",
+  });
+}
 
 function watchDownloads(
   api: IExtensionApi,
   downloadPath: string,
   onChange: (evt: string, fileName: string) => void,
 ) {
-  if (currentWatch !== undefined) {
-    currentWatch.close();
-  }
+  stopWatchingDownloads();
+
+  const fallbackToPolling = (err: unknown) => {
+    if (!isWatcherLimitError(err)) return false;
+    currentWatch?.close();
+    currentWatch = undefined;
+    void startDownloadPolling(api, downloadPath, onChange).catch((pollingError) => {
+      api.showErrorNotification("Can't monitor the download directory", pollingError, {
+        allowReport: false,
+      });
+    });
+    return true;
+  };
 
   try {
     currentWatch = fs.watch(downloadPath, {}, onChange);
     currentWatch.on("error", (error) => {
+      if (fallbackToPolling(error)) return;
       // these may happen when the download path gets moved.
       log("warn", "failed to watch mod directory", { downloadPath, error });
     });
-  } catch (err) {
+  } catch (err: unknown) {
+    if (fallbackToPolling(err)) return;
     api.showErrorNotification("Can't watch the download directory for changes", err, {
       allowReport: false,
     });
@@ -1126,10 +1189,7 @@ function init(context: IExtensionContext): boolean {
     });
 
     context.api.events.on("will-move-downloads", () => {
-      if (currentWatch !== undefined) {
-        currentWatch.close();
-        currentWatch = undefined;
-      }
+      stopWatchingDownloads();
     });
 
     context.api.events.on("did-import-downloads", (dlIds: string[], cb?: (err?: Error) => void) => {

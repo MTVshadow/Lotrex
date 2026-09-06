@@ -49,7 +49,14 @@ describe("diagnosticReport", () => {
           device: "/dev/sda1",
           fsType: "ext4",
           mountPoint: "/home",
-          options: ["rw", "relatime"],
+          options: ["rw", "password=mount-secret"],
+        },
+      ],
+      issues: [
+        {
+          code: "EACCES",
+          message: "Cannot access /home/johndoe/private?token=issue-secret",
+          severity: "error",
         },
       ],
       steam: {
@@ -72,5 +79,7 @@ describe("diagnosticReport", () => {
     expect(report).toContain("~/Games/SkyrimSE");
     expect(report).toContain("~/Vortex Mods/skyrimse");
     expect(report).not.toContain("/home/johndoe");
+    expect(report).not.toContain("mount-secret");
+    expect(report).not.toContain("issue-secret");
   });
 });

@@ -31,6 +31,9 @@ import {
   saveActivation,
   withActivationLock,
 } from "./activationStore";
+import { runDeploymentFaultPoint } from "./deploymentFaultInjection";
+import { advanceDeploymentOperation, beginDeploymentOperation } from "./deploymentJournal";
+import { withDeploymentLock } from "./deploymentLock";
 import { getActivator, getCurrentActivator } from "./deploymentMethods";
 import { NoDeployment } from "./exceptions";
 import { dealWithExternalChanges } from "./externalChanges";
@@ -233,90 +236,132 @@ async function purgeModsImpl(
   const modTypes = Object.keys(modPaths).filter((typeId) => truthy(modPaths[typeId]));
 
   try {
-    await withActivationLock(async () => {
-      log("debug", "purging mods", { activatorId: activator.id, stagingPath });
-      onProgress(0, "Preparing purge");
-
-      let lastDeployment: { [typeId: string]: IDeployedFile[] };
-      let purgeSucceeded = true;
-      api.store.dispatch(startActivity("mods", "purging"));
-
-      // TODO: we really should be using the deployment specified in the manifest,
-      //   not the current one! This only works because we force a purge when switching
-      //   deployment method.
-      try {
-        await activator.prePurge(stagingPath);
-
-        const deployments = await loadAllManifests(api, activator, gameId, modPaths, stagingPath);
-        lastDeployment = deployments;
-
-        await api.emitAndAwait("will-purge", profile.id, lastDeployment);
-        onProgress(10, "Removing links");
-
-        await dealWithExternalChanges(
-          api,
-          activator,
-          profile.id,
+    await withActivationLock(
+      () =>
+        withDeploymentLock(
           stagingPath,
-          modPaths,
-          lastDeployment,
-        );
-        onProgress(25, "Removing links");
+          modTypes.map((typeId) => modPaths[typeId]),
+          async () => {
+            log("debug", "purging mods", { activatorId: activator.id, stagingPath });
+            onProgress(0, "Preparing purge");
 
-        for (const [idx, typeId] of modTypes.entries()) {
-          const cover = 50 / modTypes.length;
-          const progressType = (num: number, total: number) => {
-            onProgress(25 + idx * cover + Math.floor((num * cover) / total), "Removing links");
-          };
-          await activator.purge(stagingPath, modPaths[typeId], gameId, progressType);
-        }
+            let lastDeployment: { [typeId: string]: IDeployedFile[] };
+            let purgeSucceeded = true;
+            api.store.dispatch(startActivity("mods", "purging"));
 
-        onProgress(75, "Saving updated manifest");
+            // TODO: we really should be using the deployment specified in the manifest,
+            //   not the current one! This only works because we force a purge when switching
+            //   deployment method.
+            try {
+              let deploymentOperation = await beginDeploymentOperation({
+                operation: "purge",
+                gameId,
+                profileId: profile.id,
+                instanceId: state.app.instanceId,
+                deploymentMethod: activator.id,
+                stagingPath,
+                targetPaths: modTypes.map((typeId) => modPaths[typeId]),
+              });
+              deploymentOperation = await advanceDeploymentOperation(
+                deploymentOperation,
+                "applying",
+              );
+              await activator.prePurge(stagingPath);
 
-        await Promise.all(
-          modTypes.map((typeId) =>
-            saveActivation(
-              gameId,
-              typeId,
-              state.app.instanceId,
-              modPaths[typeId],
-              stagingPath,
-              [],
-              activator.id,
-            ),
-          ),
-        );
-      } catch (err: unknown) {
-        if (lastDeployment !== undefined) {
-          await Promise.all(
-            modTypes.map((typeId) =>
-              filterManifest(activator, modPaths[typeId], stagingPath, lastDeployment[typeId]).then(
-                (files) =>
+              const deployments = await loadAllManifests(
+                api,
+                activator,
+                gameId,
+                modPaths,
+                stagingPath,
+              );
+              lastDeployment = deployments;
+
+              await api.emitAndAwait("will-purge", profile.id, lastDeployment);
+              onProgress(10, "Removing links");
+
+              await dealWithExternalChanges(
+                api,
+                activator,
+                profile.id,
+                stagingPath,
+                modPaths,
+                lastDeployment,
+              );
+              onProgress(25, "Removing links");
+
+              for (const [idx, typeId] of modTypes.entries()) {
+                const cover = 50 / modTypes.length;
+                const progressType = (num: number, total: number) => {
+                  onProgress(
+                    25 + idx * cover + Math.floor((num * cover) / total),
+                    "Removing links",
+                  );
+                };
+                await activator.purge(stagingPath, modPaths[typeId], gameId, progressType);
+                runDeploymentFaultPoint("after-purge");
+              }
+
+              onProgress(75, "Saving updated manifest");
+
+              await Promise.all(
+                modTypes.map((typeId) =>
                   saveActivation(
                     gameId,
                     typeId,
                     state.app.instanceId,
                     modPaths[typeId],
                     stagingPath,
-                    files,
+                    [],
                     activator.id,
                   ),
-              ),
-            ),
-          );
-        }
-        if (!(err instanceof ProcessCanceled)) {
-          purgeSucceeded = false;
-          throw err;
-        }
-      } finally {
-        onProgress(85, "Post purge events");
-        await activator.postPurge();
-        if (purgeSucceeded) {
-          await api.emitAndAwait("did-purge", profile.id);
-        }
-      }
-    }, true);
+                ),
+              );
+              deploymentOperation = await advanceDeploymentOperation(
+                deploymentOperation,
+                "manifest-written",
+              );
+              runDeploymentFaultPoint("after-manifest-write");
+              await advanceDeploymentOperation(deploymentOperation, "committed");
+              runDeploymentFaultPoint("after-commit");
+            } catch (err: unknown) {
+              if (lastDeployment !== undefined) {
+                await Promise.all(
+                  modTypes.map((typeId) =>
+                    filterManifest(
+                      activator,
+                      modPaths[typeId],
+                      stagingPath,
+                      lastDeployment[typeId],
+                    ).then((files) =>
+                      saveActivation(
+                        gameId,
+                        typeId,
+                        state.app.instanceId,
+                        modPaths[typeId],
+                        stagingPath,
+                        files,
+                        activator.id,
+                      ),
+                    ),
+                  ),
+                );
+              }
+              if (!(err instanceof ProcessCanceled)) {
+                purgeSucceeded = false;
+                throw err;
+              }
+            } finally {
+              onProgress(85, "Post purge events");
+              await activator.postPurge();
+              if (purgeSucceeded) {
+                await api.emitAndAwait("did-purge", profile.id);
+              }
+            }
+          },
+        ),
+      true,
+    );
   } finally {
     api.dismissNotification(notificationId);
     api.store.dispatch(stopActivity("mods", "purging"));
@@ -381,49 +426,74 @@ export function purgeModsInPath(
       "deployment.method": activator.name,
     },
     () =>
-      withActivationLock(async () => {
-        log("debug", "purging mods", { activatorId: activator.id, stagingPath });
-        onProgress(0, "Preparing purge");
+      withActivationLock(
+        () =>
+          withDeploymentLock(stagingPath, [modPath], async () => {
+            log("debug", "purging mods", { activatorId: activator.id, stagingPath });
+            onProgress(0, "Preparing purge");
 
-        if (gameId !== undefined && profile === undefined) {
-          // gameId was set but we have no last active profile for that game.
-          // In this case there is probably nothing to purge but if that's true
-          // there will also be no manifest so we can just as easily try a fallback
-          // purge just to be safe.
-          return fallbackPurgeType(api, activator, gameId, typeId, modPath, stagingPath);
-        }
+            if (gameId !== undefined && profile === undefined) {
+              // gameId was set but we have no last active profile for that game.
+              // In this case there is probably nothing to purge but if that's true
+              // there will also be no manifest so we can just as easily try a fallback
+              // purge just to be safe.
+              return fallbackPurgeType(api, activator, gameId, typeId, modPath, stagingPath);
+            }
 
-        // TODO: we really should be using the deployment specified in the manifest,
-        //   not the current one! This only works because we force a purge when switching
-        //   deployment method.
-        let purgeSucceeded = true;
-        try {
-          await activator.prePurge(stagingPath);
-          onProgress(25, "Removing links");
-          await activator.purge(stagingPath, modPath, gameId);
-          onProgress(50, "Saving updated manifest");
-          await saveActivation(
-            gameId,
-            typeId,
-            state.app.instanceId,
-            modPath,
-            stagingPath,
-            [],
-            activator.id,
-          );
-        } catch (err: unknown) {
-          if (!(err instanceof ProcessCanceled)) {
-            purgeSucceeded = false;
-            throw err;
-          }
-        } finally {
-          onProgress(75, "Post purge events");
-          await activator.postPurge();
-          if (purgeSucceeded) {
-            await api.emitAndAwait("did-purge", profile.id);
-          }
-        }
-      }, true)
+            // TODO: we really should be using the deployment specified in the manifest,
+            //   not the current one! This only works because we force a purge when switching
+            //   deployment method.
+            let purgeSucceeded = true;
+            try {
+              let deploymentOperation = await beginDeploymentOperation({
+                operation: "purge",
+                gameId,
+                profileId: profile.id,
+                instanceId: state.app.instanceId,
+                deploymentMethod: activator.id,
+                stagingPath,
+                targetPaths: [modPath],
+              });
+              deploymentOperation = await advanceDeploymentOperation(
+                deploymentOperation,
+                "applying",
+              );
+              await activator.prePurge(stagingPath);
+              onProgress(25, "Removing links");
+              await activator.purge(stagingPath, modPath, gameId);
+              runDeploymentFaultPoint("after-purge");
+              onProgress(50, "Saving updated manifest");
+              await saveActivation(
+                gameId,
+                typeId,
+                state.app.instanceId,
+                modPath,
+                stagingPath,
+                [],
+                activator.id,
+              );
+              deploymentOperation = await advanceDeploymentOperation(
+                deploymentOperation,
+                "manifest-written",
+              );
+              runDeploymentFaultPoint("after-manifest-write");
+              await advanceDeploymentOperation(deploymentOperation, "committed");
+              runDeploymentFaultPoint("after-commit");
+            } catch (err: unknown) {
+              if (!(err instanceof ProcessCanceled)) {
+                purgeSucceeded = false;
+                throw err;
+              }
+            } finally {
+              onProgress(75, "Post purge events");
+              await activator.postPurge();
+              if (purgeSucceeded) {
+                await api.emitAndAwait("did-purge", profile.id);
+              }
+            }
+          }),
+        true,
+      )
         .then(() => null)
         .finally(() => {
           api.dismissNotification(notificationId);

@@ -352,12 +352,6 @@ export class ProtonPaths {
       return undefined;
     }
 
-    const cacheKey = `${options.gameMode ?? ""}:${gamePath ?? options.prefixPath}`;
-    const cached = this.cache.get(cacheKey);
-    if (cached !== undefined) {
-      return cached;
-    }
-
     // Перевірка підтримки магазину: якщо магазин не steam і немає явного префіксу, пропускаємо
     const isSteam =
       discovery?.store === "steam" || (!discovery?.store && gamePath?.includes("steamapps"));
@@ -386,6 +380,19 @@ export class ProtonPaths {
         gamePath,
       });
       return undefined;
+    }
+
+    // Resolve the effective identity before consulting the cache: overrides and
+    // discovery metadata can change while the installation directory stays put.
+    const cacheKey = `${options.gameMode ?? ""}:${JSON.stringify([
+      gamePath,
+      discovery?.store,
+      appId,
+      prefixPath,
+    ])}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
     }
 
     // Визначаємо профіль користувача

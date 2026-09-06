@@ -5,6 +5,10 @@
 import type { IModRequiring, IModRequirement } from "@nexusmods/nexus-api";
 
 import type { HealthCheckTrigger, IHealthCheckResult } from "../../types/IHealthCheck";
+import type {
+  LinuxEnvironmentIssueCode,
+  LinuxEnvironmentPathPurpose,
+} from "../../util/linux/environmentAssessment";
 import type { ICustomCheckApi, ILegacyApi, IResultsApi } from "./api";
 
 /**
@@ -19,19 +23,29 @@ export type LinuxProtonIssueReason =
   | "steam-not-found"
   | "app-id-not-found"
   | "prefix-not-found"
-  | "runtime-not-found";
+  | "runtime-not-found"
+  | LinuxEnvironmentIssueCode;
 
 export interface ILinuxProtonIssue {
   reason: LinuxProtonIssueReason;
   appId?: string;
+  command?: string;
   executablePath?: string;
   gameName?: string;
+  fsType?: string;
+  message?: string;
+  mountPoint?: string;
+  path?: string;
   prefixPath?: string;
+  purpose?: LinuxEnvironmentPathPurpose;
+  remediation?: string;
+  severity?: "error" | "warning";
   steamPath?: string;
 }
 
 export interface ILinuxProtonCheckMetadata {
   issue?: ILinuxProtonIssue;
+  issues?: ILinuxProtonIssue[];
 }
 
 /**

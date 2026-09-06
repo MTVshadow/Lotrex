@@ -119,11 +119,22 @@
   },
   "linux_proton": {
     "title": "Proton setup for {{gameName}}",
+    "report": {
+      "preview": "Preview privacy-safe diagnostic report",
+      "copy": "Copy report",
+      "save": "Save report",
+      "save_title": "Save Linux diagnostic report",
+      "save_failed": "Failed to save Linux diagnostic report"
+    },
     "diagnostics": {
       "app_id": "Steam App ID",
       "executable": "Executable",
       "steam": "Steam installation",
-      "prefix": "Proton prefix"
+      "prefix": "Proton prefix",
+      "path": "Affected path",
+      "mount": "Mount point",
+      "filesystem": "Filesystem",
+      "command": "Scoped override command"
     },
     "issues": {
       "steam-not-found": {
@@ -145,6 +156,54 @@
         "title": "Proton runtime not found",
         "summary": "Vortex cannot find an installed Proton runtime for this game.",
         "details": "Open the game's Steam Properties, enable a compatibility tool, install or select Proton, then refresh Health Check."
+      },
+      "read-only": {
+        "title": "Read-only filesystem",
+        "summary": "Vortex cannot write to {{path}}.",
+        "details": "The path {{path}} is on the read-only mount {{mountPoint}}.",
+        "remediation": "Mount the filesystem with write access or move the game and staging directories to a writable location."
+      },
+      "noexec": {
+        "title": "Execution is disabled on this filesystem",
+        "summary": "Programs cannot run from {{path}}.",
+        "details": "The mount {{mountPoint}} uses the noexec option, which prevents the game or Proton from running.",
+        "remediation": "Remove the noexec option for this mount or move the affected files to an executable filesystem."
+      },
+      "ntfs-prefix": {
+        "title": "Proton prefix is on a non-POSIX filesystem",
+        "summary": "The Proton prefix uses {{fsType}}, which may not support required Linux semantics.",
+        "details": "Wine prefixes require reliable permissions and symbolic links; {{path}} is on {{fsType}}.",
+        "remediation": "Move the Proton prefix or Steam library to a native Linux filesystem such as ext4 or btrfs."
+      },
+      "cross-device-hardlink": {
+        "title": "Hardlink deployment crosses filesystems",
+        "summary": "The staging and deployment directories cannot use hardlinks.",
+        "details": "Hardlinks cannot be created between {{path}} and a destination on another filesystem.",
+        "remediation": "Move the staging directory to the game's filesystem or select a supported symlink deployment method."
+      },
+      "insufficient-disk-space": {
+        "title": "Not enough free disk space",
+        "summary": "The deployment destination does not have enough free space.",
+        "details": "Deploying to {{path}} requires {{requiredBytes}} bytes plus a safety reserve, but only {{availableBytes}} bytes are available.",
+        "remediation": "Free disk space, move the game to a larger filesystem, or select a link-based deployment method."
+      },
+      "permission-denied": {
+        "title": "Directory is not writable",
+        "summary": "Vortex does not have write access to {{path}}.",
+        "details": "The current user cannot write to {{path}}.",
+        "remediation": "Correct the directory ownership or user permissions without granting broader access than necessary."
+      },
+      "flatpak-permission-missing": {
+        "title": "Flatpak filesystem permission is missing",
+        "summary": "The Flatpak sandbox cannot access {{path}}.",
+        "details": "The relevant Flatpak application needs access to {{path}}.",
+        "remediation": "Grant access only to the affected directory with Flatseal or the scoped flatpak override command shown in the diagnostics."
+      },
+      "symlink-unavailable": {
+        "title": "Symbolic links are unavailable",
+        "summary": "Vortex cannot create symbolic links in {{path}}.",
+        "details": "The deployment destination does not support the symbolic links required by the selected method.",
+        "remediation": "Choose another writable Linux filesystem or select a compatible deployment method."
       }
     }
   },

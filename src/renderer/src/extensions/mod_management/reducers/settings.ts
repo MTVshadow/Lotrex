@@ -19,6 +19,10 @@ export const settingsReducer: IReducerSpec = {
       const { gameId, activatorId } = payload;
       return setSafe(state, ["activator", gameId], activatorId);
     },
+    [actions.setProtonRuntimePreference as any]: (state, payload) =>
+      setSafe(state, ["protonRuntime", payload.gameId], payload.preference),
+    [actions.setLinuxSetupCompleted as any]: (state, payload) =>
+      setSafe(state, ["linuxSetupCompleted"], payload),
     [actions.setShowModDropzone as any]: (state, payload) =>
       setSafe(state, ["showDropzone"], payload),
     [actions.setConfirmPurge as any]: (state, payload) => setSafe(state, ["confirmPurge"], payload),
@@ -31,6 +35,8 @@ export const settingsReducer: IReducerSpec = {
     suggestInstallPathDirectory: "Vortex Mods",
     modlistState: {},
     activator: {},
+    protonRuntime: {},
+    linuxSetupCompleted: false,
     showDropzone: true,
     confirmPurge: true,
     cleanupOnDeploy: false,

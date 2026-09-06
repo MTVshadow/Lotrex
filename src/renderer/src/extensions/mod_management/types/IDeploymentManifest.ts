@@ -9,6 +9,10 @@ export interface IDeploymentManifest {
   gameId?: string;
   targetPath?: string;
   files: IDeployedFile[];
+  integrity?: {
+    algorithm: "sha256";
+    digest: string;
+  };
 }
 
 export type ManifestFormat = (input: any) => IDeploymentManifest;

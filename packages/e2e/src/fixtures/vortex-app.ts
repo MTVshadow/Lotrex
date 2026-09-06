@@ -19,7 +19,7 @@ import {
   instrumentVortexInstance,
   instrumentVortexWindow,
 } from "../helpers/diagnostics";
-import { manageGame, type ManagedGame } from "../helpers/games";
+import { manageGame, type ManagedGame, type ManagedGameId } from "../helpers/games";
 import { stubRemoteImages } from "../helpers/imageStub";
 import { loginToNexus } from "../helpers/login";
 import { launchNexusBrowser } from "../helpers/nexusBrowser";
@@ -200,6 +200,8 @@ export type VortexOptions = {
    * Set via test.use({ nexusUser: freeUser }) or test.use({ nexusUser: premiumUser }).
    */
   nexusUser: NexusUser | null;
+  /** Fake game managed by the managedGame fixture. */
+  managedGameId: ManagedGameId;
 };
 
 /** Launch a Vortex Electron app against the given user-data dir. */
@@ -260,6 +262,7 @@ async function launchVortexApp(
  *   test('my test', async ({ vortexWindow }) => { ... });
  */
 export const test = base.extend<VortexTestFixtures & VortexOptions, VortexWorkerFixtures>({
+  managedGameId: ["stardewvalley", { option: true }],
   // ---------------------------------------------------------------------------
   // Worker-scoped: auth snapshot cache
   // ---------------------------------------------------------------------------
@@ -421,10 +424,18 @@ export const test = base.extend<VortexTestFixtures & VortexOptions, VortexWorker
   },
 
   managedGame: async (
-    { vortexWindow, vortexApp }: { vortexWindow: Page; vortexApp: ElectronApplication },
+    {
+      vortexWindow,
+      vortexApp,
+      managedGameId,
+    }: {
+      vortexWindow: Page;
+      vortexApp: ElectronApplication;
+      managedGameId: ManagedGameId;
+    },
     use: (game: ManagedGame) => Promise<void>,
   ) => {
-    const game = await manageGame(vortexWindow, vortexApp, "stardewvalley");
+    const game = await manageGame(vortexWindow, vortexApp, managedGameId);
     await use(game);
     cleanupFakeGame(game.basePath);
   },

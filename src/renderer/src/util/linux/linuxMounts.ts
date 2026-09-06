@@ -20,17 +20,23 @@ export type FileSystemIssueCode =
   | "noexec"
   | "ntfs-prefix"
   | "cross-device-hardlink"
-  | "permission-denied";
+  | "insufficient-disk-space"
+  | "permission-denied"
+  | "symlink-unavailable";
 
 export interface IFileSystemIssue {
+  availableBytes?: number;
   code: FileSystemIssueCode;
   severity: "error" | "warning";
   message: string;
   path: string;
   mountPoint?: string;
   fsType?: string;
+  requiredBytes?: number;
   remediation?: string;
 }
+
+const MINIMUM_FREE_SPACE_RESERVE = 512 * 1024 * 1024;
 
 /**
  * Список файлових систем, які не підтримують повні POSIX-атрибути
@@ -120,9 +126,7 @@ export function findMountForPath(
   return bestMatch;
 }
 
-/**
- * Перевірка сумісності файлової системи для каталогу гри, staging або префіксу Proton.
- */
+/** Assess filesystem compatibility for a game, staging, or Proton-prefix directory. */
 export function assessDirectoryFileSystem(
   targetPath: string,
   purpose: "game" | "staging" | "prefix",
@@ -135,49 +139,46 @@ export function assessDirectoryFileSystem(
     const hasRo = mount.options.includes("ro");
     const hasNoExec = mount.options.includes("noexec");
 
-    // 1. Перевірка монтування лише для читання
     if (hasRo) {
       issues.push({
         code: "read-only",
         severity: "error",
-        message: `Каталог знаходиться на файловій системі, змонтованій лише для читання (ro): ${mount.mountPoint}`,
+        message: `The directory is on a read-only filesystem: ${mount.mountPoint}`,
         path: targetPath,
         mountPoint: mount.mountPoint,
         fsType: mount.fsType,
         remediation:
-          "Перемонтуйте диск із правами запису (rw) або змініть налаштування в /etc/fstab.",
+          "Choose a writable location, or ask the system administrator to review the mount configuration.",
       });
     }
 
-    // 2. Перевірка noexec для каталогів, де виконуються бінарні файли (гра, префікс)
     if (hasNoExec && (purpose === "game" || purpose === "prefix")) {
       issues.push({
         code: "noexec",
         severity: "error",
-        message: `Файлова система змонтована з опцією 'noexec', виконання програм неможливе: ${mount.mountPoint}`,
-        path: targetPath,
-        mountPoint: mount.mountPoint,
-        fsType: mount.fsType,
-        remediation: "Видаліть опцію 'noexec' із параметрів монтування розділу в /etc/fstab.",
-      });
-    }
-
-    // 3. Перевірка префіксу Proton на несумісних файлових системах (NTFS/FAT/exFAT)
-    if (purpose === "prefix" && NON_POSIX_FS_TYPES.has(mount.fsType.toLowerCase())) {
-      issues.push({
-        code: "ntfs-prefix",
-        severity: "warning",
-        message: `Префікс Proton розташований на не-POSIX файловій системі (${mount.fsType}): ${mount.mountPoint}`,
+        message: `The filesystem is mounted with 'noexec', so programs cannot run from: ${mount.mountPoint}`,
         path: targetPath,
         mountPoint: mount.mountPoint,
         fsType: mount.fsType,
         remediation:
-          "Рекомендується перенести префікс Proton або каталог steamapps на рідну файлову систему Linux (ext4, btrfs тощо), оскільки Wine потребує коректних POSIX прав та символьних посилань.",
+          "Choose an executable location, or ask the system administrator to review the mount options.",
+      });
+    }
+
+    if (purpose === "prefix" && NON_POSIX_FS_TYPES.has(mount.fsType.toLowerCase())) {
+      issues.push({
+        code: "ntfs-prefix",
+        severity: "warning",
+        message: `The Proton prefix is on a non-POSIX filesystem (${mount.fsType}): ${mount.mountPoint}`,
+        path: targetPath,
+        mountPoint: mount.mountPoint,
+        fsType: mount.fsType,
+        remediation:
+          "Move the Proton prefix or Steam library to a native Linux filesystem such as ext4 or btrfs; Wine requires reliable POSIX permissions and symlinks.",
       });
     }
   }
 
-  // 4. Перевірка фактичних прав запису у каталог (W_OK)
   try {
     let checkDir = targetPath;
     while (!fs.existsSync(checkDir) && checkDir !== path.dirname(checkDir)) {
@@ -188,21 +189,19 @@ export function assessDirectoryFileSystem(
     issues.push({
       code: "permission-denied",
       severity: "error",
-      message: `Відсутні права на запис у каталог: ${targetPath}`,
+      message: `The current user cannot write to: ${targetPath}`,
       path: targetPath,
       mountPoint: mount?.mountPoint,
       fsType: mount?.fsType,
-      remediation: "Перевірте права власності (chown) або дозволи (chmod) для поточної директорії.",
+      remediation:
+        "Choose a writable directory or review the directory ownership and permissions with your system administrator.",
     });
   }
 
   return issues;
 }
 
-/**
- * Перевірка сумісності хардлінків між staging-каталогом та каталогом гри.
- * Хардлінки на POSIX вимагають однакового номера пристрою (st_dev).
- */
+/** Hardlinks on POSIX require staging and the destination to have the same device ID. */
 export function checkHardlinkCompatibility(
   stagingPath: string,
   gamePath: string,
@@ -226,15 +225,94 @@ export function checkHardlinkCompatibility(
         code: "cross-device-hardlink",
         severity: "error",
         message:
-          "Каталог модів (staging) та каталог гри розташовані на різних пристроях файлової системи (EXDEV). Хардлінки не підтримуються між різними дисками або розділами.",
+          "The staging and game directories are on different filesystem devices (EXDEV); hardlinks cannot cross disks or partitions.",
         path: stagingPath,
         remediation:
-          "Перемістіть каталог staging на той самий диск, де встановлена гра, або оберіть метод розгортання через символьні посилання (Symlink).",
+          "Move staging to the same filesystem as the game, or select Symlink Deployment.",
       };
     }
   } catch {
-    // Якщо каталоги ще не існують і перевірка не вдалася, не блокуємо попередньо
+    // Do not block before both paths (or their nearest parents) can be inspected.
   }
 
   return undefined;
+}
+
+/** Ensure a deployment destination can hold the estimated copied data plus a safety reserve. */
+export function checkAvailableDiskSpace(
+  targetPath: string,
+  requiredBytes: number,
+  reserveBytes = MINIMUM_FREE_SPACE_RESERVE,
+): IFileSystemIssue | undefined {
+  try {
+    let existingTarget = targetPath;
+    while (!fs.existsSync(existingTarget) && existingTarget !== path.dirname(existingTarget)) {
+      existingTarget = path.dirname(existingTarget);
+    }
+
+    const stats = fs.statfsSync(existingTarget);
+    const availableBytes = stats.bavail * stats.bsize;
+    if (requiredBytes + reserveBytes > availableBytes) {
+      return {
+        availableBytes,
+        code: "insufficient-disk-space",
+        message: `The deployment requires ${requiredBytes} bytes, but only ${availableBytes} bytes are available at ${targetPath}.`,
+        path: targetPath,
+        remediation:
+          "Free disk space, move the game to a larger filesystem, or select a link-based deployment method.",
+        requiredBytes,
+        severity: "error",
+      };
+    }
+  } catch {
+    // Do not block deployment when the platform cannot report filesystem capacity.
+  }
+
+  return undefined;
+}
+
+/**
+ * Verify symbolic-link support with a short-lived probe inside the destination.
+ * The probe is removed before this function returns, including after failures.
+ */
+export function checkSymlinkCompatibility(targetPath: string): IFileSystemIssue | undefined {
+  let probeDirectory: string | undefined;
+  try {
+    let existingTarget = targetPath;
+    while (!fs.existsSync(existingTarget) && existingTarget !== path.dirname(existingTarget)) {
+      existingTarget = path.dirname(existingTarget);
+    }
+    if (!fs.statSync(existingTarget).isDirectory()) {
+      throw new Error("The deployment destination is not a directory");
+    }
+
+    probeDirectory = fs.mkdtempSync(path.join(existingTarget, ".vortex-symlink-check-"));
+    const source = path.join(probeDirectory, "source");
+    const link = path.join(probeDirectory, "link");
+    fs.writeFileSync(source, "probe");
+    fs.symlinkSync(source, link);
+    if (!fs.lstatSync(link).isSymbolicLink()) {
+      throw new Error("The filesystem did not create a symbolic link");
+    }
+    return undefined;
+  } catch (err) {
+    return {
+      code: "symlink-unavailable",
+      message: `Symbolic links cannot be created at ${targetPath}: ${
+        err instanceof Error ? err.message : "unknown filesystem error"
+      }`,
+      path: targetPath,
+      remediation:
+        "Choose another writable Linux filesystem or select a compatible deployment method.",
+      severity: "error",
+    };
+  } finally {
+    if (probeDirectory !== undefined) {
+      try {
+        fs.rmSync(probeDirectory, { force: true, recursive: true });
+      } catch {
+        // A failed cleanup is handled by the normal deployment filesystem diagnostics.
+      }
+    }
+  }
 }

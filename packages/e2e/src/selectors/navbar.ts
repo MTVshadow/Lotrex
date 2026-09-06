@@ -13,7 +13,7 @@ export class NavBar {
 
   constructor(page: Page) {
     this.page = page;
-    this.gamesLink = page.getByText("Games", { exact: true }).first();
+    this.gamesLink = page.getByRole("button", { name: "Games", exact: true }).first();
     this.homeLink = page.getByText("Dashboard", { exact: true }).first();
     // Top-bar "Home" button that exits the per-game workspace back to the
     // global one (where the Settings/Dashboard/Extensions spine lives).
@@ -24,6 +24,6 @@ export class NavBar {
     this.settingsLink = page.getByRole("button", { name: "Settings", exact: true }).first();
     this.preferencesLink = page.getByRole("button", { name: "Preferences", exact: true }).first();
     this.profilesLink = page.getByRole("button", { name: "Profiles", exact: true }).first();
-    this.modsLink = page.getByText("Mods", { exact: true }).first();
+    this.modsLink = page.getByRole("button", { name: "Mods", exact: true }).first();
   }
 }

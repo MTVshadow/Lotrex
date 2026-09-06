@@ -2,6 +2,7 @@ import * as reduxAct from "redux-act";
 
 import safeCreateAction from "../../../actions/safeCreateAction";
 import type { InstallPathMode } from "../../../types/api";
+import type { IProtonRuntimePreference } from "../../../util/linux/protonRuntimeSelection";
 
 /**
  * change the mod install path. Supports placeholders
@@ -27,6 +28,16 @@ export const setSuggestInstallPathDirectory = safeCreateAction(
 export const setActivator = safeCreateAction(
   "SET_ACTIVATOR",
   (gameId: string, activatorId: string) => ({ gameId, activatorId }),
+);
+
+export const setProtonRuntimePreference = safeCreateAction(
+  "SET_PROTON_RUNTIME_PREFERENCE",
+  (gameId: string, preference: IProtonRuntimePreference) => ({ gameId, preference }),
+);
+
+export const setLinuxSetupCompleted = safeCreateAction(
+  "SET_LINUX_SETUP_COMPLETED",
+  (completed: boolean) => completed,
 );
 
 export const setShowModDropzone = safeCreateAction("SET_SHOW_MOD_DROPZONE", (show) => show);

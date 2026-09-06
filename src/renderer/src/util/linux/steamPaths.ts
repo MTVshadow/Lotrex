@@ -2,6 +2,8 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
+import { parse } from "simple-vdf";
+
 import getVortexPath from "../getVortexPath";
 
 /**
@@ -70,6 +72,20 @@ export function isValidSteamPath(steamPath: string): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+/** Read all library roots from a Steam installation without scanning game manifests. */
+export function discoverLinuxSteamLibraries(steamPath: string): string[] {
+  try {
+    const content = fs.readFileSync(path.join(steamPath, "config", "libraryfolders.vdf"), "utf8");
+    const parsed = parse(content) as Record<string, unknown>;
+    const libraryFolders =
+      parsed.libraryfolders ??
+      Object.entries(parsed).find(([key]) => key.toLowerCase() === "libraryfolders")?.[1];
+    return extractSteamLibraryPaths(libraryFolders, steamPath);
+  } catch {
+    return [steamPath];
   }
 }
 

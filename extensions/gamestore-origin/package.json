@@ -4,7 +4,8 @@
   "description": "Discovery and game launch support for the Origin/EA game store",
   "scripts": {
     "build": "node build.mjs && pnpm extractInfo",
-    "typecheck": "pnpm tsc"
+    "typecheck": "pnpm tsc",
+    "test": "vitest run"
   },
   "author": "Black Tree Gaming Ltd.",
   "license": "GPL-3.0",

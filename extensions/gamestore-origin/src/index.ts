@@ -4,8 +4,13 @@ import * as queryParser from "querystring";
 import { fs, log, types, util } from "@nexusmods/vortex-api";
 import PromiseBB from "bluebird";
 import turbowalk, { IEntry } from "turbowalk";
-import * as winapi from "winapi-bindings";
 import { parseStringPromise } from "xml2js";
+
+import { supportsPlatform } from "./platform";
+
+const winapi = (
+  process.platform === "win32" ? require("winapi-bindings") : undefined
+) as typeof import("winapi-bindings");
 
 const STORE_ID = "origin";
 const STORE_NAME = "Origin";
@@ -249,12 +254,11 @@ class OriginLauncher implements types.IGameStore {
 }
 
 function main(context: types.IExtensionContext) {
-  const instance: types.IGameStore =
-    process.platform === "win32" ? new OriginLauncher() : undefined;
-
-  if (instance !== undefined) {
-    context.registerGameStore(instance);
+  if (!supportsPlatform(process.platform)) {
+    return false;
   }
+
+  context.registerGameStore(new OriginLauncher());
   return true;
 }
 

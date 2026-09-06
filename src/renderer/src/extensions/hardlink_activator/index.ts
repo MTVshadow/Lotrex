@@ -234,19 +234,19 @@ class DeploymentMethod extends LinkingDeployment {
       installEntryProm = PromiseBB.resolve(this.mInstallationFiles);
     } else {
       this.mInstallationFiles = new Set<string>();
+      let statQueue = PromiseBB.resolve();
       installEntryProm = turbowalk(
         installationPath,
         (entries) => {
-          if (this.mInstallationFiles === undefined) {
-            // don't know when this would be necessary but apparently
-            // it is, see https://github.com/Nexus-Mods/Vortex/issues/3684
-            return;
-          }
-          entries.forEach((entry) => {
-            if (entry.linkCount > 1 && entry.idStr !== undefined) {
-              this.mInstallationFiles.add(entry.idStr);
-            }
-          });
+          statQueue = statQueue.then(() =>
+            PromiseBB.map(entries, (entry) =>
+              this.hardlinkIdentity(entry).then((identity) => {
+                if (identity !== undefined && this.mInstallationFiles !== undefined) {
+                  this.mInstallationFiles.add(identity);
+                }
+              }),
+            ).then(() => undefined),
+          );
         },
         {
           details: true,
@@ -256,6 +256,7 @@ class DeploymentMethod extends LinkingDeployment {
         .catch((err) =>
           ["ENOENT", "ENOTFOUND"].includes(err.code) ? PromiseBB.resolve() : PromiseBB.reject(err),
         )
+        .then(() => statQueue)
         .then(() => PromiseBB.resolve(this.mInstallationFiles));
     }
 
@@ -274,7 +275,10 @@ class DeploymentMethod extends LinkingDeployment {
         (entries) => {
           queue = queue.then(() =>
             PromiseBB.map(entries, (entry) => {
-              if (entry.linkCount > 1 && entry.idStr !== undefined && inos.has(entry.idStr)) {
+              return this.hardlinkIdentity(entry).then((identity) => {
+                if (identity === undefined || !inos.has(identity)) {
+                  return undefined;
+                }
                 ++purged;
                 if (purged % 1000 === 0) {
                   onProgress?.(purged, total);
@@ -282,15 +286,41 @@ class DeploymentMethod extends LinkingDeployment {
                 return fs
                   .unlinkAsync(entry.filePath)
                   .catch((err) => log("warn", "failed to remove", entry.filePath));
-              } else {
-                return PromiseBB.resolve();
-              }
+              });
             }).then(() => undefined),
           );
         },
         { details: true, skipHidden: false },
       ).then(() => queue);
     });
+  }
+
+  /**
+   * turbowalk only supplies linkCount/idStr on Windows. Its portable walker
+   * ignores the `details` option, so use stat(2) as the source of truth on
+   * Linux and macOS. Include the device number because inode numbers are only
+   * unique within a filesystem.
+   */
+  private hardlinkIdentity(entry: {
+    filePath: string;
+    isDirectory: boolean;
+    idStr?: string;
+    linkCount?: number;
+  }): PromiseBB<string | undefined> {
+    if (entry.isDirectory) {
+      return PromiseBB.resolve(undefined);
+    }
+    if (entry.linkCount !== undefined && entry.idStr !== undefined) {
+      return PromiseBB.resolve(entry.linkCount > 1 ? `native:${entry.idStr}` : undefined);
+    }
+    return fs
+      .statAsync(entry.filePath)
+      .then((stats) => (stats.nlink > 1 ? `stat:${stats.dev}:${stats.ino}` : undefined))
+      .catch((err: unknown) =>
+        getErrorCode(err) === "ENOENT"
+          ? PromiseBB.resolve(undefined)
+          : PromiseBB.reject(unknownToError(err)),
+      );
   }
 
   protected linkFile(linkPath: string, sourcePath: string, dirTags?: boolean): Promise<void> {

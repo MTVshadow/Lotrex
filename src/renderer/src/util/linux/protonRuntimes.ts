@@ -16,24 +16,62 @@ export interface IProtonRuntimeOption {
   version?: string;
 }
 
-/**
- * Валідація довільного шляху до Proton, введеного користувачем вручну.
- */
-export function validateCustomProtonPath(customPath: string): { valid: boolean; error?: string } {
+export interface ICustomProtonValidationOptions {
+  approvedPath?: string;
+  currentUid?: number;
+  requireApproval?: boolean;
+  untrustedRoots?: string[];
+}
+
+function isWithinPath(parentPath: string, candidatePath: string): boolean {
+  const relative = path.relative(path.resolve(parentPath), path.resolve(candidatePath));
+  return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== "..");
+}
+
+/** Validate a user-provided Proton runtime directory. */
+export function validateCustomProtonPath(
+  customPath: string,
+  options: ICustomProtonValidationOptions = {},
+): { valid: boolean; error?: string } {
   if (!customPath || customPath.trim().length === 0) {
-    return { valid: false, error: "Шлях до середовища Proton не може бути порожнім." };
+    return { valid: false, error: "The Proton runtime path cannot be empty." };
   }
 
   const normalized = path.resolve(customPath);
+  if (
+    options.requireApproval === true &&
+    (options.approvedPath === undefined || path.resolve(options.approvedPath) !== normalized)
+  ) {
+    return {
+      valid: false,
+      error: "This custom Proton runtime must be selected again to confirm that you trust it.",
+    };
+  }
   if (!fs.existsSync(normalized)) {
-    return { valid: false, error: `Вказаний каталог не існує: ${normalized}` };
+    return { valid: false, error: `The selected directory does not exist: ${normalized}` };
   }
 
   const protonBin = path.join(normalized, "proton");
   if (!fs.existsSync(protonBin)) {
     return {
       valid: false,
-      error: `У каталозі відсутній обов'язковий скрипт 'proton': ${protonBin}`,
+      error: `The selected directory does not contain the required 'proton' script: ${protonBin}`,
+    };
+  }
+
+  let resolvedRuntime: string;
+  try {
+    resolvedRuntime = fs.realpathSync(normalized);
+  } catch {
+    return { valid: false, error: `The selected Proton runtime path cannot be resolved safely.` };
+  }
+  const untrustedRoot = options.untrustedRoots?.find(
+    (root) => root.trim().length > 0 && isWithinPath(root, resolvedRuntime),
+  );
+  if (untrustedRoot !== undefined) {
+    return {
+      valid: false,
+      error: `The custom Proton runtime cannot be loaded from managed game or staging content: ${resolvedRuntime}`,
     };
   }
 
@@ -42,16 +80,41 @@ export function validateCustomProtonPath(customPath: string): { valid: boolean; 
   } catch {
     return {
       valid: false,
-      error: `Файл '${protonBin}' не має прав на виконання (+x).`,
+      error: `The Proton script is not executable (+x): ${protonBin}`,
     };
+  }
+
+  const currentUid = options.currentUid ?? process.getuid?.();
+  if (currentUid !== undefined) {
+    let runtimeStats: fs.Stats;
+    let protonStats: fs.Stats;
+    try {
+      runtimeStats = fs.statSync(resolvedRuntime);
+      protonStats = fs.statSync(fs.realpathSync(protonBin));
+    } catch {
+      return {
+        valid: false,
+        error: "The custom Proton runtime ownership or permissions could not be verified.",
+      };
+    }
+    if (runtimeStats.uid !== currentUid || protonStats.uid !== currentUid) {
+      return {
+        valid: false,
+        error: "The custom Proton runtime and its script must be owned by the current user.",
+      };
+    }
+    if ((runtimeStats.mode & 0o022) !== 0 || (protonStats.mode & 0o022) !== 0) {
+      return {
+        valid: false,
+        error: "The custom Proton runtime cannot be writable by group or other users.",
+      };
+    }
   }
 
   return { valid: true };
 }
 
-/**
- * Сканування системи для виявлення всіх встановлених рантаймів Proton (Steam, GE-Proton, тощо).
- */
+/** Discover installed Steam, Experimental, GE-Proton, and custom compatibility tools. */
 export function discoverAvailableProtonRuntimes(steamPath?: string): IProtonRuntimeOption[] {
   const home = os.homedir();
   const searchRoots = new Set<string>();
@@ -108,6 +171,13 @@ export function discoverAvailableProtonRuntimes(steamPath?: string): IProtonRunt
         if (fs.existsSync(protonBin)) {
           seenPaths.add(fullPath);
 
+          let isUsable = true;
+          try {
+            fs.accessSync(protonBin, fs.constants.X_OK);
+          } catch {
+            isUsable = false;
+          }
+
           let type: ProtonRuntimeType = "custom";
           if (/GE-Proton/i.test(entry)) {
             type = "ge-proton";
@@ -122,13 +192,13 @@ export function discoverAvailableProtonRuntimes(steamPath?: string): IProtonRunt
             name: entry,
             type,
             path: fullPath,
-            isUsable: true,
+            isUsable,
             source,
           });
         }
       }
     } catch {
-      // Ігноруємо недоступні директорії
+      // An inaccessible optional runtime directory should not abort discovery.
     }
   }
 

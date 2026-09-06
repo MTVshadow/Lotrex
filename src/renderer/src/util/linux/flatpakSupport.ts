@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 export interface IFlatpakPermissionIssue {
+  appId: string;
   code: "flatpak-permission-missing";
   severity: "error" | "warning";
   targetPath: string;
@@ -9,6 +10,9 @@ export interface IFlatpakPermissionIssue {
   flatsealAdvice: string;
   message: string;
 }
+
+const STEAM_FLATPAK_ID = "com.valvesoftware.Steam";
+const VORTEX_FLATPAK_ID = "com.nexusmods.vortex";
 
 /**
  * Перевірка, чи запущено сам Vortex усередині пісочниці Flatpak.
@@ -29,12 +33,17 @@ export function isFlatpakSteam(steamPath?: string): boolean {
  * Генерація точної мінімальної команди 'flatpak override' для надання доступу до конкретної директорії.
  * Ми не рекомендуємо надмірні права на кшталт --filesystem=host або --filesystem=home.
  */
-export function getFlatpakOverrideCommand(
-  targetDir: string,
-  appId = "com.valvesoftware.Steam",
-): string {
+export function getFlatpakOverrideCommand(targetDir: string, appId = STEAM_FLATPAK_ID): string {
   const normalized = path.resolve(targetDir);
-  return `flatpak override --user --filesystem="${normalized}" ${appId}`;
+  const quote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
+  return `flatpak override --user --filesystem=${quote(normalized)} ${quote(appId)}`;
+}
+
+export function flatpakAccessAppId(steamPath?: string): string | undefined {
+  if (isVortexInFlatpak()) {
+    return process.env.FLATPAK_ID || VORTEX_FLATPAK_ID;
+  }
+  return isFlatpakSteam(steamPath) ? STEAM_FLATPAK_ID : undefined;
 }
 
 /**
@@ -44,15 +53,15 @@ export function assessFlatpakDirectoryAccess(
   targetDir: string,
   steamPath?: string,
 ): IFlatpakPermissionIssue | undefined {
-  const isFlatpak = isFlatpakSteam(steamPath) || isVortexInFlatpak();
-  if (!isFlatpak) {
+  const appId = flatpakAccessAppId(steamPath);
+  if (!appId) {
     return undefined;
   }
 
   const normalized = path.resolve(targetDir);
 
   // Перевіряємо, чи доступний каталог на читання та запис
-  let hasAccess = false;
+  let hasAccess: boolean;
   try {
     let checkPath = normalized;
     while (!fs.existsSync(checkPath) && checkPath !== path.dirname(checkPath)) {
@@ -65,14 +74,15 @@ export function assessFlatpakDirectoryAccess(
   }
 
   if (!hasAccess) {
-    const command = getFlatpakOverrideCommand(normalized);
+    const command = getFlatpakOverrideCommand(normalized, appId);
     return {
+      appId,
       code: "flatpak-permission-missing",
       severity: "error",
       targetPath: normalized,
       command,
-      flatsealAdvice: `У Flatseal оберіть 'Steam' -> розділ 'Filesystem' -> 'Other files' та додайте шлях: ${normalized}`,
-      message: `Flatpak Steam не має доступу до зовнішнього каталогу: ${normalized}. Необхідно надати дозвіл у пісочниці.`,
+      flatsealAdvice: `In Flatseal, select '${appId}', open 'Filesystem' -> 'Other files', and add: ${normalized}`,
+      message: `The Flatpak sandbox '${appId}' cannot access: ${normalized}`,
     };
   }
 

@@ -5,6 +5,13 @@ import { parse } from "simple-vdf";
 import * as fs from "../fs";
 import { log } from "../log";
 
+export {
+  buildProtonCommand,
+  buildProtonEnvironment,
+  getWinePrefixPath,
+  isWindowsExecutable,
+} from "./protonLaunch";
+
 export interface IProtonInfo {
   usesProton: boolean;
   compatDataPath?: string;
@@ -29,13 +36,6 @@ export async function detectProtonUsage(steamAppsPath: string, appId: string): P
  */
 export function getCompatDataPath(steamAppsPath: string, appId: string): string {
   return path.join(steamAppsPath, "compatdata", appId);
-}
-
-/**
- * Get the Wine prefix path within compatdata
- */
-export function getWinePrefixPath(compatDataPath: string): string {
-  return path.join(compatDataPath, "pfx");
 }
 
 /**
@@ -285,82 +285,4 @@ export async function getProtonInfo(
   }
 
   return { usesProton: true, compatDataPath, protonPath };
-}
-
-/**
- * Check if a file is a Windows executable
- */
-export function isWindowsExecutable(filePath: string): boolean {
-  const ext = path.extname(filePath).toLowerCase();
-  return [".exe", ".bat", ".cmd"].includes(ext);
-}
-
-/**
- * Build environment variables for running through Proton
- */
-export function buildProtonEnvironment(
-  compatDataPath: string,
-  steamPath: string,
-  existingEnv?: Record<string, string>,
-  protonPath?: string,
-  gamePath?: string,
-): Record<string, string> {
-  const env: Record<string, string> = {
-    ...existingEnv,
-    STEAM_COMPAT_DATA_PATH: compatDataPath,
-    STEAM_COMPAT_CLIENT_INSTALL_PATH: steamPath,
-    WINEPREFIX: getWinePrefixPath(compatDataPath),
-  };
-  if (protonPath) {
-    // Вказуємо шлях до рантайму Proton для коректної роботи сучасних збірок Proton
-    env.STEAM_COMPAT_TOOL_PATHS = protonPath;
-  }
-  if (gamePath) {
-    // Для запуску ігор/інструментів з додаткових розділів або зовнішніх дисків
-    env.STEAM_COMPAT_MOUNTS = gamePath;
-
-    // Перевіряємо наявність ENB, ReShade або кастомних перехоплювачів рендерера
-    // На Linux Wine/DXVK за замовчуванням блокує зовнішні d3d11/dxgi/d3d9, якщо не вказано native-then-builtin
-    const hasCustomD3D = [
-      "d3d11.dll",
-      "dxgi.dll",
-      "d3d9.dll",
-      "enbseries.ini",
-      "ReShade.ini",
-      "dxgi.ini",
-    ].some((fileName) => {
-      try {
-        fs.statSync(path.join(gamePath, fileName));
-        return true;
-      } catch {
-        return false;
-      }
-    });
-
-    if (hasCustomD3D) {
-      const overrides = "d3d11=n,b;dxgi=n,b;d3d9=n,b";
-      env.WINEDLLOVERRIDES = env.WINEDLLOVERRIDES
-        ? `${env.WINEDLLOVERRIDES};${overrides}`
-        : overrides;
-      log("info", "Proton: Applied WINEDLLOVERRIDES for ENB/ReShade", {
-        gamePath,
-        overrides: env.WINEDLLOVERRIDES,
-      });
-    }
-  }
-  return env;
-}
-
-/**
- * Build the command to run an executable through Proton
- */
-export function buildProtonCommand(
-  protonPath: string,
-  exePath: string,
-  args: string[],
-): { executable: string; args: string[] } {
-  return {
-    executable: path.join(protonPath, "proton"),
-    args: ["run", exePath, ...args],
-  };
 }

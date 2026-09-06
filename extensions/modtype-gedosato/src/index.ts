@@ -3,7 +3,6 @@ import * as path from "path";
 import { actions, fs, log, types, util } from "@nexusmods/vortex-api";
 import Promise from "bluebird";
 import {} from "redux-thunk";
-import * as winapi from "winapi-bindings";
 
 import { gameSupported, getPath } from "./gameSupport";
 
@@ -11,6 +10,7 @@ let gedosatoPath: string;
 
 function getLocation(): Promise<string> {
   try {
+    const winapi: typeof import("winapi-bindings") = require("winapi-bindings");
     const instPath = winapi.RegGetValue(
       "HKEY_LOCAL_MACHINE",
       "Software\\Wow6432Node\\Durante\\GeDoSaTo",
@@ -79,6 +79,10 @@ function isSupported(gameId: string): boolean {
 }
 
 function init(context: types.IExtensionContext) {
+  if (process.platform !== "win32") {
+    return false;
+  }
+
   const getOutputPath = (game: types.IGame): string => {
     if (gedosatoPath !== undefined) {
       return path.join(gedosatoPath, "textures", getPath(game.id));

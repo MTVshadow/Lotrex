@@ -10,13 +10,7 @@ import type { ICustomExecutionInfo, IExecInfo, IGameStore, IGameStoreEntry } fro
 import type { IExtensionApi } from "../types/IExtensionContext";
 import { GameEntryNotFound } from "../types/IGameStore";
 import * as fs from "./fs";
-import {
-  getProtonInfo,
-  buildProtonEnvironment,
-  buildProtonCommand,
-  findLatestProton,
-} from "./linux/proton";
-import { ProtonUnavailable } from "./linux/ProtonUnavailable";
+import { getProtonInfo } from "./linux/proton";
 import { extractSteamLibraryPaths, findLinuxSteamPath } from "./linux/steamPaths";
 import { log } from "./log";
 import opn from "./opn";
@@ -368,54 +362,6 @@ class Steam implements IGameStore {
           log("info", "done reading steam libraries");
         }),
     );
-  }
-
-  /**
-   * Run a Windows tool through Proton using the game's prefix
-   */
-  public async runToolWithProton(
-    api: IExtensionApi,
-    exePath: string,
-    args: string[],
-    options: any,
-    gameEntry: ISteamEntry,
-  ): Promise<void> {
-    const steamPath = await this.mBaseFolder;
-    let protonPath = gameEntry.protonPath;
-    if (!protonPath && steamPath) {
-      protonPath = await findLatestProton(steamPath);
-    }
-    const compatDataPath = gameEntry.compatDataPath;
-
-    if (!gameEntry.usesProton || !compatDataPath) {
-      log("warn", "Cannot run Windows tool through Proton: missing Proton prefix", {
-        exePath,
-        compatDataPath,
-      });
-      throw new ProtonUnavailable("prefix-not-found", gameEntry.appid);
-    }
-    if (!protonPath) {
-      log("warn", "Cannot run Windows tool through Proton: missing Proton runtime", {
-        exePath,
-        compatDataPath,
-      });
-      throw new ProtonUnavailable("runtime-not-found", gameEntry.appid);
-    }
-
-    const { executable, args: protonArgs } = buildProtonCommand(protonPath, exePath, args);
-    const protonEnv = buildProtonEnvironment(
-      compatDataPath,
-      steamPath,
-      options.env,
-      protonPath,
-      gameEntry.gamePath,
-    );
-
-    return api.runExecutable(executable, protonArgs, {
-      ...options,
-      env: protonEnv,
-      shell: false,
-    });
   }
 }
 

@@ -182,6 +182,46 @@ describe("ProtonPaths", () => {
     expect(result).toBeUndefined();
   });
 
+  it("refreshes the prefix when an override changes at the same game path", () => {
+    const alternate = path.join(tmpDir, "alternate-prefix");
+    fs.mkdirSync(path.join(alternate, "drive_c", "users", "steamuser", "Documents"), {
+      recursive: true,
+    });
+    const options = {
+      gameMode: "skyrimse",
+      appId: "489830",
+      discovery: { path: gameDir, store: "steam" },
+    };
+    expect(ProtonPaths.resolve(options)?.prefixPath).toBe(pfx);
+    expect(ProtonPaths.resolve({ ...options, prefixPath: alternate })?.prefixPath).toBe(alternate);
+  });
+
+  it("does not reuse a cached Steam prefix after switching stores", () => {
+    const options = {
+      gameMode: "skyrimse",
+      appId: "489830",
+      discovery: { path: gameDir, store: "steam" },
+    };
+    expect(ProtonPaths.resolve(options)).toBeDefined();
+    expect(
+      ProtonPaths.resolve({
+        ...options,
+        discovery: { path: gameDir, store: "gog" },
+      }),
+    ).toBeUndefined();
+  });
+
+  it("does not return cached paths after the prefix is removed", () => {
+    const options = {
+      gameMode: "skyrimse",
+      appId: "489830",
+      discovery: { path: gameDir, store: "steam" },
+    };
+    expect(ProtonPaths.resolve(options)).toBeDefined();
+    fs.renameSync(pfx, path.join(compatData, "old-prefix"));
+    expect(ProtonPaths.resolve(options)).toBeUndefined();
+  });
+
   it("caches successful resolutions and clears them on invalidate()", () => {
     const opts = {
       gameMode: "skyrimse",
@@ -194,10 +234,12 @@ describe("ProtonPaths", () => {
 
     const first = ProtonPaths.resolve(opts);
     expect(first).toBeDefined();
+    expect(ProtonPaths.resolve(opts)).toBe(first);
 
     // Invalidate and verify re-resolution
     ProtonPaths.invalidate("skyrimse");
     const second = ProtonPaths.resolve(opts);
     expect(second).toBeDefined();
+    expect(second).not.toBe(first);
   });
 });

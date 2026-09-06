@@ -22,7 +22,7 @@ describe("platformRemediation", () => {
     expect(sanitized).toBe(input);
   });
 
-  it("provides Linux-specific remediation for permission errors with chown snippet", () => {
+  it("provides safe Linux-specific remediation for permission errors", () => {
     const advice = getPlatformRemediation(
       "permission-denied",
       {
@@ -31,15 +31,15 @@ describe("platformRemediation", () => {
       "linux",
     );
 
-    expect(advice.title).toBe("Помилка доступу до каталогу");
-    expect(advice.commandSnippet).toBe('chown -R $USER:$USER "/home/user/Games/Skyrim"');
-    expect(advice.remediation).toContain("Не запускайте Vortex через sudo");
+    expect(advice.title).toBe("Directory access error");
+    expect(advice.commandSnippet).toBeUndefined();
+    expect(advice.remediation).toContain("Do not run Vortex through sudo");
   });
 
   it("provides Linux-specific remediation for cross-device links", () => {
     const advice = getPlatformRemediation("EXDEV", {}, "linux");
 
-    expect(advice.title).toBe("Розбіжність розділів файлової системи");
+    expect(advice.title).toBe("Filesystem device mismatch");
     expect(advice.remediation).toContain("Symlink Deployment");
   });
 });

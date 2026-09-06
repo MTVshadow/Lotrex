@@ -1,10 +1,19 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { extractSteamLibraryPaths } from "./steamPaths";
+import { discoverLinuxSteamLibraries, extractSteamLibraryPaths } from "./steamPaths";
 
 describe("extractSteamLibraryPaths", () => {
+  const temporaryPaths: string[] = [];
+
+  afterEach(() => {
+    temporaryPaths
+      .splice(0)
+      .forEach((temporaryPath) => fs.rmSync(temporaryPath, { force: true, recursive: true }));
+  });
   const basePath = path.join(path.sep, "home", "user", ".local", "share", "Steam");
 
   it("finds modern Steam libraries even when numeric keys have gaps", () => {
@@ -42,5 +51,17 @@ describe("extractSteamLibraryPaths", () => {
         basePath,
       ),
     ).toEqual([basePath]);
+  });
+
+  it("reads external libraries from a Steam VDF", () => {
+    const steamPath = fs.mkdtempSync(path.join(os.tmpdir(), "vortex-steam-libraries-"));
+    temporaryPaths.push(steamPath);
+    fs.mkdirSync(path.join(steamPath, "config"));
+    fs.writeFileSync(
+      path.join(steamPath, "config", "libraryfolders.vdf"),
+      '"libraryfolders"\n{\n  "0"\n  {\n    "path" "/tmp/Steam"\n  }\n  "2"\n  {\n    "path" "/mnt/Games"\n  }\n}',
+    );
+
+    expect(discoverLinuxSteamLibraries(steamPath)).toEqual([steamPath, "/tmp/Steam", "/mnt/Games"]);
   });
 });

@@ -1,13 +1,15 @@
 import * as os from "node:os";
 import * as path from "node:path";
 
+import { buildProtonEnvironment, isWindowsExecutable } from "./protonLaunch";
 import ProtonPaths from "./ProtonPaths";
+import { discoverAvailableProtonRuntimes } from "./protonRuntimes";
+import type { ICustomProtonValidationOptions } from "./protonRuntimes";
+import {
+  type IProtonRuntimePreference,
+  resolveProtonRuntimePreference,
+} from "./protonRuntimeSelection";
 import { ProtonUnavailable } from "./ProtonUnavailable";
-
-export function isWindowsExecutable(filePath: string): boolean {
-  const ext = path.extname(filePath).toLowerCase();
-  return [".exe", ".bat", ".cmd"].includes(ext);
-}
 
 export type LinuxLaunchMode =
   | "native"
@@ -28,8 +30,18 @@ export interface IUnifiedLaunchRequest {
   store?: string;
   discovery?: any;
   gameMetadata?: any;
-  userProtonRuntime?: string;
+  protonContext?: IUnifiedProtonContext;
+  protonRuntimePreference?: IProtonRuntimePreference;
+  protonRuntimeValidation?: ICustomProtonValidationOptions;
   enableProtonLogs?: boolean;
+}
+
+export interface IUnifiedProtonContext {
+  appId?: string;
+  gamePath?: string;
+  prefixPath?: string;
+  protonPath?: string;
+  steamPath?: string;
 }
 
 export interface IUnifiedLaunchResult {
@@ -44,11 +56,7 @@ export interface IUnifiedLaunchResult {
   diagnostics: string[];
 }
 
-/**
- * Єдиний провайдер запуску для Linux (Unified Linux Launch Provider).
- * Консолідує логіку вибору середовища (нативний двійковий файл, Steam Proton, Heroic або Lutris URI)
- * та налаштування змінних оточення (STEAM_COMPAT_DATA_PATH, PROTON_LOG тощо).
- */
+/** Build one launch plan for native binaries, launcher URIs, and Windows binaries on Linux. */
 export function resolveUnifiedLaunch(request: IUnifiedLaunchRequest): IUnifiedLaunchResult {
   const {
     executablePath,
@@ -58,19 +66,16 @@ export function resolveUnifiedLaunch(request: IUnifiedLaunchRequest): IUnifiedLa
     isGame,
     gameId,
     gameName,
-    store,
     discovery,
     gameMetadata,
-    userProtonRuntime,
     enableProtonLogs = false,
   } = request;
 
   const cwd = workingDirectory || path.dirname(executablePath || ".");
   const diagnostics: string[] = [];
 
-  // 1. Якщо це виклик URI запуску через Heroic Games Launcher
-  if (store === "heroic" || executablePath.startsWith("heroic://")) {
-    diagnostics.push("Використовується URI-протокол запуску Heroic Games Launcher.");
+  if (executablePath.startsWith("heroic://")) {
+    diagnostics.push("Using the Heroic Games Launcher URI protocol.");
     return {
       mode: "heroic-uri",
       executable: executablePath,
@@ -81,9 +86,8 @@ export function resolveUnifiedLaunch(request: IUnifiedLaunchRequest): IUnifiedLa
     };
   }
 
-  // 2. Якщо це виклик URI запуску через Lutris
-  if (store === "lutris" || executablePath.startsWith("lutris:")) {
-    diagnostics.push("Використовується URI-протокол запуску Lutris.");
+  if (executablePath.startsWith("lutris:")) {
+    diagnostics.push("Using the Lutris URI protocol.");
     return {
       mode: "lutris-uri",
       executable: executablePath,
@@ -94,9 +98,8 @@ export function resolveUnifiedLaunch(request: IUnifiedLaunchRequest): IUnifiedLa
     };
   }
 
-  // 3. Якщо це Steam URI
   if (executablePath.startsWith("steam://")) {
-    diagnostics.push("Використовується URI-протокол запуску Steam.");
+    diagnostics.push("Using the Steam URI protocol.");
     return {
       mode: "steam-uri",
       executable: executablePath,
@@ -107,11 +110,8 @@ export function resolveUnifiedLaunch(request: IUnifiedLaunchRequest): IUnifiedLa
     };
   }
 
-  // 4. Якщо це не Windows-бінарник (ELF, shell script тощо), запускаємо нативно
   if (!isWindowsExecutable(executablePath)) {
-    diagnostics.push(
-      "Цільовий виконуваний файл є нативним для Linux (non-PE). Запуск без емуляції.",
-    );
+    diagnostics.push("The target is native to Linux; launching without a compatibility layer.");
     return {
       mode: "native",
       executable: executablePath,
@@ -122,52 +122,63 @@ export function resolveUnifiedLaunch(request: IUnifiedLaunchRequest): IUnifiedLa
     };
   }
 
-  // 4. Windows-виконуваний файл (гра або сторонній мод-тул: LOOT, xEdit, BodySlide)
-  const proton = ProtonPaths.resolve({
-    gameMode: gameId,
-    discovery,
-    game: gameMetadata,
-  });
+  const proton =
+    request.protonContext ??
+    ProtonPaths.resolve({
+      gameMode: gameId,
+      discovery,
+      game: gameMetadata,
+    });
 
-  const effectiveProtonRuntime = userProtonRuntime || proton?.protonPath;
+  const selectedRuntime = request.protonRuntimePreference
+    ? resolveProtonRuntimePreference(
+        request.protonRuntimePreference,
+        proton?.protonPath,
+        discoverAvailableProtonRuntimes(proton?.steamPath),
+        request.protonRuntimeValidation,
+      )
+    : { path: undefined, type: "auto" as const };
+  if (selectedRuntime.error !== undefined) {
+    throw new Error(selectedRuntime.error);
+  }
+  const effectiveProtonRuntime = selectedRuntime.path || proton?.protonPath;
   const effectivePrefix = proton?.prefixPath;
 
   if (!effectivePrefix) {
-    diagnostics.push(`Префікс Proton для гри '${gameName || gameId}' не знайдено.`);
+    diagnostics.push(`No Proton prefix was found for '${gameName || gameId}'.`);
     throw new ProtonUnavailable("prefix-not-found", proton?.appId);
   }
 
   if (!effectiveProtonRuntime) {
-    diagnostics.push(`Виконуване середовище Proton для гри '${gameName || gameId}' не знайдено.`);
+    diagnostics.push(`No Proton runtime was found for '${gameName || gameId}'.`);
     throw new ProtonUnavailable("runtime-not-found", proton?.appId);
   }
 
-  // Формування оточення сумісності Steam Proton
-  const launchEnv: Record<string, string> = {
-    ...environment,
-    STEAM_COMPAT_DATA_PATH: path.dirname(effectivePrefix),
-    STEAM_COMPAT_CLIENT_INSTALL_PATH: proton?.steamPath || "",
-  };
+  const launchEnv = buildProtonEnvironment(
+    path.dirname(effectivePrefix),
+    proton?.steamPath ?? "",
+    environment,
+    effectiveProtonRuntime,
+    proton?.gamePath ?? discovery?.path ?? path.dirname(executablePath),
+  );
 
   let logFilePath: string | undefined;
   if (enableProtonLogs) {
     launchEnv.PROTON_LOG = "1";
     launchEnv.PROTON_LOG_DIR = path.join(os.homedir(), ".config", "Vortex", "logs");
     logFilePath = path.join(launchEnv.PROTON_LOG_DIR, `proton-${gameId}.log`);
-    diagnostics.push(`Увімкнено журнал Proton: ${logFilePath}`);
+    diagnostics.push(`Proton logging enabled: ${logFilePath}`);
   }
 
   const protonExecutable = path.join(effectiveProtonRuntime, "proton");
   const parameters = ["run", executablePath, ...commandLine];
 
-  diagnostics.push(
-    `Запуск Windows-виконуваного файлу через Proton (${isGame ? "Основна гра" : "Інструмент"})`,
-  );
-  diagnostics.push(`Використовується префікс: ${effectivePrefix}`);
-  diagnostics.push(`Використовується рантайм: ${effectiveProtonRuntime}`);
+  diagnostics.push(`Launching a Windows executable through Proton (${isGame ? "game" : "tool"}).`);
+  diagnostics.push(`Prefix: ${effectivePrefix}`);
+  diagnostics.push(`Runtime: ${effectiveProtonRuntime}`);
 
   return {
-    mode: userProtonRuntime ? "custom-proton" : "steam-proton",
+    mode: selectedRuntime.type === "custom" ? "custom-proton" : "steam-proton",
     executable: protonExecutable,
     parameters,
     environment: launchEnv,

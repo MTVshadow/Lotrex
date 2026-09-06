@@ -15,6 +15,15 @@ export interface ICaseCollisionGroup {
   sources: ICaseCollisionItem[];
 }
 
+export class CaseCollisionError extends Error {
+  public readonly code = "CASE_COLLISION";
+
+  constructor(public readonly collisions: ICaseCollisionGroup[]) {
+    super(formatCaseCollisionReport(collisions));
+    this.name = "CaseCollisionError";
+  }
+}
+
 /**
  * Нормалізація шляху для порівняння без урахування регістру (case-folding).
  */
@@ -62,18 +71,16 @@ export function detectCaseCollisions(items: ICaseCollisionItem[]): ICaseCollisio
  */
 export function formatCaseCollisionReport(collisions: ICaseCollisionGroup[]): string {
   if (collisions.length === 0) {
-    return "Колізій регістру імен файлів не виявлено.";
+    return "No case-sensitive filename collisions were found.";
   }
 
-  const lines: string[] = [
-    `Виявлено ${collisions.length} колізій регістру імен файлів (case-sensitive conflicts):`,
-  ];
+  const lines: string[] = [`Found ${collisions.length} case-sensitive filename collision(s):`];
 
   for (const collision of collisions) {
-    lines.push(`\n- Шлях: ${collision.normalizedPath}`);
-    lines.push("  Варіанти написання:");
+    lines.push(`\n- Path: ${collision.normalizedPath}`);
+    lines.push("  Variants:");
     for (const source of collision.sources) {
-      const modInfo = source.modId ? ` (мод: ${source.modId})` : "";
+      const modInfo = source.modId ? ` (mod: ${source.modId})` : "";
       lines.push(`    • ${source.relPath}${modInfo}`);
     }
   }

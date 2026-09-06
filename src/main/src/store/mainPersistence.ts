@@ -16,12 +16,13 @@ import { getErrorMessageOrDefault } from "@vortex/shared";
  * 4. Provides hydration data to renderer
  */
 import type { DiffOperation, Serializable } from "@vortex/shared/ipc";
-import type { PersistedHive } from "@vortex/shared/state";
-import { BrowserWindow } from "electron";
+import type { IPersistor, PersistedHive } from "@vortex/shared/state";
+import { BrowserWindow, safeStorage } from "electron";
 
 import { getVortexPath } from "../getVortexPath";
 import { betterIpcMain } from "../ipc";
 import { log } from "../logging";
+import ConfidentialPersistor, { ConfidentialStorageError } from "./ConfidentialPersistor";
 import { Database } from "./Database";
 import DuckDBSingleton from "./DuckDBSingleton";
 import type LevelPersist from "./LevelPersist";
@@ -39,6 +40,37 @@ let levelPersist: LevelPersist | undefined;
 let queryRegistry: QueryRegistry | undefined;
 let queryInvalidator: QueryInvalidator | undefined;
 let database: Database | undefined;
+
+function createHivePersistor(hive: string): IPersistor | undefined {
+  if (levelPersist === undefined) {
+    return undefined;
+  }
+
+  const persistor = new SubPersistor(levelPersist, hive);
+  if (hive !== "confidential") {
+    return persistor;
+  }
+
+  const encryptionAvailable = safeStorage.isEncryptionAvailable();
+  const backend =
+    process.platform === "linux" ? safeStorage.getSelectedStorageBackend() : undefined;
+  if (!encryptionAvailable || backend === "basic_text" || backend === "unknown") {
+    log(
+      "warn",
+      "Secure credential storage is unavailable; confidential state uses compatibility persistence",
+      {
+        backend,
+        encryptionAvailable,
+      },
+    );
+  }
+
+  return new ConfidentialPersistor(persistor, {
+    decrypt: (value) => safeStorage.decryptString(value),
+    encrypt: (value) => safeStorage.encryptString(value),
+    encryptionAvailable,
+  });
+}
 
 /**
  * Get the Database instance for typed model access.
@@ -67,7 +99,7 @@ export function initMainPersistence(levelPersistor: LevelPersist): ReduxPersisto
     if (levelPersist === undefined) {
       return undefined;
     }
-    return new SubPersistor(levelPersist, hive);
+    return createHivePersistor(hive);
   });
 
   // Set up IPC handlers to receive diffs from renderer
@@ -149,8 +181,11 @@ export function registerHive(hive: string): Promise<{ [key: string]: Serializabl
     );
   }
 
-  const subPersistor = new SubPersistor(levelPersist, hive);
-  return mainPersistor.insertPersistor(hive, subPersistor);
+  const persistor = createHivePersistor(hive);
+  if (persistor === undefined) {
+    return Promise.reject(new Error("Main persistence is unavailable"));
+  }
+  return mainPersistor.insertPersistor(hive, persistor);
 }
 
 /**
@@ -230,13 +265,14 @@ export async function readPersistedValue<T>(hive: string, path: string[]): Promi
 
   // First, try a direct read — works for leaf values stored at the exact key
   try {
-    const subPersistor = new SubPersistor(levelPersist, hive);
-    const value = await subPersistor.getItem(path);
+    const persistor = createHivePersistor(hive);
+    const value = await persistor?.getItem(path);
     if (value !== undefined && value !== "") {
       return JSON.parse(value) as T;
     }
     return undefined;
-  } catch {
+  } catch (err) {
+    if (err instanceof ConfidentialStorageError) throw err;
     // Direct read failed (key not found). The value may be a non-leaf node
     // whose children are stored as separate leaf keys (e.g. the diff-based
     // persistence writes "settings###window###customTitlebar" rather than
@@ -244,13 +280,16 @@ export async function readPersistedValue<T>(hive: string, path: string[]): Promi
   }
 
   try {
-    const prefix = [hive, ...path].join("###");
-    const kvs = await levelPersist.getAllKVs(prefix);
+    const persistor = createHivePersistor(hive);
+    const kvs =
+      (await persistor?.getAllKVs?.())?.filter(({ key }) =>
+        path.every((segment, index) => key[index] === segment),
+      ) ?? [];
     if (kvs.length === 0) {
       return undefined;
     }
 
-    const pathDepth = path.length + 1; // +1 for the hive prefix
+    const pathDepth = path.length;
     const result: Record<string, unknown> = {};
     for (const { key, value } of kvs) {
       const remainingKey = key.slice(pathDepth);
@@ -277,6 +316,7 @@ export async function readPersistedValue<T>(hive: string, path: string[]): Promi
 
     return result as T;
   } catch (err) {
+    if (err instanceof ConfidentialStorageError) throw err;
     const message = getErrorMessageOrDefault(err);
     log("warn", "Could not read persisted value", {
       hive,
@@ -305,9 +345,10 @@ export async function writePersistedValue<T>(
   }
 
   try {
-    const subPersistor = new SubPersistor(levelPersist, hive);
-    await subPersistor.setItem(path, JSON.stringify(value));
+    const persistor = createHivePersistor(hive);
+    await persistor?.setItem(path, JSON.stringify(value));
   } catch (err) {
+    if (err instanceof ConfidentialStorageError) throw err;
     const message = getErrorMessageOrDefault(err);
     log("warn", "Could not write persisted value", {
       hive,
@@ -333,9 +374,10 @@ export async function readHiveData(hive: string): Promise<{ [key: string]: Seria
   const persistor = mainPersistor;
   try {
     // This will load the data if not already loaded
-    const subPersistor = new SubPersistor(levelPersist, hive);
-    return await persistor.insertPersistor(hive, subPersistor);
+    const hivePersistor = createHivePersistor(hive);
+    return hivePersistor === undefined ? {} : await persistor.insertPersistor(hive, hivePersistor);
   } catch (err) {
+    if (err instanceof ConfidentialStorageError) throw err;
     const message = getErrorMessageOrDefault(err);
     log("warn", "Could not read hive data", { hive, error: message });
     return {};

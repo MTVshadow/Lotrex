@@ -18,20 +18,19 @@ import { activeGameId, discoveryByGame, installPathForGame } from "../../../util
 import { getSafe } from "../../../util/storeHelper";
 import { deBOM, makeQueue, truthy } from "../../../util/util";
 import { getGame } from "../../gamemode_management/util/getGame";
-import type { IDeploymentManifest, ManifestFormat } from "../types/IDeploymentManifest";
+import type { IDeploymentManifest } from "../types/IDeploymentManifest";
 import type { IDeployedFile, IDeploymentMethod } from "../types/IDeploymentMethod";
+import {
+  addDeploymentManifestIntegrity,
+  CURRENT_DEPLOYMENT_MANIFEST_VERSION,
+  migrateDeploymentManifest,
+  verifyDeploymentManifestIntegrity,
+} from "./deploymentManifest";
 import { getActivator, getCurrentActivator } from "./deploymentMethods";
-import format_1 from "./manifest_formats/format_1";
-
-const CURRENT_VERSION = 1;
-
-const formats: { [version: number]: ManifestFormat } = {
-  1: format_1,
-};
 
 function emptyManifest(instance: string): IDeploymentManifest {
   return {
-    version: CURRENT_VERSION,
+    version: CURRENT_DEPLOYMENT_MANIFEST_VERSION,
     instance,
     files: [],
   };
@@ -43,7 +42,7 @@ function emptyManifest(instance: string): IDeploymentManifest {
  */
 function repairManifest(input: IDeploymentManifest): IDeploymentManifest {
   if (!truthy(input.version)) {
-    input.version = CURRENT_VERSION;
+    input.version = 1;
   }
 
   if (!truthy(input.instance)) {
@@ -85,19 +84,14 @@ function readManifest(data: string | Buffer): IDeploymentManifest {
     throw newErr;
   }
 
-  let lastVersion = 0;
-  while (lastVersion < CURRENT_VERSION) {
-    parsed = formats[parsed.version || 1](parsed);
-    if (parsed.version === lastVersion && parsed.version < CURRENT_VERSION) {
-      // this should not happen!
-      throw new Error(`unsupported format upgrade ${parsed.version} -> ${CURRENT_VERSION}`);
-    }
-    lastVersion = parsed.version;
-  }
+  verifyDeploymentManifestIntegrity(parsed);
+  parsed = migrateDeploymentManifest(parsed);
   if (parsed.files === undefined) {
     parsed.files = [];
   }
-  return repairManifest(parsed);
+  const repaired = repairManifest(parsed);
+  const { integrity: _integrity, ...payload } = repaired;
+  return addDeploymentManifestIntegrity(payload);
 }
 
 export function purgeDeployedFiles(basePath: string, files: IDeployedFile[]): Promise<void> {
@@ -192,12 +186,27 @@ function readManifestFileBinary(filePath: string): Promise<any> {
   return Promise.resolve(fs.readFileAsync(filePath)).then((data) => readManifest(data));
 }
 
+async function readFirstValidBackup(paths: string[]): Promise<IDeploymentManifest> {
+  let lastError: unknown;
+  for (const backupPath of paths) {
+    try {
+      return backupPath.endsWith(".msgpack")
+        ? await readManifestFileBinary(backupPath)
+        : await readManifestFile(backupPath);
+    } catch (err: unknown) {
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+
 function getManifestImpl(
   api: IExtensionApi,
   instanceId: string,
   filePath: string,
   backupPath: string,
   backup2Path: string,
+  lastGoodPath?: string,
 ): Promise<IDeploymentManifest> {
   return readManifestFile(filePath)
     .catch((err: unknown) => {
@@ -228,13 +237,7 @@ function getManifestImpl(
           'on the "Mods" page, then deploy again.';
       }
 
-      return readManifestFileBinary(backup2Path)
-        .catch((inner: unknown) => {
-          if (getErrorCode(inner) === "ENOENT") {
-            return readManifestFile(backupPath);
-          }
-          throw inner;
-        })
+      return readFirstValidBackup([backup2Path, backupPath, lastGoodPath].filter(truthy))
         .then((data) =>
           api
             .showDialog(
@@ -280,10 +283,11 @@ export function fallbackPurgeType(
   const tagFileName = `vortex.deployment.${typeTag}json`;
   const tagFilePath = path.join(deployPath, tagFileName);
   const tagBackupPath = path.join(stagingPath, tagFileName);
-  const tagBackup2Path = path.join(stagingPath, `vortex.deployment.backup.${typeTag}msgpack`);
+  const tagBackup2Path = path.join(stagingPath, `vortex.deployment.${typeTag}msgpack`);
+  const lastGoodPath = path.join(stagingPath, `vortex.deployment.last-good.${typeTag}msgpack`);
   const instanceId = state.app.instanceId;
 
-  return getManifestImpl(api, instanceId, tagFilePath, tagBackupPath, tagBackup2Path)
+  return getManifestImpl(api, instanceId, tagFilePath, tagBackupPath, tagBackup2Path, lastGoodPath)
     .then((tagObject) => {
       let result: Promise<void>;
       if (tagObject.files.length > 0) {
@@ -390,8 +394,16 @@ export function getManifest(
     const tagFilePath = path.join(deployPath, tagFileName);
     const tagBackupPath = path.join(stagingPath, tagFileName);
     const tagBackup2Path = path.join(stagingPath, `vortex.deployment.${typeTag}msgpack`);
+    const lastGoodPath = path.join(stagingPath, `vortex.deployment.last-good.${typeTag}msgpack`);
 
-    return getManifestImpl(api, instanceId, tagFilePath, tagBackupPath, tagBackup2Path);
+    return getManifestImpl(
+      api,
+      instanceId,
+      tagFilePath,
+      tagBackupPath,
+      tagBackup2Path,
+      lastGoodPath,
+    );
   } catch (err) {
     return Promise.reject(err);
   }
@@ -413,38 +425,44 @@ export function loadActivation(
   const tagFilePath = path.join(deployPath, tagFileName);
   const tagBackupPath = path.join(stagingPath, tagFileName);
   const tagBackup2Path = path.join(stagingPath, `vortex.deployment.${typeTag}msgpack`);
+  const lastGoodPath = path.join(stagingPath, `vortex.deployment.last-good.${typeTag}msgpack`);
   const state: IState = api.store.getState();
   const instanceId = state.app.instanceId;
-  return getManifestImpl(api, instanceId, tagFilePath, tagBackupPath, tagBackup2Path).then(
-    (tagObject) => {
-      let result: Promise<IDeployedFile[]>;
-      if (tagObject.instance !== instanceId && tagObject.files.length > 0) {
-        let safe = true;
-        if (tagObject.deploymentMethod !== undefined) {
-          const previousActivator = getActivator(tagObject.deploymentMethod);
-          if (previousActivator !== undefined && !previousActivator.isFallbackPurgeSafe) {
-            safe = false;
-          }
+  return getManifestImpl(
+    api,
+    instanceId,
+    tagFilePath,
+    tagBackupPath,
+    tagBackup2Path,
+    lastGoodPath,
+  ).then((tagObject) => {
+    let result: Promise<IDeployedFile[]>;
+    if (tagObject.instance !== instanceId && tagObject.files.length > 0) {
+      let safe = true;
+      if (tagObject.deploymentMethod !== undefined) {
+        const previousActivator = getActivator(tagObject.deploymentMethod);
+        if (previousActivator !== undefined && !previousActivator.isFallbackPurgeSafe) {
+          safe = false;
         }
-        result = queryPurge(api, deployPath, tagObject.files, safe)
-          .then(() =>
-            saveActivation(
-              gameId,
-              modType,
-              state.app.instanceId,
-              deployPath,
-              stagingPath,
-              [],
-              activator.id,
-            ),
-          )
-          .then(() => Promise.resolve([]));
-      } else {
-        result = Promise.resolve(tagObject.files);
       }
-      return result;
-    },
-  );
+      result = queryPurge(api, deployPath, tagObject.files, safe)
+        .then(() =>
+          saveActivation(
+            gameId,
+            modType,
+            state.app.instanceId,
+            deployPath,
+            stagingPath,
+            [],
+            activator.id,
+          ),
+        )
+        .then(() => Promise.resolve([]));
+    } else {
+      result = Promise.resolve(tagObject.files);
+    }
+    return result;
+  });
 }
 
 export function saveActivation(
@@ -457,16 +475,16 @@ export function saveActivation(
   activatorId?: string,
 ) {
   const typeTag = modType !== undefined && modType.length > 0 ? modType + "." : "";
-  const dataRaw = {
+  const dataRaw = addDeploymentManifestIntegrity({
     instance,
-    version: CURRENT_VERSION,
+    version: CURRENT_DEPLOYMENT_MANIFEST_VERSION,
     deploymentMethod: activatorId,
     gameId,
     deploymentTime: Date.now(),
     stagingPath,
     targetPath: gamePath,
     files: activation,
-  };
+  });
   const dataJSON = JSON.stringify(dataRaw, undefined, 2);
   try {
     JSON.parse(dataJSON);
@@ -482,6 +500,22 @@ export function saveActivation(
   const tagFileName = `vortex.deployment.${typeTag}json`;
   const tagFilePath = path.join(gamePath, tagFileName);
   const tagBackupPath = path.join(stagingPath, `vortex.deployment.${typeTag}msgpack`);
+  const lastGoodPath = path.join(stagingPath, `vortex.deployment.last-good.${typeTag}msgpack`);
+
+  try {
+    const previous = readManifest(fs.readFileSync(tagFilePath, "utf8"));
+    if (previous !== undefined) {
+      const msgpack: typeof msgpackT = require("@msgpack/msgpack");
+      writeAtomicSync(lastGoodPath, Buffer.from(msgpack.encode(previous)));
+    }
+  } catch (err: unknown) {
+    if (getErrorCode(err) !== "ENOENT") {
+      log("warn", "Failed to preserve last-known-good deployment manifest", {
+        error: getErrorMessageOrDefault(err),
+        path: tagFilePath,
+      });
+    }
+  }
 
   if (activation.length > 0) {
     // write backup synchronously

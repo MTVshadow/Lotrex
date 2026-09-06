@@ -13,6 +13,7 @@ export class ModsPage {
   readonly installFromFileButton: Locator;
   /** Toolbar "Deploy Mods" button (flashes when a deployment is pending). */
   readonly deployButton: Locator;
+  readonly purgeButton: Locator;
   /** Toolbar Quick Launcher "Play" button that starts the managed game. */
   readonly playButton: Locator;
   /**
@@ -31,6 +32,7 @@ export class ModsPage {
     this.page = page;
     this.installFromFileButton = page.locator("#install-from-archive");
     this.deployButton = page.locator("#deploy-mods");
+    this.purgeButton = page.locator("#purge-mods");
     this.playButton = page.locator("#btn-quicklaunch-play");
     this.statusButton = page.locator("#btn-mods-enabled").first();
     this.emptyState = page.getByText(/don't have any installed mods/i);

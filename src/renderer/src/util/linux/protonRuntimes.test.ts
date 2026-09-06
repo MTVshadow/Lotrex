@@ -21,12 +21,12 @@ describe("protonRuntimes", () => {
     expect(validateCustomProtonPath("").valid).toBe(false);
     expect(validateCustomProtonPath("/non/existent/path").valid).toBe(false);
 
-    // Каталог є, але без бінарника proton
+    // The directory exists but does not contain a Proton entry point.
     const dummyDir = path.join(tmpDir, "dummy-proton");
     fs.mkdirSync(dummyDir);
     const noBinResult = validateCustomProtonPath(dummyDir);
     expect(noBinResult.valid).toBe(false);
-    expect(noBinResult.error).toContain("відсутній обов'язковий скрипт 'proton'");
+    expect(noBinResult.error).toContain("required 'proton' script");
   });
 
   it("validates correct custom proton path with executable script", () => {
@@ -40,20 +40,59 @@ describe("protonRuntimes", () => {
     expect(result.valid).toBe(true);
   });
 
+  it.runIf(process.platform !== "win32")(
+    "requires approval and rejects untrusted, foreign-owned, or writable runtimes",
+    () => {
+      const runtimeDir = path.join(tmpDir, "trusted-proton");
+      const protonBin = path.join(runtimeDir, "proton");
+      fs.mkdirSync(runtimeDir);
+      fs.writeFileSync(protonBin, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+
+      expect(validateCustomProtonPath(runtimeDir, { requireApproval: true })).toMatchObject({
+        valid: false,
+        error: expect.stringContaining("selected again"),
+      });
+      expect(
+        validateCustomProtonPath(runtimeDir, {
+          approvedPath: runtimeDir,
+          requireApproval: true,
+          untrustedRoots: [tmpDir],
+        }),
+      ).toMatchObject({ valid: false, error: expect.stringContaining("staging content") });
+      expect(
+        validateCustomProtonPath(runtimeDir, {
+          approvedPath: runtimeDir,
+          currentUid: (process.getuid?.() ?? 0) + 1,
+          requireApproval: true,
+        }),
+      ).toMatchObject({ valid: false, error: expect.stringContaining("current user") });
+
+      fs.chmodSync(runtimeDir, 0o775);
+      expect(
+        validateCustomProtonPath(runtimeDir, {
+          approvedPath: runtimeDir,
+          requireApproval: true,
+        }),
+      ).toMatchObject({ valid: false, error: expect.stringContaining("group or other") });
+    },
+  );
+
   it("discovers installed runtimes in steamapps and compatibilitytools.d", () => {
     const steamRoot = path.join(tmpDir, "mock-steam");
     const commonDir = path.join(steamRoot, "steamapps", "common");
     const compatDir = path.join(steamRoot, "compatibilitytools.d");
 
-    // Створюємо Proton 9.0
+    // Create Proton 9.0.
     const proton9Dir = path.join(commonDir, "Proton 9.0");
     fs.mkdirSync(proton9Dir, { recursive: true });
     fs.writeFileSync(path.join(proton9Dir, "proton"), "#!/bin/sh");
+    fs.chmodSync(path.join(proton9Dir, "proton"), 0o755);
 
-    // Створюємо GE-Proton9-25
+    // Create GE-Proton9-25.
     const geDir = path.join(compatDir, "GE-Proton9-25");
     fs.mkdirSync(geDir, { recursive: true });
     fs.writeFileSync(path.join(geDir, "proton"), "#!/bin/sh");
+    fs.chmodSync(path.join(geDir, "proton"), 0o755);
 
     const found = discoverAvailableProtonRuntimes(steamRoot);
     expect(found.length).toBeGreaterThanOrEqual(2);
@@ -65,5 +104,17 @@ describe("protonRuntimes", () => {
     const ge = found.find((r) => r.name === "GE-Proton9-25");
     expect(ge).toBeDefined();
     expect(ge?.type).toBe("ge-proton");
+    expect(ge?.isUsable).toBe(true);
+  });
+
+  it("reports a discovered runtime without execute permission as unusable", () => {
+    const steamRoot = path.join(tmpDir, "mock-unusable-steam");
+    const runtimeDir = path.join(steamRoot, "steamapps", "common", "Proton Broken");
+    fs.mkdirSync(runtimeDir, { recursive: true });
+    fs.writeFileSync(path.join(runtimeDir, "proton"), "#!/bin/sh", { mode: 0o644 });
+
+    expect(discoverAvailableProtonRuntimes(steamRoot)).toContainEqual(
+      expect.objectContaining({ isUsable: false, name: "Proton Broken" }),
+    );
   });
 });
