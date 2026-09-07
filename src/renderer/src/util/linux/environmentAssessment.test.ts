@@ -248,6 +248,7 @@ describe("environmentAssessment", () => {
           code: "insufficient-disk-space",
           purpose: "deployment",
           requiredBytes: availableBytes,
+          reserveBytes: expect.any(Number),
         }),
       ]),
     );

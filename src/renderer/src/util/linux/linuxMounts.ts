@@ -34,6 +34,7 @@ export interface IFileSystemIssue {
   mountPoint?: string;
   fsType?: string;
   requiredBytes?: number;
+  reserveBytes?: number;
   remediation?: string;
 }
 
@@ -294,6 +295,7 @@ export function checkAvailableDiskSpace(
         remediation:
           "Free disk space, move the game to a larger filesystem, or select a link-based deployment method.",
         requiredBytes,
+        reserveBytes,
         severity: "error",
       };
     }

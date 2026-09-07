@@ -173,7 +173,7 @@ after the corresponding automated or packaged evidence changes.
 | Workstream                           | Implemented | Integrated | Manually verified | Automated | Blocked | Acceptance criteria                                                                                                       |
 | ------------------------------------ | :---------: | :--------: | :---------------: | :-------: | :-----: | ------------------------------------------------------------------------------------------------------------------------- |
 | 100k–500k file deployment benchmark  |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Repeat after material deployment changes and compare results against the recorded baseline.                               |
-| Case-collision scan memory budget    |   Partial   |     ✅     |         —         |    ✅     |    —    | Collision detection is bounded and reports a dedicated deployment-progress phase. Add representative heap profiling.      |
+| Case-collision scan memory budget    |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Repeat the 500,000-entry benchmark after material scanner changes and compare it with the recorded memory baseline.       |
 | Cached folder-size preflight         |     ✅      |     ✅     |         —         |    ✅     |    —    | Disk estimation avoids repeated full staging scans while invalidating cache on install/remove/merge changes.              |
 | Cancellable environment assessment   |     ✅      |     ✅     |         —         |    ✅     |    —    | Long Steam-library, mount, prefix, and filesystem scans expose progress and cancel without leaving probes.                |
 | Large Steam library/prefix discovery |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Benchmark hundreds of library entries and compatdata prefixes with a defined startup budget and cache invalidation proof. |
@@ -188,14 +188,18 @@ latency. Representative runs on the current Linux development system completed s
 after 2,267 completed files with 0.084 ms measured loop-observation latency. The command uses a
 disposable directory and removes its generated files after every outcome.
 
-Case-collision memory-budget status: **Partial / Integrated / Automated**. Production scanning now
+Case-collision memory-budget status: **Complete / Integrated / Manually verified / Automated**.
+Production scanning
 consumes an iterable instead of allocating a second deployment-entry array, reports progress every
 10,000 entries, and rejects above a deterministic 500,000-entry ceiling with
 `ECASECOLLISIONSCANLIMIT`. The production deployment progress now identifies filename-collision
 checking as its own 50–60% phase before applying files at 60–100%, and a lifecycle regression covers
-the phase-aware callback. Existing iterable progress/limit and lifecycle tests pass. The new focused
-Vitest run was **Deferred** after the runner stalled without producing a result; representative heap
-profiling also remains **Deferred**.
+the phase-aware callback. The opt-in `benchmark:linux-case-collisions` command streams representative
+entries into the production detector, validates deliberate collisions and progress reporting, and
+enforces a configurable heap-growth budget. A 500,000-entry run completed in 1.41 s, found all ten
+deliberate collision groups, emitted 50 progress events, and used 177.89 MB of additional heap under
+the 384 MiB budget. Existing iterable progress/limit and lifecycle tests pass. The new focused Vitest
+run remains **Deferred** after the runner stalled without producing a result.
 
 Cached folder-size preflight status: **Complete / Integrated / Automated**. Cross-device move
 estimation caches completed folder scans using device, inode, modification-time, and change-time
@@ -239,14 +243,44 @@ check returns exactly nine unique runtimes. Packaged UI verification remains **D
 
 ## Linux UX and accessibility backlog
 
-| Workstream                            | Implemented | Integrated | Manually verified | Automated | Blocked | Acceptance criteria                                                                                                         |
-| ------------------------------------- | :---------: | :--------: | :---------------: | :-------: | :-----: | --------------------------------------------------------------------------------------------------------------------------- |
-| Complete Linux UI localization        |   Partial   |  Partial   |         —         |  Partial  |    —    | Setup, diagnostics, recovery, runtime, permission, and filesystem messages have keys and no user-facing hard-coded copy.    |
-| Human-readable capacity diagnostics   |      —      |     —      |         —         |     —     |    —    | Disk-space UI shows formatted required/available/reserve values while retaining raw bytes in diagnostics.                   |
-| Keyboard and screen-reader navigation |      —      |     —      |         —         |     —     |   ⚠️    | Setup, Health Check, runtime selection, diagnostic preview, and recovery flows pass keyboard and accessibility checks.      |
-| Long-running health-check progress    |      —      |     —      |         —         |     —     |    —    | Expensive checks expose status, progress, cancellation, timeout, and a safe retry action.                                   |
-| Copyable scoped remediation commands  |   Partial   |     ✅     |         —         |    ✅     |    —    | Commands are exact-previewed, narrowly scoped, safely quoted, copied only by user action, and never executed implicitly.    |
-| Guided Flatpak permission repair      |   Partial   |  Partial   |         —         |    ✅     |   ⚠️    | UI explains the minimal directory grant, supports portal/Flatseal workflows, and rechecks access after the user changes it. |
+| Workstream                            | Implemented | Integrated | Manually verified | Automated | Blocked | Acceptance criteria                                                                                                                                                             |
+| ------------------------------------- | :---------: | :--------: | :---------------: | :-------: | :-----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Complete Linux UI localization        |   Partial   |  Partial   |         —         |  Partial  |    —    | Setup, diagnostics, recovery, runtime, permission, and filesystem messages have keys and no user-facing hard-coded copy.                                                        |
+| Human-readable capacity diagnostics   |     ✅      |     ✅     |         —         |  Partial  |    —    | Disk-space UI shows formatted required/available/reserve values while retaining raw bytes in diagnostics. Packaged UI verification and the stalled focused test remain.         |
+| Keyboard and screen-reader navigation |     ✅      |     ✅     |     Deferred      |  Partial  |    —    | Linux Setup, Health Check, runtime selection, diagnostics, and recovery have keyboard/screen-reader semantics. Automated and packaged assistive-technology verification remain. |
+| Long-running health-check progress    |      —      |     —      |         —         |     —     |    —    | Expensive checks expose status, progress, cancellation, timeout, and a safe retry action.                                                                                       |
+| Copyable scoped remediation commands  |   Partial   |     ✅     |         —         |    ✅     |    —    | Commands are exact-previewed, narrowly scoped, safely quoted, copied only by user action, and never executed implicitly.                                                        |
+| Guided Flatpak permission repair      |   Partial   |  Partial   |         —         |    ✅     |   ⚠️    | UI explains the minimal directory grant, supports portal/Flatseal workflows, and rechecks access after the user changes it.                                                     |
+
+Capacity-diagnostics status: **Implemented / Integrated / Partially automated**. The deployment
+blocker formats required, available, and safety-reserve capacity with the shared byte formatter,
+while its notification details retain all three raw byte values for diagnostics and reporting. The
+filesystem assessment now carries the exact reserve it used, and its regression fixture asserts that
+field. Type checking passes. The focused Vitest run is **Deferred** because the renderer runner again
+stalled after startup without producing a result; packaged notification layout is also unverified.
+
+Accessibility status: **Partial / Integrated for Linux Setup**. The setup assistant is an explicitly
+named region; detected configuration has an accessible name; runtime selection has a programmatic
+label and error description; discovery progress is announced as a polite, atomic busy status; its
+Cancel control identifies the active progress bar; and discovery failures are assertive alerts with
+a keyboard-native Retry button. Type checking passes.
+
+Health Check accessibility now adds named active/hidden issue lists, announces refresh start and
+completion without announcing a false completion on initial render, and exposes a stable Refresh
+control for future automated interaction coverage. The Linux issue detail is a named region with a
+heading, named diagnostic data, a keyboard-focusable scrollable report preview, and a polite
+confirmation after copying the report. Closing a detail restores focus to its originating issue, or
+to Refresh if the issue was resolved and removed. Nested row actions no longer trigger row opening
+when their Enter/Space event bubbles, and a focused regression test covers both keyboard paths. Its
+Vitest execution is **Deferred** because the renderer runner stalled after startup without producing
+a result.
+
+Recovery accessibility gives the database-backup controls a named caution region, groups them in a
+fieldset, connects both actions to the full safety warning, and prevents accidental form submission.
+Interrupted-deployment confirmation now defaults Enter to Cancel and replaces the ambiguous
+`Continue` action with the exact operation, `Roll back deployment` or `Finish recovery`. Type
+checking passes. Packaged keyboard/screen-reader verification and broader automated accessibility
+coverage remain **Deferred**.
 
 ### Ukrainian localization plan
 

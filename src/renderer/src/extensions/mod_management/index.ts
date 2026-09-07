@@ -58,7 +58,7 @@ import {
   profileById,
 } from "../../util/selectors";
 import { getSafe } from "../../util/storeHelper";
-import { batchDispatch, isChildPath, truthy, wrapExtCBAsync } from "../../util/util";
+import { batchDispatch, bytesToString, isChildPath, truthy, wrapExtCBAsync } from "../../util/util";
 import { waitForCondition } from "../../util/waitForCondition";
 import { emitModsDeployed } from "../analytics/mixpanel/deployAnalytics";
 import { emitModStateChanged } from "../analytics/mixpanel/modChangeAnalytics";
@@ -1007,12 +1007,16 @@ function genUpdateModDeployment(installManager: InstallManager) {
                         t("Deployment not possible"),
                         {
                           message: t(`linux_proton::issues::${diskIssue.code}::details`, {
-                            availableBytes: diskIssue.availableBytes,
+                            available: bytesToString(diskIssue.availableBytes ?? 0),
                             ns: "health_check",
                             path: diskIssue.path,
-                            requiredBytes: diskIssue.requiredBytes,
+                            required: bytesToString(diskIssue.requiredBytes ?? 0),
+                            reserve: bytesToString(diskIssue.reserveBytes ?? 0),
                           }),
+                          availableBytes: diskIssue.availableBytes,
                           path: diskIssue.path,
+                          requiredBytes: diskIssue.requiredBytes,
+                          reserveBytes: diskIssue.reserveBytes,
                           remediation: t(`linux_proton::issues::${diskIssue.code}::remediation`, {
                             ns: "health_check",
                           }),
@@ -1671,10 +1675,22 @@ async function checkDeploymentJournalsAtStartup(api: IExtensionApi): Promise<voi
                       text: recoveryPlan.reason,
                       message: `Operation ID: ${recoveryPlan.operationId}\nAffected paths: ${recoveryPlan.affectedPaths.join(", ")}`,
                     },
-                    [{ label: "Cancel" }, { label: "Continue" }],
+                    [
+                      { label: "Cancel", default: true },
+                      {
+                        label:
+                          recoveryPlan.action === "rollback"
+                            ? "Roll back deployment"
+                            : "Finish recovery",
+                      },
+                    ],
                   )
                   .then(async (result) => {
-                    if (result.action !== "Continue") {
+                    const confirmedAction =
+                      recoveryPlan.action === "rollback"
+                        ? "Roll back deployment"
+                        : "Finish recovery";
+                    if (result.action !== confirmedAction) {
                       return;
                     }
                     await withActivationLock(() =>

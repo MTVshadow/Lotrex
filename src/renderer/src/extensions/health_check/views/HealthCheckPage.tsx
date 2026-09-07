@@ -104,6 +104,22 @@ const HealthCheckPage = ({ api, onRefresh, active, registerReset }: IHealthCheck
   const [selected, setSelected] = useState<IListedEntry | null>(null);
   const [selectedTab, setSelectedTab] = useState("active");
 
+  const closeDetailAndRestoreFocus = React.useCallback(() => {
+    const selectedKey =
+      selected === null ? undefined : `${selected.entry.checkId}:${selected.entry.id}`;
+    setSelected(null);
+    window.requestAnimationFrame(() => {
+      const entry =
+        selectedKey === undefined
+          ? undefined
+          : document.getElementById(`health-check-entry-${encodeURIComponent(selectedKey)}`);
+      const target =
+        entry?.querySelector<HTMLElement>('[role="button"]') ??
+        document.querySelector<HTMLElement>('[data-testid="health-check-refresh"]');
+      target?.focus();
+    });
+  }, [selected]);
+
   const {
     trackPageViewed,
     trackPassedViewed,
@@ -136,9 +152,20 @@ const HealthCheckPage = ({ api, onRefresh, active, registerReset }: IHealthCheck
   const showPremiumAd = useSelector(shouldShowPremiumAd);
   const [showInstallAllPremium, setShowInstallAllPremium] = useState(false);
   const isRefreshing = useSelector(isAnyHealthCheckRunning);
+  const wasRefreshingRef = useRef(false);
+  const [refreshStatus, setRefreshStatus] = useState("");
   // Every check that talks to Nexus Mods skips itself while logged out, so an empty
   // list then means "we couldn't run the checks", not "your loadout is healthy".
   const loggedIn = useSelector(isLoggedIn);
+
+  useEffect(() => {
+    if (isRefreshing) {
+      setRefreshStatus(t("listing::refreshing"));
+    } else if (wasRefreshingRef.current) {
+      setRefreshStatus(t("listing::refresh_complete"));
+    }
+    wasRefreshingRef.current = isRefreshing;
+  }, [isRefreshing, t]);
 
   // selectListedEntries / collectInstallAllItems read the slices above from the live
   // state; those slices fully determine their results. exhaustive-deps can't see the
@@ -164,6 +191,7 @@ const HealthCheckPage = ({ api, onRefresh, active, registerReset }: IHealthCheck
         label: t("common:::refresh"),
         iconPath: mdiRefresh,
         isLoading: isRefreshing,
+        testId: "health-check-refresh",
         onClick: () => onRefresh?.(),
       },
       {
@@ -223,7 +251,7 @@ const HealthCheckPage = ({ api, onRefresh, active, registerReset }: IHealthCheck
         api={api}
         content={selected.content}
         entry={selected.entry}
-        onBack={() => setSelected(null)}
+        onBack={closeDetailAndRestoreFocus}
       />
     );
   }
@@ -237,15 +265,21 @@ const HealthCheckPage = ({ api, onRefresh, active, registerReset }: IHealthCheck
     const { content, entry } = item;
 
     return (
-      <IssueProvider entry={entry} key={`${entry.checkId}:${entry.id}`}>
-        <content.ListingRow
-          api={api}
-          entry={entry}
-          isHidden={item.hidden}
-          onOpen={() => setSelected(item)}
-          onToggleHide={() => content.toggleHide?.(api, entry)}
-        />
-      </IssueProvider>
+      <div
+        id={`health-check-entry-${encodeURIComponent(`${entry.checkId}:${entry.id}`)}`}
+        key={`${entry.checkId}:${entry.id}`}
+        role="listitem"
+      >
+        <IssueProvider entry={entry}>
+          <content.ListingRow
+            api={api}
+            entry={entry}
+            isHidden={item.hidden}
+            onOpen={() => setSelected(item)}
+            onToggleHide={() => content.toggleHide?.(api, entry)}
+          />
+        </IssueProvider>
+      </div>
     );
   };
 
@@ -338,7 +372,9 @@ const HealthCheckPage = ({ api, onRefresh, active, registerReset }: IHealthCheck
 
   const activeList =
     activeCount > 0 ? (
-      <div className="space-y-2">{activeItems.map(renderRow)}</div>
+      <div aria-label={t("listing::active_issues")} className="space-y-2" role="list">
+        {activeItems.map(renderRow)}
+      </div>
     ) : loggedIn ? (
       passedState
     ) : (
@@ -380,6 +416,9 @@ const HealthCheckPage = ({ api, onRefresh, active, registerReset }: IHealthCheck
         </PageHeader>
 
         <PageScroll className="space-y-6 p-6">
+          <div aria-atomic="true" aria-live="polite" className="sr-only" role="status">
+            {refreshStatus}
+          </div>
           {supportsHide ? (
             <TabProvider
               tab={selectedTab}
@@ -432,7 +471,9 @@ const HealthCheckPage = ({ api, onRefresh, active, registerReset }: IHealthCheck
 
               <TabPanel id="hidden">
                 {hiddenCount > 0 ? (
-                  <div className="space-y-2">{hiddenItems.map(renderRow)}</div>
+                  <div aria-label={t("listing::hidden_issues")} className="space-y-2" role="list">
+                    {hiddenItems.map(renderRow)}
+                  </div>
                 ) : (
                   <NoResults
                     className="py-24"

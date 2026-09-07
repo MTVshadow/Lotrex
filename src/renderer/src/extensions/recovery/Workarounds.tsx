@@ -3,7 +3,7 @@ import * as path from "path";
 import { getErrorCode, getErrorMessageOrDefault } from "@vortex/shared";
 import type PromiseBB from "bluebird";
 import * as React from "react";
-import { Button, ControlLabel, FormGroup, HelpBlock } from "react-bootstrap";
+import { Button, HelpBlock } from "react-bootstrap";
 import { withTranslation } from "react-i18next";
 import { connect } from "react-redux";
 import type * as Redux from "redux";
@@ -48,18 +48,37 @@ class Settings extends ComponentEx<IProps, {}> {
     const { t, onCreateManualBackup } = this.props;
 
     return (
-      <div className="danger-outline">
-        <div className="danger-heading">{t("Caution")}</div>
-        <form>
-          <FormGroup id="database-backups" controlId="restore-backup">
-            <ControlLabel>{t("Database backup")}</ControlLabel>
+      <div
+        aria-describedby="database-backups-help"
+        aria-labelledby="database-backups-heading"
+        className="danger-outline"
+        role="region"
+      >
+        <div className="danger-heading" id="database-backups-heading" role="heading" aria-level={2}>
+          {t("Caution")}
+        </div>
+        <form onSubmit={(event) => event.preventDefault()}>
+          <fieldset id="database-backups">
+            <legend>{t("Database backup")}</legend>
             <div className="button-container">
-              <Button onClick={this.onSelectBackup}>{t("Restore") + "..."}</Button>
+              <Button
+                aria-describedby="database-backups-help"
+                type="button"
+                onClick={this.onSelectBackup}
+              >
+                {t("Restore") + "..."}
+              </Button>
             </div>
             <div className="button-container">
-              <Button onClick={onCreateManualBackup}>{t("Create Backup")}</Button>
+              <Button
+                aria-describedby="database-backups-help"
+                type="button"
+                onClick={onCreateManualBackup}
+              >
+                {t("Create Backup")}
+              </Button>
             </div>
-            <HelpBlock>
+            <HelpBlock id="database-backups-help">
               <div>
                 {t(
                   "Vortex stores application settings as well as mod meta data and a lot " +
@@ -80,7 +99,7 @@ class Settings extends ComponentEx<IProps, {}> {
                 )}
               </div>
             </HelpBlock>
-          </FormGroup>
+          </fieldset>
         </form>
       </div>
     );

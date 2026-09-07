@@ -246,15 +246,15 @@ function LinuxSetupContent(props: IProps): JSX.Element {
   };
 
   return (
-    <Panel id="linux-setup-assistant">
+    <Panel aria-labelledby="linux-setup-heading" id="linux-setup-assistant" role="region">
       <Panel.Body>
-        <ControlLabel>{t("Linux setup assistant")}</ControlLabel>
+        <ControlLabel id="linux-setup-heading">{t("Linux setup assistant")}</ControlLabel>
         {!props.linuxSetupCompleted ? (
-          <Alert bsStyle="info">
+          <Alert aria-live="polite" bsStyle="info">
             {t("Review this configuration before your first deployment.")}
           </Alert>
         ) : null}
-        <dl>
+        <dl aria-label={t("Detected Linux configuration")}>
           <dt>{t("Steam installation")}</dt>
           <dd>{t(steamType)}</dd>
           <dt>{t("Discovered Steam libraries")}</dt>
@@ -272,25 +272,40 @@ function LinuxSetupContent(props: IProps): JSX.Element {
           <dd>{proton?.prefixPath || t("Not detected")}</dd>
         </dl>
         {discoveryProgress !== undefined ? (
-          <FormGroup>
-            <ControlLabel>{t("Discovering Linux environment")}</ControlLabel>
+          <FormGroup aria-atomic="true" aria-busy="true" aria-live="polite" role="status">
+            <ControlLabel id="linux-discovery-progress-label">
+              {t("Discovering Linux environment")}
+            </ControlLabel>
             <ProgressBar
+              aria-labelledby="linux-discovery-progress-label"
+              id="linux-discovery-progress"
               label={`${t(discoveryProgress.label)}: ${discoveryProgress.completed}/${discoveryProgress.total}`}
               max={Math.max(discoveryProgress.total, 1)}
               now={discoveryProgress.completed}
             />
-            <Button onClick={() => discoveryController.current?.abort()}>{t("Cancel")}</Button>
+            <Button
+              aria-controls="linux-discovery-progress"
+              onClick={() => discoveryController.current?.abort()}
+            >
+              {t("Cancel")}
+            </Button>
           </FormGroup>
         ) : null}
         {discoveryError !== undefined ? (
-          <Alert bsStyle="warning">
+          <Alert aria-atomic="true" aria-live="assertive" bsStyle="warning" role="alert">
             {t("Linux environment discovery failed")}: {discoveryError}{" "}
             <Button onClick={startDiscovery}>{t("Retry")}</Button>
           </Alert>
         ) : null}
         <FormGroup validationState={resolvedRuntime.error ? "error" : undefined}>
-          <ControlLabel>{t("Proton runtime")}</ControlLabel>
-          <FormControl componentClass="select" value={preferenceValue} onChange={selectRuntime}>
+          <ControlLabel htmlFor="linux-proton-runtime">{t("Proton runtime")}</ControlLabel>
+          <FormControl
+            aria-describedby={resolvedRuntime.error ? "linux-proton-runtime-error" : undefined}
+            componentClass="select"
+            id="linux-proton-runtime"
+            value={preferenceValue}
+            onChange={selectRuntime}
+          >
             <option value="auto">{t("Automatic")}</option>
             <option value="steam-selected">{t("Steam-selected")}</option>
             {runtimes.map((runtime) => (
@@ -312,7 +327,9 @@ function LinuxSetupContent(props: IProps): JSX.Element {
             ) : null}
           </FormControl>
           {resolvedRuntime.error && discoveryProgress === undefined ? (
-            <HelpBlock>{t(resolvedRuntime.error)}</HelpBlock>
+            <HelpBlock id="linux-proton-runtime-error" role="alert">
+              {t(resolvedRuntime.error)}
+            </HelpBlock>
           ) : null}
           <Button onClick={browseRuntime}>{t("Choose custom runtime")}</Button>{" "}
           <Button

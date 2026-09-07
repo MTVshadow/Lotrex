@@ -22,6 +22,10 @@
     "title": "Health Check",
     "subtitle": "Review your Loadout for any issues and learn how to resolve them if needed.",
     "last_updated": "Last updated: {{time}}",
+    "active_issues": "Active Health Check issues",
+    "hidden_issues": "Hidden Health Check issues",
+    "refreshing": "Health Check is running",
+    "refresh_complete": "Health Check finished",
     "item": {
       "title": "Additional mod file may be required for: {{modName}}",
       "description": "Missing mod: {{dependencyModName}}",
@@ -122,11 +126,13 @@
     "report": {
       "preview": "Preview privacy-safe diagnostic report",
       "copy": "Copy report",
+      "copied": "Diagnostic report copied",
       "save": "Save report",
       "save_title": "Save Linux diagnostic report",
       "save_failed": "Failed to save Linux diagnostic report"
     },
     "diagnostics": {
+      "title": "Linux diagnostic details",
       "app_id": "Steam App ID",
       "executable": "Executable",
       "steam": "Steam installation",
@@ -184,7 +190,7 @@
       "insufficient-disk-space": {
         "title": "Not enough free disk space",
         "summary": "The deployment destination does not have enough free space.",
-        "details": "Deploying to {{path}} requires {{requiredBytes}} bytes plus a safety reserve, but only {{availableBytes}} bytes are available.",
+        "details": "Deploying to {{path}} requires {{required}} plus a {{reserve}} safety reserve, but only {{available}} is available.",
         "remediation": "Free disk space, move the game to a larger filesystem, or select a link-based deployment method."
       },
       "permission-denied": {

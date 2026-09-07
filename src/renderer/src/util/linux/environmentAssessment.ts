@@ -23,6 +23,7 @@ export interface ILinuxEnvironmentIssue {
   path: string;
   remediation?: string;
   requiredBytes?: number;
+  reserveBytes?: number;
   fsType?: string;
   mountPoint?: string;
 }

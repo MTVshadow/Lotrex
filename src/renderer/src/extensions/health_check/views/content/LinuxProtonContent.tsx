@@ -63,8 +63,12 @@ const DetailView = ({ api, entry }: IDetailViewProps) => {
     () => generateLinuxIssueReport(issue, entry.severity),
     [entry.severity, issue],
   );
+  const [copyStatus, setCopyStatus] = React.useState("");
 
-  const copyReport = () => window.api.clipboard.writeText(report);
+  const copyReport = () => {
+    window.api.clipboard.writeText(report);
+    setCopyStatus(t("linux_proton::report::copied"));
+  };
   const saveReport = async () => {
     try {
       const outputPath = await api.saveFile({
@@ -79,10 +83,14 @@ const DetailView = ({ api, entry }: IDetailViewProps) => {
   };
 
   return (
-    <div className="rounded-lg border border-stroke-weak">
+    <div
+      aria-labelledby="linux-proton-detail-title"
+      className="rounded-lg border border-stroke-weak"
+      role="region"
+    >
       <div className="flex items-center gap-x-2 border-b border-stroke-weak p-4">
         <Icon className={severity.textClassName} path={severity.iconPath} />
-        <Typography className="font-semibold">
+        <Typography as="h3" className="font-semibold" id="linux-proton-detail-title">
           {t(`linux_proton::issues::${issue.reason}::title`, translationOptions)}
         </Typography>
       </div>
@@ -99,7 +107,10 @@ const DetailView = ({ api, entry }: IDetailViewProps) => {
         )}
 
         {diagnostics.length > 0 && (
-          <dl className="space-y-2 rounded-sm bg-surface-low p-4">
+          <dl
+            aria-label={t("linux_proton::diagnostics::title")}
+            className="space-y-2 rounded-sm bg-surface-low p-4"
+          >
             {diagnostics.map(([label, value]) => (
               <div className="grid grid-cols-[10rem_1fr] gap-x-3" key={label}>
                 <dt>
@@ -121,7 +132,13 @@ const DetailView = ({ api, entry }: IDetailViewProps) => {
           <summary className="cursor-pointer">
             <Typography>{t("linux_proton::report::preview")}</Typography>
           </summary>
-          <pre className="mt-4 max-h-80 overflow-auto text-sm whitespace-pre-wrap">{report}</pre>
+          <pre
+            aria-label={t("linux_proton::report::preview")}
+            className="mt-4 max-h-80 overflow-auto text-sm whitespace-pre-wrap"
+            tabIndex={0}
+          >
+            {report}
+          </pre>
           <div className="mt-4 flex gap-2">
             <Button appearance="subdued" onClick={copyReport}>
               {t("linux_proton::report::copy")}
@@ -129,6 +146,9 @@ const DetailView = ({ api, entry }: IDetailViewProps) => {
             <Button appearance="subdued" onClick={saveReport}>
               {t("linux_proton::report::save")}
             </Button>
+          </div>
+          <div aria-live="polite" className="sr-only" role="status">
+            {copyStatus}
           </div>
         </details>
       </div>

@@ -37,6 +37,7 @@ export const ListingRow = ({
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={(e: KeyboardEvent) => {
+        if (e.target !== e.currentTarget) return;
         if (["Enter", " "].includes(e.key)) {
           e.preventDefault();
           onOpen();
