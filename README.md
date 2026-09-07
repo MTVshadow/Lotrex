@@ -1,57 +1,144 @@
-<p align="center">
-  <img src=".github/assets/github_readme_title.png" alt="Vortex Mod Manager title banner"/>
-</p>
+# Lotrex
 
-<p align="center">  
-<a href="https://discord.gg/nexusmods"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
-<a href="https://twitter.com/nexussites"><img src="https://img.shields.io/badge/twitter-000000?style=for-the-badge&logo=x&logoColor=white" alt="X (formally Twitter)"></a>
-<a href="https://www.youtube.com/c/NexusModsYT"><img src="https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="YouTube"></a>
-<a href="https://www.instagram.com/nexusmodsofficial/"><img src="https://img.shields.io/badge/Instagram-E4405F?style=for-the-badge&logo=instagram&logoColor=white" alt="Instagram"></a>
-<a href="https://www.reddit.com/r/nexusmods/"><img src="https://img.shields.io/badge/Reddit-FF4500?style=for-the-badge&logo=reddit&logoColor=white" alt="Reddit"></a>
-<a href="https://www.facebook.com/nexussites/"><img src="https://img.shields.io/badge/Facebook-1877F2?style=for-the-badge&logo=facebook&logoColor=white" alt="Facebook"></a>
-</p>
+**A community-maintained, Linux-focused fork of Vortex Mod Manager.**
 
-## Introduction
+Lotrex explores a dependable and convenient Vortex experience for modded games on Linux. Its first
+priority is not adding as many features as possible: it is making core discovery, deployment,
+launching, diagnostics, and recovery behave safely and predictably across real Linux systems.
 
-Vortex is the current mod manager from Nexus Mods. It is designed to make modding your game as simple as possible for new users, while still providing enough control for more experienced veterans of the modding scene.
+> [!WARNING]
+> Lotrex is under active development. It is not yet a stable release, no end-user build is currently
+> published, and several important packaged-app and real-game tests remain incomplete. Back up game
+> saves, profiles, downloads, and staging data before testing development builds.
 
-Our approach with Vortex aims to take complex tasks such as sorting your load order or managing your mod files and automate as much of the process as possible with the goal of having you achieve a stable modded game with minimal effort. We want to help you spend less time modding and more time playing your games.
+Lotrex is an independent community project. It is **not an official Nexus Mods product** and is not
+endorsed or supported by Nexus Mods.
 
-## Features
+## Project lineage and credit
 
-- **Multi-game Support** - with mod support for over 250 different games and counting, Vortex is the most versatile mod manager available. This includes games such as [Skyrim](https://www.nexusmods.com/skyrimspecialedition), [Fallout 3](https://www.nexusmods.com/fallout3), [Fallout 4](https://www.nexusmods.com/fallout4), [Fallout: New Vegas](https://www.nexusmods.com/newvegas/), [Cyberpunk 2077](https://www.nexusmods.com/cyberpunk2077/), [Baldur's Gate 3](https://www.nexusmods.com/baldursgate3/), [Starfield](https://www.nexusmods.com/starfield/), [Stardew Valley](https://www.nexusmods.com/stardewvalley/), [Bannerlord](https://www.nexusmods.com/mountandblade2bannerlord), [Witcher 3](https://www.nexusmods.com/witcher3), [Elden Ring](https://www.nexusmods.com/eldenring), [The Sims 4](https://www.nexusmods.com/thesims4), [Monster Hunter: World](https://www.nexusmods.com/monsterhunterworld), [Oblivion](https://www.nexusmods.com/oblivion), [Palworld](https://www.nexusmods.com/palworld), [Blade & Sorcery](https://www.nexusmods.com/bladeandsorcery), [Valheim](https://www.nexusmods.com/valheim), [Hogwarts Legacy](https://www.nexusmods.com/hogwartslegacy/), [7 Days to Die](https://www.nexusmods.com/7daystodie/).
+Lotrex is maintained by [MTVshadow](https://github.com/MTVshadow) and is based on
+[Starkka15/Vortex](https://github.com/Starkka15/Vortex), which itself derives from the official
+[Nexus Mods Vortex](https://github.com/Nexus-Mods/Vortex) project.
 
-- **Close integration with Nexus Mods** - Vortex is designed to seamlessly interact with Nexus Mods, allowing you to easily find, install, and play mods from our site, learn about new files and catch the latest news.
+The full inherited Git history is intentionally preserved. Consequently, GitHub's Contributors page
+includes authors from Vortex and the base fork. Their presence records authorship of inherited work;
+it does not mean they maintain, endorse, or provide support for Lotrex.
 
-- **Modding made easy** - The built-in auto-sorting system manages your load order and helps you to resolve mod conflicts with powerful, yet easy to use plugin management features.
+## What Lotrex changes
 
-- **Mod Profiles** - Easily set up, switch between, and manage independent mod profiles, enabling you to use exactly the combination of mods that you want for a particular playthrough.
+Current development focuses on the Linux-specific layers around the existing Vortex experience:
 
-- **Modern, Easy-to-use UI** - Featuring a fully customisable interface, Vortex allows you to quickly and easily access tools and manage your games, plugins, downloads and save games.
+- Native, Flatpak, and Snap-aware Steam discovery, including external Steam libraries.
+- Proton runtime, prefix, Windows-user, and modding-tool discovery.
+- Structured launch plans for native games, Steam, Proton, Heroic, and Lutris integrations.
+- Linux filesystem checks for hardlinks, symbolic links, cross-device moves, permissions, available
+  capacity, read-only mounts, NTFS/exFAT, and network filesystems.
+- Deployment journals, interruption detection, guarded recovery, and rollback-oriented failure
+  handling.
+- Case-insensitive Windows-path collision detection on case-sensitive Linux filesystems.
+- Bounded discovery caches, cancellation, progress reporting, and scale benchmarks.
+- Linux-focused Health Check diagnostics with privacy-safe reports.
+- Ongoing keyboard and screen-reader improvements for Linux setup, diagnostics, and recovery.
 
-- **Extensions and Plugins** - Vortex is released under a GPL-3.0 License, giving our community the ability to write extensions and frameworks which can then interact with Vortex, continually adding to its functionality.
+Detailed implementation evidence, deferred checks, and future work are tracked in
+[LINUX-ROADMAP.md](./LINUX-ROADMAP.md).
 
-## Getting Started
+## Current status
 
-To get started, Vortex can be downloaded from [Nexus Mods](https://www.nexusmods.com/site/mods/1?tab=files) or from [GitHub](https://github.com/Nexus-Mods/Vortex/releases/latest). After the installer has been downloaded, just run it and follow the instructions.
+| Area                       | Current state                                                                |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| Source development         | Active                                                                       |
+| Stable end-user release    | Not available                                                                |
+| Packaged Linux builds      | Not yet published                                                            |
+| Steam and Proton discovery | Implemented; additional packaged smoke testing remains                       |
+| Heroic discovery           | Partial                                                                      |
+| Lutris discovery           | Partial; some installations require the planned read-only database provider  |
+| Linux deployment safety    | Substantial implementation; real-filesystem and interruption matrices remain |
+| Ukrainian localization     | Planned; language selector and complete translation are not implemented yet  |
+| Broad distribution support | Not claimed                                                                  |
 
-Additional information on Vortex and guides can be found in the [Vortex Wiki](https://github.com/Nexus-Mods/Vortex/wiki).
+Ubuntu and Arch-based environments are the initial development targets, but neither should be
+interpreted as fully supported until the release gates and packaged smoke matrix in the roadmap are
+complete. Other distributions and packaging formats remain expected, experimental, or unsupported
+until they have repeatable evidence.
 
-## Resources
+## No downloads yet
 
-- [Download Vortex](https://www.nexusmods.com/site/mods/1?tab=files) from Nexus Mods
-- [GitHub](https://github.com/Nexus-Mods/Vortex) for source code, issues, and pull requests.
-- [Vortex Forum](https://forums.nexusmods.com/index.php?/forum/4306-vortex-support/) or [Discord](https://discord.gg/nexusmods) for support and discussions with the community and the team.
-- [Vortex Wiki](https://github.com/Nexus-Mods/Vortex/wiki) for knowledge base, articles and troubleshooting
+There is currently no supported Lotrex installer or release artifact. The repository contains
+development source code only. Do not download an archive from GitHub's **Code** button expecting it
+to be a ready-to-run application.
 
-## Contributing
+When the first testing release is ready, it will be published on this repository's Releases page
+with:
 
-The majority of Vortex code is open-source. We are committed to a transparent development process and highly appreciate any contributions. Whether you are helping us fix bugs, proposing new features, improving our documentation or spreading the word - we would love to have you as a part of the Vortex community.
+- an explicit alpha or beta label;
+- supported and experimental environment details;
+- checksums and build information;
+- known limitations;
+- installation, update, uninstall, and rollback instructions.
 
-- Bug Report: If you see an error message or encounter an issue while using our application, please create a [bug report](https://github.com/Nexus-Mods/Vortex/issues/new?assignees=&labels=&projects=&template=bug_report.md&title=).
-- Feature Request: If you have an idea or if there is a capability that is missing and would make development easier and more robust, please submit a [feature request](https://github.com/Nexus-Mods/Vortex/issues/new?assignees=&labels=&projects=&template=feature_request.md&title=).
-- Review Extension: If you're creating a game extension and need us to review it, please submit a [review extension](https://github.com/Nexus-Mods/Vortex/issues/new?assignees=&labels=extension+%3Agear%3A&projects=&template=review-extension.yaml&title=Review%3A+Game+Name) request.
+## Development
+
+The project currently uses Node.js `24.17.0` and pnpm `11.10.0`. From a clean checkout:
+
+```bash
+corepack enable
+pnpm install
+pnpm run typecheck
+pnpm run lint
+pnpm run test
+pnpm run build
+```
+
+Some test and packaging paths are platform-specific. A successful source build alone does not prove
+that a packaged Linux application or a particular game workflow is supported.
+
+Useful Linux benchmarks are available as explicit opt-in commands:
+
+```bash
+pnpm run benchmark:linux-deployment
+pnpm run benchmark:linux-discovery
+pnpm run benchmark:linux-case-collisions
+```
+
+The deployment benchmark creates many temporary files. Review its options and ensure sufficient
+temporary storage before running large cases.
+
+## Contributing and testing
+
+Contributions are welcome, especially when they include a reproducible Linux environment, focused
+fixtures, and clear failure/recovery evidence. Before opening a change:
+
+1. Check the roadmap and existing issues.
+2. Describe the distribution, desktop session, package format, launcher, filesystem, and relevant
+   game setup.
+3. Avoid publishing access tokens, usernames, full home-directory paths, or unrelated logs.
+4. Include a safe reproduction and explain whether real game, prefix, staging, or save data is at
+   risk.
+5. Do not mark a platform or workflow supported based on a single successful run.
+
+Contributor, issue, security-reporting, and support-scope documents are still being prepared. Until
+then, treat the repository as an early development project rather than a user-support channel.
+
+## Relationship with upstream projects
+
+Lotrex keeps the base fork configured as an upstream source so inherited fixes can be reviewed and
+integrated deliberately. Linux-specific changes may differ from the direction or support policy of
+the base fork and official Vortex.
+
+For official Vortex downloads, documentation, or support, use the official Nexus Mods resources:
+
+- [Vortex source repository](https://github.com/Nexus-Mods/Vortex)
+- [Vortex on Nexus Mods](https://www.nexusmods.com/site/mods/1)
+- [Vortex documentation](https://wiki.nexusmods.com/index.php/Vortex)
+
+Please do not report Lotrex-specific defects to Nexus Mods or to the maintainers of the base fork
+unless the problem has been independently reproduced in their unmodified project.
 
 ## License
 
-This project is licensed under the [GPL-3.0](https://github.com/Nexus-Mods/Vortex/blob/master/LICENSE.md) license.
+Lotrex is distributed under the same [GNU General Public License v3.0](./LICENSE.md) used by the
+inherited project. Existing copyright, authorship, license notices, and Git history are preserved.
+
+The Lotrex name identifies this independent fork; it does not replace the copyright or authorship of
+the software from which it is derived.
