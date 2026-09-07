@@ -24,6 +24,26 @@ export class CaseCollisionError extends Error {
   }
 }
 
+export const DEFAULT_CASE_COLLISION_SCAN_LIMIT = 500_000;
+
+export interface ICaseCollisionScanOptions {
+  maxEntries?: number;
+  onProgress?: (scanned: number) => void;
+  progressInterval?: number;
+}
+
+export class CaseCollisionScanLimitError extends Error {
+  public readonly code = "ECASECOLLISIONSCANLIMIT";
+
+  constructor(
+    public readonly scanned: number,
+    public readonly limit: number,
+  ) {
+    super(`Case-collision scan exceeded its ${limit}-entry safety limit.`);
+    this.name = "CaseCollisionScanLimitError";
+  }
+}
+
 /**
  * Normalize separators and dot segments before applying locale-independent Unicode casing.
  * NFC is applied on both sides of lowercasing because mappings such as U+0130 may introduce a
@@ -39,10 +59,19 @@ export function normalizeCasePath(relPath: string): string {
  * На файлових системах Linux (ext4, btrfs, xfs) файли `Textures/icon.dds` та `textures/Icon.dds`
  * є різними файлами в різних папках, що призводить до дублювання або ігнорування грою.
  */
-export function detectCaseCollisions(items: ICaseCollisionItem[]): ICaseCollisionGroup[] {
+export function detectCaseCollisions(
+  items: Iterable<ICaseCollisionItem>,
+  options: ICaseCollisionScanOptions = {},
+): ICaseCollisionGroup[] {
   const groups = new Map<string, ICaseCollisionItem[]>();
+  const limit = options.maxEntries ?? DEFAULT_CASE_COLLISION_SCAN_LIMIT;
+  const progressInterval = options.progressInterval ?? 10_000;
+  let scanned = 0;
 
   for (const item of items) {
+    ++scanned;
+    if (scanned > limit) throw new CaseCollisionScanLimitError(scanned, limit);
+    if (scanned % progressInterval === 0) options.onProgress?.(scanned);
     if (!item.relPath) continue;
     const key = normalizeCasePath(item.relPath);
     const existing = groups.get(key);
@@ -52,6 +81,7 @@ export function detectCaseCollisions(items: ICaseCollisionItem[]): ICaseCollisio
       groups.set(key, [item]);
     }
   }
+  if (scanned % progressInterval !== 0) options.onProgress?.(scanned);
 
   const collisions: ICaseCollisionGroup[] = [];
 

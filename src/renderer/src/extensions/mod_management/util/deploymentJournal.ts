@@ -26,6 +26,7 @@ export interface IDeploymentJournalEntry {
   deploymentMethod: string;
   stagingPath: string;
   targetPaths: string[];
+  pathIdentities?: IDeploymentPathIdentity[];
   startedAt: string;
   updatedAt: string;
   fileOperations?: IDeploymentFileOperation[];
@@ -33,6 +34,13 @@ export interface IDeploymentJournalEntry {
     action: DeploymentRecoveryAction;
     resolvedAt: string;
   };
+}
+
+export interface IDeploymentPathIdentity {
+  device: number;
+  inode: number;
+  observedPath: string;
+  path: string;
 }
 
 export interface IDeploymentFileOperation {
@@ -124,6 +132,15 @@ function isValidEntry(entry: IDeploymentJournalEntry, stagingPath: string): bool
     path.resolve(entry.stagingPath) === path.resolve(stagingPath) &&
     Array.isArray(entry.targetPaths) &&
     entry.targetPaths.every((targetPath) => typeof targetPath === "string") &&
+    (entry.pathIdentities === undefined ||
+      (Array.isArray(entry.pathIdentities) &&
+        entry.pathIdentities.every(
+          (identity) =>
+            typeof identity.path === "string" &&
+            typeof identity.observedPath === "string" &&
+            typeof identity.device === "number" &&
+            typeof identity.inode === "number",
+        ))) &&
     (entry.fileOperations === undefined ||
       (Array.isArray(entry.fileOperations) &&
         entry.fileOperations.every(
@@ -141,6 +158,51 @@ function isValidEntry(entry: IDeploymentJournalEntry, stagingPath: string): bool
     typeof entry.startedAt === "string" &&
     typeof entry.updatedAt === "string"
   );
+}
+
+async function capturePathIdentity(
+  targetPath: string,
+  findExistingAncestor = true,
+): Promise<IDeploymentPathIdentity> {
+  let observedPath = path.resolve(targetPath);
+  while (true) {
+    try {
+      const stats = await fs.statAsync(observedPath);
+      return { device: stats.dev, inode: stats.ino, observedPath, path: targetPath };
+    } catch (err: unknown) {
+      if (
+        findExistingAncestor &&
+        getErrorCode(err) === "ENOENT" &&
+        observedPath !== path.dirname(observedPath)
+      ) {
+        observedPath = path.dirname(observedPath);
+        continue;
+      }
+      const unavailable = new Error(`Deployment volume is unavailable at: ${targetPath}`, {
+        cause: err,
+      });
+      unavailable["code"] = "EDEPLOYMENTVOLUMEUNAVAILABLE";
+      unavailable["path"] = targetPath;
+      throw unavailable;
+    }
+  }
+}
+
+export async function validateDeploymentPathIdentities(
+  entry: IDeploymentJournalEntry,
+): Promise<void> {
+  if (process.platform !== "linux" || entry.pathIdentities === undefined) return;
+  for (const expected of entry.pathIdentities) {
+    const actual = await capturePathIdentity(expected.observedPath, false);
+    if (actual.device !== expected.device || actual.inode !== expected.inode) {
+      const changed = new Error(
+        `Deployment volume identity changed at ${expected.path}; reconnect the original volume before recovery.`,
+      );
+      changed["code"] = "EDEPLOYMENTVOLUMECHANGED";
+      changed["path"] = expected.path;
+      throw changed;
+    }
+  }
 }
 
 function isWithinPath(parentPath: string, candidatePath: string): boolean {
@@ -233,6 +295,13 @@ export async function beginDeploymentOperation(input: {
   }
 
   const now = new Date().toISOString();
+  const targetPaths = [...new Set(input.targetPaths)].sort();
+  const pathIdentities =
+    process.platform === "linux"
+      ? await Promise.all(
+          [input.stagingPath, ...targetPaths].map((targetPath) => capturePathIdentity(targetPath)),
+        )
+      : undefined;
   return persist({
     version: DEPLOYMENT_JOURNAL_VERSION,
     operationId: randomUUID(),
@@ -243,7 +312,8 @@ export async function beginDeploymentOperation(input: {
     instanceId: input.instanceId,
     deploymentMethod: input.deploymentMethod,
     stagingPath: input.stagingPath,
-    targetPaths: [...new Set(input.targetPaths)].sort(),
+    targetPaths,
+    pathIdentities,
     startedAt: now,
     updatedAt: now,
   });
@@ -253,6 +323,7 @@ export async function advanceDeploymentOperation(
   entry: IDeploymentJournalEntry,
   phase: DeploymentOperationPhase,
 ): Promise<IDeploymentJournalEntry> {
+  await validateDeploymentPathIdentities(entry);
   const currentIndex = phaseOrder.indexOf(entry.phase);
   const nextIndex = phaseOrder.indexOf(phase);
   if (nextIndex !== currentIndex + 1) {
@@ -287,6 +358,7 @@ export async function recordPlannedFileOperations(
   if (entry.phase !== "applying") {
     throw new Error("File operations can only be recorded for an applying deployment");
   }
+  await validateDeploymentPathIdentities(entry);
 
   const invalidOperation = operations.find(
     (operation) =>
@@ -452,6 +524,7 @@ async function reconcileFileOperation(
 export async function reconcileDeploymentOperation(
   entry: IDeploymentJournalEntry,
 ): Promise<IDeploymentReconciliation> {
+  await validateDeploymentPathIdentities(entry);
   const files = await Promise.all(
     (entry.fileOperations ?? []).map((operation) => reconcileFileOperation(entry, operation)),
   );
@@ -539,6 +612,7 @@ async function rollbackFileOperation(
 export async function rollbackApplyingDeployment(
   entry: IDeploymentJournalEntry,
 ): Promise<IDeploymentJournalEntry> {
+  await validateDeploymentPathIdentities(entry);
   if (
     entry.phase !== "applying" ||
     entry.operation !== "deploy" ||
@@ -632,6 +706,7 @@ export async function completeDeploymentRecovery(
   entry: IDeploymentJournalEntry,
   action: DeploymentRecoveryAction,
 ): Promise<IDeploymentJournalEntry> {
+  await validateDeploymentPathIdentities(entry);
   const plan = buildDeploymentRecoveryPlan(entry);
   if (!plan.safe || plan.action !== action) {
     throw new Error(`Recovery action ${action} is not safe for phase ${entry.phase}`);

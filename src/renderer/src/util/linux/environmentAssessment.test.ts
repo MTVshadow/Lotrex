@@ -4,7 +4,7 @@ import * as path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { assessLinuxEnvironment } from "./environmentAssessment";
+import { assessLinuxEnvironment, assessLinuxEnvironmentAsync } from "./environmentAssessment";
 
 const temporaryDirectories: string[] = [];
 
@@ -21,6 +21,57 @@ afterEach(() => {
 });
 
 describe("environmentAssessment", () => {
+  it("reports incremental progress for every assessed path", async () => {
+    const root = temporaryDirectory();
+    const paths = ["game", "staging", "prefix", "mods"].map((name) => path.join(root, name));
+    paths.forEach((entry) => fs.mkdirSync(entry));
+    const progress: Array<{ completed: number; total: number }> = [];
+
+    await assessLinuxEnvironmentAsync(
+      {
+        deploymentPaths: [paths[3]],
+        gamePath: paths[0],
+        platform: "linux",
+        prefixPath: paths[2],
+        stagingPath: paths[1],
+      },
+      { onProgress: ({ completed, total }) => progress.push({ completed, total }) },
+    );
+
+    expect(progress).toEqual([
+      { completed: 1, total: 4 },
+      { completed: 2, total: 4 },
+      { completed: 3, total: 4 },
+      { completed: 4, total: 4 },
+    ]);
+  });
+
+  it("cancels between path probes without running the remaining work", async () => {
+    const root = temporaryDirectory();
+    const paths = ["game", "staging", "mods"].map((name) => path.join(root, name));
+    paths.forEach((entry) => fs.mkdirSync(entry));
+    const controller = new AbortController();
+    const progress: number[] = [];
+
+    await expect(
+      assessLinuxEnvironmentAsync(
+        {
+          deploymentPaths: [paths[2]],
+          gamePath: paths[0],
+          platform: "linux",
+          stagingPath: paths[1],
+        },
+        {
+          signal: controller.signal,
+          onProgress: ({ completed }) => {
+            progress.push(completed);
+            controller.abort();
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ code: "ECANCELED", name: "AbortError" });
+    expect(progress).toEqual([1]);
+  });
   it("does not run Linux checks on other platforms", () => {
     expect(
       assessLinuxEnvironment({
@@ -86,6 +137,54 @@ describe("environmentAssessment", () => {
         stagingPath,
       }),
     ).toEqual({ blocking: false, issues: [] });
+  });
+
+  it.each(["nfs", "nfs4", "cifs", "smbfs", "fuse.sshfs", "9p"])(
+    "blocks link deployment on the %s network filesystem",
+    (fsType) => {
+      const root = temporaryDirectory();
+      const gamePath = path.join(root, "game");
+      const stagingPath = path.join(root, "staging");
+      fs.mkdirSync(gamePath);
+      fs.mkdirSync(stagingPath);
+
+      const result = assessLinuxEnvironment({
+        deploymentMethodId: "hardlink_activator",
+        deploymentPaths: [gamePath],
+        gamePath,
+        mounts: [{ device: "server:/games", fsType, mountPoint: root, options: ["rw"] }],
+        platform: "linux",
+        stagingPath,
+      });
+
+      expect(result.blocking).toBe(true);
+      expect(result.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: "network-filesystem",
+            fsType,
+            severity: "error",
+          }),
+        ]),
+      );
+    },
+  );
+
+  it("warns without blocking when a network path is only being assessed", () => {
+    const root = temporaryDirectory();
+    const gamePath = path.join(root, "game");
+    fs.mkdirSync(gamePath);
+
+    const result = assessLinuxEnvironment({
+      gamePath,
+      mounts: [{ device: "server:/games", fsType: "nfs4", mountPoint: root, options: ["rw"] }],
+      platform: "linux",
+    });
+
+    expect(result.blocking).toBe(false);
+    expect(result.issues).toEqual([
+      expect.objectContaining({ code: "network-filesystem", severity: "warning" }),
+    ]);
   });
 
   it("probes symlink support and removes the probe directory", () => {

@@ -31,6 +31,20 @@ export interface IFilesystemErrorContext {
   activeMethod?: string;
 }
 
+const FATAL_DEPLOYMENT_FILESYSTEM_CODES = new Set([
+  "EIO",
+  "ENODEV",
+  "ENXIO",
+  "EREMOTEIO",
+  "EROFS",
+  "ESTALE",
+]);
+
+/** Storage-level failures must abort the whole transaction so its journal remains recoverable. */
+export function isFatalDeploymentFilesystemError(err: unknown): boolean {
+  return FATAL_DEPLOYMENT_FILESYSTEM_CODES.has(getErrorCode(err));
+}
+
 /**
  * Перетворює низькорівневі винятки файлової системи Linux (EXDEV, EACCES, EROFS, ENOSPC)
  * у структуровані помилки зі зрозумілими інструкціями щодо вирішення.

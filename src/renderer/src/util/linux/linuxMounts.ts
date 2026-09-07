@@ -22,6 +22,7 @@ export type FileSystemIssueCode =
   | "cross-device-hardlink"
   | "insufficient-disk-space"
   | "permission-denied"
+  | "network-filesystem"
   | "symlink-unavailable";
 
 export interface IFileSystemIssue {
@@ -51,6 +52,21 @@ const NON_POSIX_FS_TYPES = new Set([
   "msdos",
   "cifs",
   "smbfs",
+]);
+
+const NETWORK_FS_TYPES = new Set([
+  "9p",
+  "ceph",
+  "cifs",
+  "fuse.ceph",
+  "fuse.glusterfs",
+  "fuse.sshfs",
+  "glusterfs",
+  "nfs",
+  "nfs4",
+  "smb3",
+  "smbfs",
+  "sshfs",
 ]);
 
 /**
@@ -131,6 +147,7 @@ export function assessDirectoryFileSystem(
   targetPath: string,
   purpose: "game" | "staging" | "prefix",
   mounts: IMountEntry[] = getLinuxMounts(),
+  blockNetworkDeployment = false,
 ): IFileSystemIssue[] {
   const issues: IFileSystemIssue[] = [];
   const mount = findMountForPath(targetPath, mounts);
@@ -175,6 +192,22 @@ export function assessDirectoryFileSystem(
         fsType: mount.fsType,
         remediation:
           "Move the Proton prefix or Steam library to a native Linux filesystem such as ext4 or btrfs; Wine requires reliable POSIX permissions and symlinks.",
+      });
+    }
+
+    if (NETWORK_FS_TYPES.has(mount.fsType.toLowerCase())) {
+      issues.push({
+        code: "network-filesystem",
+        severity: blockNetworkDeployment ? "error" : "warning",
+        message: blockNetworkDeployment
+          ? `Link-based deployment is unsafe on network filesystem ${mount.fsType}: ${mount.mountPoint}`
+          : `The directory is on network filesystem ${mount.fsType}, where locking, file identity, and atomic operations may have reduced guarantees: ${mount.mountPoint}`,
+        path: targetPath,
+        mountPoint: mount.mountPoint,
+        fsType: mount.fsType,
+        remediation: blockNetworkDeployment
+          ? "Move the game and staging directories to a local Linux filesystem before deploying mods."
+          : "Use a local Linux filesystem for deployment and Proton data; keep network storage for archives or backups only.",
       });
     }
   }

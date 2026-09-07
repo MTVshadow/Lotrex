@@ -23,6 +23,103 @@ export interface ICustomProtonValidationOptions {
   untrustedRoots?: string[];
 }
 
+export interface IProtonRuntimeDiscoveryProgress {
+  completed: number;
+  directory: string;
+  total: number;
+}
+
+export interface IProtonRuntimeDiscoveryOptions {
+  onProgress?: (progress: IProtonRuntimeDiscoveryProgress) => void;
+  signal?: AbortSignal;
+}
+
+interface IRuntimeCacheEntry {
+  fingerprint: string;
+  runtimes: IProtonRuntimeOption[];
+}
+
+let runtimeCache: IRuntimeCacheEntry | undefined;
+
+function cloneRuntimes(runtimes: IProtonRuntimeOption[]): IProtonRuntimeOption[] {
+  return runtimes.map((runtime) => ({ ...runtime }));
+}
+
+function directoryFingerprint(directories: string[]): string {
+  return directories
+    .map((directory) => {
+      try {
+        const stats = fs.statSync(directory);
+        return [directory, stats.dev, stats.ino, stats.mtimeMs, stats.ctimeMs].join(":");
+      } catch {
+        return `${directory}:missing`;
+      }
+    })
+    .join("|");
+}
+
+async function directoryFingerprintAsync(directories: string[]): Promise<string> {
+  const entries = await Promise.all(
+    directories.map(async (directory) => {
+      try {
+        const stats = await fs.promises.stat(directory);
+        return [directory, stats.dev, stats.ino, stats.mtimeMs, stats.ctimeMs].join(":");
+      } catch {
+        return `${directory}:missing`;
+      }
+    }),
+  );
+  return entries.join("|");
+}
+
+function abortRuntimeDiscovery(signal?: AbortSignal): void {
+  if (signal?.aborted !== true) return;
+  const error = new Error("Proton runtime discovery was cancelled.");
+  Object.assign(error, { code: "ECANCELED" });
+  throw error;
+}
+
+function classifyRuntime(entry: string): ProtonRuntimeType {
+  if (/GE-Proton/i.test(entry)) return "ge-proton";
+  if (/experimental/i.test(entry)) return "experimental";
+  if (/proton/i.test(entry)) return "steam-selected";
+  return "custom";
+}
+
+function protonCandidateDirectories(
+  steamPath?: string,
+): Array<{ dir: string; source: "steamapps" | "compatibilitytools.d" }> {
+  const home = os.homedir();
+  const searchRoots = new Set(getLinuxSteamPaths());
+  if (steamPath) searchRoots.add(steamPath);
+  const candidates = Array.from(searchRoots).flatMap((steamRoot) => [
+    { dir: path.join(steamRoot, "steamapps", "common"), source: "steamapps" as const },
+    {
+      dir: path.join(steamRoot, "compatibilitytools.d"),
+      source: "compatibilitytools.d" as const,
+    },
+  ]);
+  candidates.push(
+    {
+      dir: path.join(home, ".local", "share", "Steam", "compatibilitytools.d"),
+      source: "compatibilitytools.d",
+    },
+    {
+      dir: path.join(
+        home,
+        ".var",
+        "app",
+        "com.valvesoftware.Steam",
+        "data",
+        "Steam",
+        "compatibilitytools.d",
+      ),
+      source: "compatibilitytools.d",
+    },
+  );
+  return Array.from(new Map(candidates.map((candidate) => [candidate.dir, candidate])).values());
+}
+
 function isWithinPath(parentPath: string, candidatePath: string): boolean {
   const relative = path.relative(path.resolve(parentPath), path.resolve(candidatePath));
   return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== "..");
@@ -116,49 +213,18 @@ export function validateCustomProtonPath(
 
 /** Discover installed Steam, Experimental, GE-Proton, and custom compatibility tools. */
 export function discoverAvailableProtonRuntimes(steamPath?: string): IProtonRuntimeOption[] {
-  const home = os.homedir();
-  const searchRoots = new Set<string>();
-
-  if (steamPath) {
-    searchRoots.add(steamPath);
-  }
-
-  for (const sPath of getLinuxSteamPaths()) {
-    searchRoots.add(sPath);
-  }
-
-  const candidateDirs: Array<{ dir: string; source: "steamapps" | "compatibilitytools.d" }> = [];
-
-  for (const sRoot of searchRoots) {
-    candidateDirs.push(
-      { dir: path.join(sRoot, "steamapps", "common"), source: "steamapps" },
-      { dir: path.join(sRoot, "compatibilitytools.d"), source: "compatibilitytools.d" },
-    );
-  }
-
-  candidateDirs.push(
-    {
-      dir: path.join(home, ".local", "share", "Steam", "compatibilitytools.d"),
-      source: "compatibilitytools.d",
-    },
-    {
-      dir: path.join(
-        home,
-        ".var",
-        "app",
-        "com.valvesoftware.Steam",
-        "data",
-        "Steam",
-        "compatibilitytools.d",
-      ),
-      source: "compatibilitytools.d",
-    },
+  const deduplicatedCandidateDirs = protonCandidateDirectories(steamPath);
+  const fingerprint = directoryFingerprint(
+    deduplicatedCandidateDirs.map((candidate) => candidate.dir),
   );
+  if (runtimeCache?.fingerprint === fingerprint) {
+    return cloneRuntimes(runtimeCache.runtimes);
+  }
 
   const seenPaths = new Set<string>();
   const runtimes: IProtonRuntimeOption[] = [];
 
-  for (const { dir, source } of candidateDirs) {
+  for (const { dir, source } of deduplicatedCandidateDirs) {
     if (!fs.existsSync(dir)) continue;
 
     try {
@@ -178,19 +244,10 @@ export function discoverAvailableProtonRuntimes(steamPath?: string): IProtonRunt
             isUsable = false;
           }
 
-          let type: ProtonRuntimeType = "custom";
-          if (/GE-Proton/i.test(entry)) {
-            type = "ge-proton";
-          } else if (/experimental/i.test(entry)) {
-            type = "experimental";
-          } else if (/proton/i.test(entry)) {
-            type = "steam-selected";
-          }
-
           runtimes.push({
             id: entry,
             name: entry,
-            type,
+            type: classifyRuntime(entry),
             path: fullPath,
             isUsable,
             source,
@@ -202,5 +259,68 @@ export function discoverAvailableProtonRuntimes(steamPath?: string): IProtonRunt
     }
   }
 
-  return runtimes;
+  runtimes.sort((left, right) => left.name.localeCompare(right.name));
+  runtimeCache = { fingerprint, runtimes };
+  return cloneRuntimes(runtimes);
+}
+
+/** Discover runtimes incrementally without blocking the renderer between search roots. */
+export async function discoverAvailableProtonRuntimesAsync(
+  steamPath?: string,
+  options: IProtonRuntimeDiscoveryOptions = {},
+): Promise<IProtonRuntimeOption[]> {
+  const candidates = protonCandidateDirectories(steamPath);
+  abortRuntimeDiscovery(options.signal);
+  const fingerprint = await directoryFingerprintAsync(candidates.map((candidate) => candidate.dir));
+  abortRuntimeDiscovery(options.signal);
+  if (runtimeCache?.fingerprint === fingerprint) return cloneRuntimes(runtimeCache.runtimes);
+
+  const seenPaths = new Set<string>();
+  const runtimes: IProtonRuntimeOption[] = [];
+  for (const [index, { dir, source }] of candidates.entries()) {
+    abortRuntimeDiscovery(options.signal);
+    try {
+      const entries = await fs.promises.readdir(dir);
+      for (const entry of entries) {
+        abortRuntimeDiscovery(options.signal);
+        const fullPath = path.join(dir, entry);
+        if (seenPaths.has(fullPath)) continue;
+        const protonBin = path.join(fullPath, "proton");
+        try {
+          await fs.promises.access(protonBin, fs.constants.F_OK);
+        } catch {
+          continue;
+        }
+        seenPaths.add(fullPath);
+        let isUsable = true;
+        try {
+          await fs.promises.access(protonBin, fs.constants.X_OK);
+        } catch {
+          isUsable = false;
+        }
+        runtimes.push({
+          id: entry,
+          isUsable,
+          name: entry,
+          path: fullPath,
+          source,
+          type: classifyRuntime(entry),
+        });
+      }
+    } catch {
+      // Optional runtime roots may be missing or inaccessible.
+    }
+    options.onProgress?.({ completed: index + 1, directory: dir, total: candidates.length });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+
+  runtimes.sort((left, right) => left.name.localeCompare(right.name));
+  abortRuntimeDiscovery(options.signal);
+  runtimeCache = { fingerprint, runtimes };
+  return cloneRuntimes(runtimes);
+}
+
+/** Clear cached runtime discovery after an explicit compatibility-tool change. */
+export function invalidateProtonRuntimeCache(): void {
+  runtimeCache = undefined;
 }

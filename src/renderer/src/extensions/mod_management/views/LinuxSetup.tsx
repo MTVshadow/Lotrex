@@ -7,6 +7,7 @@ import {
   FormGroup,
   HelpBlock,
   Panel,
+  ProgressBar,
 } from "react-bootstrap";
 import { withTranslation } from "react-i18next";
 import { connect } from "react-redux";
@@ -20,13 +21,16 @@ import type { IState } from "../../../types/IState";
 import { assessLinuxEnvironment } from "../../../util/linux/environmentAssessment";
 import { checkHardlinkCompatibility } from "../../../util/linux/linuxMounts";
 import ProtonPaths from "../../../util/linux/ProtonPaths";
-import { discoverAvailableProtonRuntimes } from "../../../util/linux/protonRuntimes";
+import {
+  discoverAvailableProtonRuntimesAsync,
+  type IProtonRuntimeOption,
+} from "../../../util/linux/protonRuntimes";
 import {
   type IProtonRuntimePreference,
   resolveProtonRuntimePreference,
 } from "../../../util/linux/protonRuntimeSelection";
 import {
-  discoverLinuxSteamLibraries,
+  discoverLinuxSteamLibrariesAsync,
   getLinuxSteamPaths,
   isValidSteamPath,
 } from "../../../util/linux/steamPaths";
@@ -75,7 +79,6 @@ interface IActionProps {
 type IProps = IBaseProps & IConnectedProps & IActionProps;
 
 function LinuxSetup(props: IProps): JSX.Element {
-  const { t } = props as IProps & { t: (key: string, options?: any) => string };
   if (
     process.platform !== "linux" ||
     props.gameId === undefined ||
@@ -84,20 +87,89 @@ function LinuxSetup(props: IProps): JSX.Element {
     return null;
   }
 
+  return <LinuxSetupContent {...props} />;
+}
+
+interface IDiscoveryProgress {
+  completed: number;
+  label: string;
+  total: number;
+}
+
+function LinuxSetupContent(props: IProps): JSX.Element {
+  const { t } = props as IProps & { t: (key: string, options?: any) => string };
+
   const proton = ProtonPaths.resolve({
     discovery: props.discovery,
     game: props.game as any,
     gameMode: props.gameId,
   });
-  const runtimes = discoverAvailableProtonRuntimes(proton?.steamPath);
+  const [runtimes, setRuntimes] = React.useState<IProtonRuntimeOption[]>([]);
+  const [steamLibraries, setSteamLibraries] = React.useState<string[]>([]);
+  const [discoveryError, setDiscoveryError] = React.useState<string>();
+  const [discoveryProgress, setDiscoveryProgress] = React.useState<IDiscoveryProgress>();
+  const discoveryController = React.useRef<AbortController>();
+  const steamInstallations = React.useMemo(() => getLinuxSteamPaths().filter(isValidSteamPath), []);
+  const startDiscovery = React.useCallback(() => {
+    discoveryController.current?.abort();
+    const controller = new AbortController();
+    discoveryController.current = controller;
+    setDiscoveryError(undefined);
+    setDiscoveryProgress({
+      completed: 0,
+      label: "Steam libraries",
+      total: steamInstallations.length,
+    });
+
+    const librariesPromise = (async () => {
+      const discovered: string[] = [];
+      for (const [index, steamPath] of steamInstallations.entries()) {
+        const libraries = await discoverLinuxSteamLibrariesAsync(steamPath, {
+          signal: controller.signal,
+        });
+        discovered.push(...libraries);
+        setDiscoveryProgress({
+          completed: index + 1,
+          label: "Steam libraries",
+          total: steamInstallations.length,
+        });
+      }
+      return Array.from(new Set(discovered));
+    })();
+    const runtimesPromise = discoverAvailableProtonRuntimesAsync(proton?.steamPath, {
+      onProgress: ({ completed, total }) =>
+        setDiscoveryProgress({ completed, label: "Proton runtimes", total }),
+      signal: controller.signal,
+    });
+
+    void Promise.all([librariesPromise, runtimesPromise])
+      .then(([libraries, discoveredRuntimes]) => {
+        if (controller.signal.aborted) return;
+        setSteamLibraries(libraries);
+        setRuntimes(discoveredRuntimes);
+      })
+      .catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== "ECANCELED") {
+          setDiscoveryError(error.message);
+        }
+      })
+      .finally(() => {
+        if (discoveryController.current === controller) {
+          discoveryController.current = undefined;
+          setDiscoveryProgress(undefined);
+        }
+      });
+  }, [proton?.steamPath, steamInstallations]);
+
+  React.useEffect(() => {
+    startDiscovery();
+    return () => discoveryController.current?.abort();
+  }, [startDiscovery]);
+
   const resolvedRuntime = resolveProtonRuntimePreference(
     props.preference,
     proton?.protonPath,
     runtimes,
-  );
-  const steamInstallations = getLinuxSteamPaths().filter(isValidSteamPath);
-  const steamLibraries = Array.from(
-    new Set(steamInstallations.flatMap(discoverLinuxSteamLibraries)),
   );
   const steamType = detectSteamInstallationType(proton?.steamPath);
   const supported = props.activators
@@ -199,6 +271,23 @@ function LinuxSetup(props: IProps): JSX.Element {
           <dt>{t("Proton prefix")}</dt>
           <dd>{proton?.prefixPath || t("Not detected")}</dd>
         </dl>
+        {discoveryProgress !== undefined ? (
+          <FormGroup>
+            <ControlLabel>{t("Discovering Linux environment")}</ControlLabel>
+            <ProgressBar
+              label={`${t(discoveryProgress.label)}: ${discoveryProgress.completed}/${discoveryProgress.total}`}
+              max={Math.max(discoveryProgress.total, 1)}
+              now={discoveryProgress.completed}
+            />
+            <Button onClick={() => discoveryController.current?.abort()}>{t("Cancel")}</Button>
+          </FormGroup>
+        ) : null}
+        {discoveryError !== undefined ? (
+          <Alert bsStyle="warning">
+            {t("Linux environment discovery failed")}: {discoveryError}{" "}
+            <Button onClick={startDiscovery}>{t("Retry")}</Button>
+          </Alert>
+        ) : null}
         <FormGroup validationState={resolvedRuntime.error ? "error" : undefined}>
           <ControlLabel>{t("Proton runtime")}</ControlLabel>
           <FormControl componentClass="select" value={preferenceValue} onChange={selectRuntime}>
@@ -222,7 +311,9 @@ function LinuxSetup(props: IProps): JSX.Element {
               </option>
             ) : null}
           </FormControl>
-          {resolvedRuntime.error ? <HelpBlock>{t(resolvedRuntime.error)}</HelpBlock> : null}
+          {resolvedRuntime.error && discoveryProgress === undefined ? (
+            <HelpBlock>{t(resolvedRuntime.error)}</HelpBlock>
+          ) : null}
           <Button onClick={browseRuntime}>{t("Choose custom runtime")}</Button>{" "}
           <Button
             disabled={effectiveRuntimePath === undefined}

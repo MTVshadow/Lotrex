@@ -14,9 +14,14 @@ import type { IState } from "../../types/IState";
 import { getGame, UserCanceled } from "../../util/api";
 import * as fs from "../../util/fs";
 import type { Normalize } from "../../util/getNormalizeFunc";
-import { CaseCollisionError, detectCaseCollisions } from "../../util/linux/caseCollisions";
+import {
+  CaseCollisionError,
+  detectCaseCollisions,
+  type ICaseCollisionItem,
+} from "../../util/linux/caseCollisions";
 import {
   type IStructuredFilesystemError,
+  isFatalDeploymentFilesystemError,
   translateFilesystemError,
 } from "../../util/linux/filesystemErrors";
 import { assertLinuxPathHasNoSymlinkAncestors } from "../../util/linux/pathSafety";
@@ -226,15 +231,25 @@ abstract class LinkingActivator implements IDeploymentMethod {
     const directoryCleaning = game.directoryCleaning || "tag";
     const dirTags = directoryCleaning === "tag";
 
+    function* collisionItems(): Iterable<ICaseCollisionItem> {
+      for (const key in context.newDeployment) {
+        const entry = context.newDeployment[key];
+        yield {
+          modId: entry.source,
+          relPath: path.join(entry.target || "", entry.relPath),
+          sourcePath: path.join(installationPath, entry.source, entry.relPath),
+        };
+      }
+    }
     const caseCollisions =
       process.platform === "linux"
-        ? detectCaseCollisions(
-            Object.values(context.newDeployment).map((entry) => ({
-              modId: entry.source,
-              relPath: path.join(entry.target || "", entry.relPath),
-              sourcePath: path.join(installationPath, entry.source, entry.relPath),
-            })),
-          )
+        ? detectCaseCollisions(collisionItems(), {
+            onProgress: (scanned) => {
+              if (scanned % 10_000 === 0) {
+                log("debug", "case-collision scan progress", { scanned });
+              }
+            },
+          })
         : [];
 
     const removalOperation = (key: string, restoreBackup: boolean): IDeploymentFileOperation => {
@@ -292,6 +307,7 @@ abstract class LinkingActivator implements IDeploymentMethod {
                     link: (context.newDeployment[key] ?? context.previousDeployment[key])?.relPath,
                     error: getErrorMessageOrDefault(err),
                   });
+                  if (isFatalDeploymentFilesystemError(err)) throw err;
                   ++errorCount;
                 },
               ),
@@ -309,6 +325,7 @@ abstract class LinkingActivator implements IDeploymentMethod {
                     link: (context.newDeployment[key] ?? context.previousDeployment[key])?.relPath,
                     error: getErrorMessageOrDefault(err),
                   });
+                  if (isFatalDeploymentFilesystemError(err)) throw err;
                   ++errorCount;
                   sourceChanged.splice(idx, 1);
                 },
@@ -327,6 +344,7 @@ abstract class LinkingActivator implements IDeploymentMethod {
                     link: (context.newDeployment[key] ?? context.previousDeployment[key])?.relPath,
                     error: getErrorMessageOrDefault(err),
                   });
+                  if (isFatalDeploymentFilesystemError(err)) throw err;
                   ++errorCount;
                   contentChanged.splice(idx, 1);
                 },
@@ -347,6 +365,7 @@ abstract class LinkingActivator implements IDeploymentMethod {
                     source: context.newDeployment[key].source,
                     error: getErrorMessageOrDefault(err),
                   });
+                  if (isFatalDeploymentFilesystemError(err)) throw err;
                   if (getErrorCode(err) !== "ENOENT") {
                     // if the source file doesn't exist it must have been deleted
                     // in the mean time. That's not really our problem.
@@ -370,6 +389,7 @@ abstract class LinkingActivator implements IDeploymentMethod {
                     source: context.newDeployment[key].source,
                     error: getErrorMessageOrDefault(err),
                   });
+                  if (isFatalDeploymentFilesystemError(err)) throw err;
                   if (getErrorCode(err) !== "ENOENT") {
                     ++errorCount;
                   }

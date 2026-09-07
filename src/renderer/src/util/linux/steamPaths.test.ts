@@ -4,12 +4,18 @@ import * as path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { discoverLinuxSteamLibraries, extractSteamLibraryPaths } from "./steamPaths";
+import {
+  discoverLinuxSteamLibraries,
+  discoverLinuxSteamLibrariesAsync,
+  extractSteamLibraryPaths,
+  invalidateLinuxSteamLibraryCache,
+} from "./steamPaths";
 
 describe("extractSteamLibraryPaths", () => {
   const temporaryPaths: string[] = [];
 
   afterEach(() => {
+    invalidateLinuxSteamLibraryCache();
     temporaryPaths
       .splice(0)
       .forEach((temporaryPath) => fs.rmSync(temporaryPath, { force: true, recursive: true }));
@@ -63,5 +69,45 @@ describe("extractSteamLibraryPaths", () => {
     );
 
     expect(discoverLinuxSteamLibraries(steamPath)).toEqual([steamPath, "/tmp/Steam", "/mnt/Games"]);
+  });
+
+  it("invalidates cached libraries when the VDF metadata changes", () => {
+    const steamPath = fs.mkdtempSync(path.join(os.tmpdir(), "vortex-steam-cache-"));
+    const configPath = path.join(steamPath, "config");
+    const vdfPath = path.join(configPath, "libraryfolders.vdf");
+    temporaryPaths.push(steamPath);
+    fs.mkdirSync(configPath);
+    fs.writeFileSync(vdfPath, '"libraryfolders"\n{\n  "0"\n  {\n    "path" "/tmp/Steam"\n  }\n}');
+
+    const first = discoverLinuxSteamLibraries(steamPath);
+    first.push("mutated-by-caller");
+    expect(discoverLinuxSteamLibraries(steamPath)).toEqual([steamPath, "/tmp/Steam"]);
+
+    fs.writeFileSync(
+      vdfPath,
+      '"libraryfolders"\n{\n  "0"\n  {\n    "path" "/mnt/NewLibrary"\n  }\n}',
+    );
+    const future = new Date(Date.now() + 2_000);
+    fs.utimesSync(vdfPath, future, future);
+    expect(discoverLinuxSteamLibraries(steamPath)).toEqual([steamPath, "/mnt/NewLibrary"]);
+  });
+
+  it("supports asynchronous discovery and cancellation", async () => {
+    const steamPath = fs.mkdtempSync(path.join(os.tmpdir(), "vortex-steam-async-"));
+    const configPath = path.join(steamPath, "config");
+    temporaryPaths.push(steamPath);
+    fs.mkdirSync(configPath);
+    fs.writeFileSync(
+      path.join(configPath, "libraryfolders.vdf"),
+      '"libraryfolders"\n{\n  "0"\n  {\n    "path" "/mnt/Async"\n  }\n}',
+    );
+
+    await expect(discoverLinuxSteamLibrariesAsync(steamPath)).resolves.toEqual([
+      steamPath,
+      "/mnt/Async",
+    ]);
+    await expect(
+      discoverLinuxSteamLibrariesAsync(steamPath, { signal: AbortSignal.abort() }),
+    ).rejects.toMatchObject({ code: "ECANCELED" });
   });
 });

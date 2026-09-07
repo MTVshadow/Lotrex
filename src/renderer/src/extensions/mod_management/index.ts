@@ -31,15 +31,18 @@ import type { ITableAttribute } from "../../types/ITableAttribute";
 import type { ITestResult } from "../../types/ITestResult";
 import { nxmModOutline } from "../../ui/icon-paths";
 import { opn } from "../../util/api";
-import calculateFolderSize from "../../util/calculateFolderSize";
 import { ProcessCanceled, TemporaryError, UserCanceled } from "../../util/CustomErrors";
 import Debouncer from "../../util/Debouncer";
 import { withTrackedActivity } from "../../util/errorHandling";
+import { calculateFolderSizeCached, invalidateFolderSizeCache } from "../../util/folderSizeCache";
 import * as fs from "../../util/fs";
 import getNormalizeFunc from "../../util/getNormalizeFunc";
 import getVortexPath from "../../util/getVortexPath";
 import { laterT, type TFunction } from "../../util/i18n";
-import { assessLinuxEnvironment } from "../../util/linux/environmentAssessment";
+import {
+  assessLinuxEnvironment,
+  assessLinuxEnvironmentAsync,
+} from "../../util/linux/environmentAssessment";
 import { findLinuxSteamPath } from "../../util/linux/steamPaths";
 import { showError } from "../../util/message";
 import onceCB from "../../util/onceCB";
@@ -668,7 +671,7 @@ async function estimateCrossDeviceMoveBytes(
       .map((mod) => path.join(stagingPath, mod.installationPath));
     const mergePath = truthy(typeId) ? MERGED_PATH + "." + typeId : MERGED_PATH;
     sourcePaths.push(path.join(stagingPath, mergePath));
-    const requiredBytes = (await Promise.all(sourcePaths.map(calculateFolderSize))).reduce(
+    const requiredBytes = (await Promise.all(sourcePaths.map(calculateFolderSizeCached))).reduce(
       (sum, size) => sum + size,
       0,
     );
@@ -680,7 +683,7 @@ async function estimateCrossDeviceMoveBytes(
 }
 
 function genUpdateModDeployment(installManager: InstallManager) {
-  return (
+  return async (
     api: IExtensionApi,
     manual: boolean,
     profileId?: string,
@@ -777,14 +780,20 @@ function genUpdateModDeployment(installManager: InstallManager) {
     const deploymentPaths = Object.values(modPaths).filter(
       (entry): entry is string => typeof entry === "string" && entry.length > 0,
     );
-    const environment = assessLinuxEnvironment({
-      deploymentMethodId: activator.id,
-      deploymentPaths,
-      gamePath: gameDiscovery.path,
-      platform: process.platform,
-      stagingPath,
-      steamPath: process.platform === "linux" ? findLinuxSteamPath() : undefined,
-    });
+    const environment = await assessLinuxEnvironmentAsync(
+      {
+        deploymentMethodId: activator.id,
+        deploymentPaths,
+        gamePath: gameDiscovery.path,
+        platform: process.platform,
+        stagingPath,
+        steamPath: process.platform === "linux" ? findLinuxSteamPath() : undefined,
+      },
+      {
+        onProgress: ({ completed, total }) =>
+          progress(t("Assessing Linux environment"), Math.floor((completed * 4) / total)),
+      },
+    );
     if (environment.blocking) {
       const issue = environment.issues.find((candidate) => candidate.severity === "error");
       api.showErrorNotification(
@@ -937,6 +946,10 @@ function genUpdateModDeployment(installManager: InstallManager) {
                     modPaths,
                     lastDeployment,
                   );
+                  for (const typeId of deployableModTypes(modPaths)) {
+                    const mergePath = truthy(typeId) ? MERGED_PATH + "." + typeId : MERGED_PATH;
+                    invalidateFolderSizeCache(path.join(stagingPath, mergePath));
+                  }
 
                   const requiredBytesByDeploymentPath = await estimateCrossDeviceMoveBytes(
                     activator.id,

@@ -11,6 +11,7 @@ vi.mock("../../../util/fs", () => ({
   readFileAsync: (filePath: string) => fs.readFile(filePath),
   readlinkAsync: (filePath: string) => fs.readlink(filePath),
   renameAsync: (sourcePath: string, targetPath: string) => fs.rename(sourcePath, targetPath),
+  statAsync: (filePath: string) => fs.stat(filePath),
   symlinkAsync: (sourcePath: string, targetPath: string) => fs.symlink(sourcePath, targetPath),
   unlinkAsync: (filePath: string) => fs.unlink(filePath),
 }));
@@ -31,6 +32,7 @@ import {
   reconcileDeploymentOperation,
   recordPlannedFileOperations,
   rollbackApplyingDeployment,
+  validateDeploymentPathIdentities,
 } from "./deploymentJournal";
 
 const temporaryDirectories: string[] = [];
@@ -42,7 +44,9 @@ async function temporaryDirectory(): Promise<string> {
 }
 
 afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map((dir) => fs.rm(dir, { recursive: true })));
+  await Promise.all(
+    temporaryDirectories.splice(0).map((dir) => fs.rm(dir, { force: true, recursive: true })),
+  );
 });
 
 describe("deployment journal", () => {
@@ -329,6 +333,47 @@ describe("deployment journal", () => {
     ).rejects.toMatchObject({
       code: "EDEPLOYMENTSYMLINK",
       path: path.join(targetRoot, "textures"),
+    });
+  });
+
+  it("stops when a recorded deployment volume becomes unavailable", async () => {
+    const stagingPath = await temporaryDirectory();
+    const targetRoot = await temporaryDirectory();
+    const entry = await beginDeploymentOperation({
+      operation: "deploy",
+      gameId: "skyrimse",
+      instanceId: "instance-1",
+      deploymentMethod: "hardlink_activator",
+      stagingPath,
+      targetPaths: [targetRoot],
+    });
+
+    await fs.rm(targetRoot, { recursive: true });
+
+    await expect(validateDeploymentPathIdentities(entry)).rejects.toMatchObject({
+      code: "EDEPLOYMENTVOLUMEUNAVAILABLE",
+      path: targetRoot,
+    });
+  });
+
+  it("rejects recovery when another root appears at the recorded mount path", async () => {
+    const stagingPath = await temporaryDirectory();
+    const targetRoot = await temporaryDirectory();
+    const entry = await beginDeploymentOperation({
+      operation: "deploy",
+      gameId: "skyrimse",
+      instanceId: "instance-1",
+      deploymentMethod: "hardlink_activator",
+      stagingPath,
+      targetPaths: [targetRoot],
+    });
+
+    await fs.rm(targetRoot, { recursive: true });
+    await fs.mkdir(targetRoot);
+
+    await expect(validateDeploymentPathIdentities(entry)).rejects.toMatchObject({
+      code: "EDEPLOYMENTVOLUMECHANGED",
+      path: targetRoot,
     });
   });
 

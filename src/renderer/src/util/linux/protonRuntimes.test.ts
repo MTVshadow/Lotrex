@@ -4,7 +4,12 @@ import * as path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { discoverAvailableProtonRuntimes, validateCustomProtonPath } from "./protonRuntimes";
+import {
+  discoverAvailableProtonRuntimes,
+  discoverAvailableProtonRuntimesAsync,
+  invalidateProtonRuntimeCache,
+  validateCustomProtonPath,
+} from "./protonRuntimes";
 
 describe("protonRuntimes", () => {
   const tmpDir = path.join(os.tmpdir(), "vortex-test-proton-runtimes-" + Date.now());
@@ -14,6 +19,7 @@ describe("protonRuntimes", () => {
   });
 
   afterEach(() => {
+    invalidateProtonRuntimeCache();
     fs.rmSync(tmpDir, { force: true, recursive: true });
   });
 
@@ -116,5 +122,42 @@ describe("protonRuntimes", () => {
     expect(discoverAvailableProtonRuntimes(steamRoot)).toContainEqual(
       expect.objectContaining({ isUsable: false, name: "Proton Broken" }),
     );
+  });
+
+  it("invalidates cached discovery when a runtime directory changes", () => {
+    const steamRoot = path.join(tmpDir, "mock-cache-steam");
+    const commonDir = path.join(steamRoot, "steamapps", "common");
+    fs.mkdirSync(commonDir, { recursive: true });
+
+    const before = discoverAvailableProtonRuntimes(steamRoot);
+    expect(before.some((runtime) => runtime.name === "Proton Added Later")).toBe(false);
+
+    const runtimeDir = path.join(commonDir, "Proton Added Later");
+    fs.mkdirSync(runtimeDir);
+    fs.writeFileSync(path.join(runtimeDir, "proton"), "#!/bin/sh", { mode: 0o755 });
+    const future = new Date(Date.now() + 2_000);
+    fs.utimesSync(commonDir, future, future);
+
+    expect(discoverAvailableProtonRuntimes(steamRoot)).toContainEqual(
+      expect.objectContaining({ name: "Proton Added Later" }),
+    );
+  });
+
+  it("reports async progress and stops after cancellation", async () => {
+    const steamRoot = path.join(tmpDir, "mock-async-steam");
+    const runtimeDir = path.join(steamRoot, "steamapps", "common", "Proton Async");
+    fs.mkdirSync(runtimeDir, { recursive: true });
+    fs.writeFileSync(path.join(runtimeDir, "proton"), "#!/bin/sh", { mode: 0o755 });
+    const progress: number[] = [];
+
+    const found = await discoverAvailableProtonRuntimesAsync(steamRoot, {
+      onProgress: ({ completed }) => progress.push(completed),
+    });
+    expect(found).toContainEqual(expect.objectContaining({ name: "Proton Async" }));
+    expect(progress.length).toBeGreaterThan(0);
+
+    await expect(
+      discoverAvailableProtonRuntimesAsync(steamRoot, { signal: AbortSignal.abort() }),
+    ).rejects.toMatchObject({ code: "ECANCELED" });
   });
 });

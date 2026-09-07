@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CaseCollisionScanLimitError,
   detectCaseCollisions,
   formatCaseCollisionReport,
   normalizeCasePath,
@@ -84,6 +85,29 @@ describe("caseCollisions", () => {
 
     const collisions = detectCaseCollisions(items);
     expect(collisions.length).toBe(0);
+  });
+
+  it("scans iterables incrementally and reports bounded progress", () => {
+    const progress: number[] = [];
+    function* items() {
+      for (let index = 0; index < 10_005; index++) {
+        yield { relPath: `textures/${index}.dds` };
+      }
+    }
+
+    expect(
+      detectCaseCollisions(items(), { onProgress: (scanned) => progress.push(scanned) }),
+    ).toEqual([]);
+    expect(progress).toEqual([10_000, 10_005]);
+  });
+
+  it("rejects work above the configured memory safety limit", () => {
+    expect(() =>
+      detectCaseCollisions([{ relPath: "one" }, { relPath: "two" }, { relPath: "three" }], {
+        maxEntries: 2,
+      }),
+    ).toThrow(expect.objectContaining({ code: "ECASECOLLISIONSCANLIMIT", limit: 2, scanned: 3 }));
+    expect(CaseCollisionScanLimitError).toBeDefined();
   });
 
   it("formats human-readable diagnostic report", () => {

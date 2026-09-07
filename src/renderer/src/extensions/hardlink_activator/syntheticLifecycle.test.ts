@@ -136,10 +136,27 @@ describe("synthetic Skyrim deployment lifecycle", () => {
     );
     await expect(fs.readFile(pluginPath, "utf8")).resolves.toBe("steam-validated");
   });
+
+  it("aborts finalize when the destination becomes read-only", async () => {
+    const normalize = (value: string) => value.toLocaleLowerCase("en-US");
+    const blacklist = { has: () => false } as unknown as BlacklistSet;
+
+    await activator.prepare(dataPath, true, [], normalize);
+    await activator.activate(path.join(stagingPath, "plugin-mod"), "plugin-mod", "", blacklist);
+    activator.failNextLinkWith("EROFS");
+
+    await expect(activator.finalize("skyrimse", dataPath, stagingPath)).rejects.toMatchObject({
+      code: "EROFS",
+    });
+    await expect(fs.stat(path.join(dataPath, "Synthetic.esp"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
 });
 
 class SyntheticHardlinkDeployment extends LinkingDeployment {
   public priority = 1;
+  private mNextLinkErrorCode: string | undefined;
 
   constructor(api: IExtensionApi) {
     super("hardlink_activator", "Hardlink Deployment", "Synthetic lifecycle", true, api);
@@ -149,7 +166,16 @@ class SyntheticHardlinkDeployment extends LinkingDeployment {
     return undefined;
   }
 
+  public failNextLinkWith(code: string): void {
+    this.mNextLinkErrorCode = code;
+  }
+
   protected async linkFile(linkPath: string, sourcePath: string, dirTags?: boolean): Promise<void> {
+    if (this.mNextLinkErrorCode !== undefined) {
+      const code = this.mNextLinkErrorCode;
+      this.mNextLinkErrorCode = undefined;
+      throw Object.assign(new Error(code), { code, path: linkPath });
+    }
     await this.ensureDir(path.dirname(linkPath), dirTags);
     await fs.link(sourcePath, linkPath);
   }

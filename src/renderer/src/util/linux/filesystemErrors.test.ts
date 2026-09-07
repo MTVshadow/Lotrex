@@ -1,8 +1,22 @@
 import { describe, expect, it } from "vitest";
 
-import { translateFilesystemError } from "./filesystemErrors";
+import { isFatalDeploymentFilesystemError, translateFilesystemError } from "./filesystemErrors";
 
 describe("translateFilesystemError", () => {
+  it.each(["EROFS", "EIO", "ESTALE", "ENODEV", "ENXIO", "EREMOTEIO"])(
+    "treats %s as a transaction-fatal storage error",
+    (code) => {
+      expect(isFatalDeploymentFilesystemError(Object.assign(new Error(code), { code }))).toBe(true);
+    },
+  );
+
+  it("keeps ordinary per-file conflicts recoverable within finalize", () => {
+    expect(
+      isFatalDeploymentFilesystemError(
+        Object.assign(new Error("target changed"), { code: "EDEPLOYMENTTARGETCHANGED" }),
+      ),
+    ).toBe(false);
+  });
   it("translates EXDEV error with fallback method and settings hint", () => {
     const error = Object.assign(new Error("EXDEV: cross-device link not permitted"), {
       code: "EXDEV",

@@ -44,6 +44,18 @@ export interface ILinuxEnvironmentAssessmentResult {
   issues: ILinuxEnvironmentIssue[];
 }
 
+export interface ILinuxEnvironmentAssessmentProgress {
+  completed: number;
+  path: string;
+  purpose: LinuxEnvironmentPathPurpose;
+  total: number;
+}
+
+export interface ILinuxEnvironmentAssessmentOptions {
+  signal?: AbortSignal;
+  onProgress?: (progress: ILinuxEnvironmentAssessmentProgress) => void;
+}
+
 function uniquePaths(paths: Array<string | undefined>): string[] {
   return Array.from(new Set(paths.filter((entry): entry is string => Boolean(entry))));
 }
@@ -53,9 +65,15 @@ function addDirectoryIssues(
   targetPath: string,
   purpose: LinuxEnvironmentPathPurpose,
   mounts?: IMountEntry[],
+  blockNetworkDeployment = false,
 ): void {
   const fileSystemPurpose = purpose === "deployment" ? "game" : purpose;
-  for (const issue of assessDirectoryFileSystem(targetPath, fileSystemPurpose, mounts)) {
+  for (const issue of assessDirectoryFileSystem(
+    targetPath,
+    fileSystemPurpose,
+    mounts,
+    blockNetworkDeployment,
+  )) {
     issues.push({ ...issue, purpose });
   }
 }
@@ -90,13 +108,17 @@ export function assessLinuxEnvironment(
 
   const issues: ILinuxEnvironmentIssue[] = [];
   const deploymentPaths = uniquePaths(input.deploymentPaths ?? []);
+  const blockNetworkDeployment =
+    input.deploymentMethodId === "hardlink_activator" ||
+    input.deploymentMethodId === "move_activator" ||
+    input.deploymentMethodId?.includes("symlink") === true;
 
   if (input.gamePath) {
-    addDirectoryIssues(issues, input.gamePath, "game", input.mounts);
+    addDirectoryIssues(issues, input.gamePath, "game", input.mounts, blockNetworkDeployment);
     addFlatpakIssue(issues, input.gamePath, "game", input.steamPath);
   }
   if (input.stagingPath) {
-    addDirectoryIssues(issues, input.stagingPath, "staging", input.mounts);
+    addDirectoryIssues(issues, input.stagingPath, "staging", input.mounts, blockNetworkDeployment);
     addFlatpakIssue(issues, input.stagingPath, "staging", input.steamPath);
   }
   if (input.prefixPath) {
@@ -104,7 +126,7 @@ export function assessLinuxEnvironment(
   }
 
   for (const deploymentPath of deploymentPaths) {
-    addDirectoryIssues(issues, deploymentPath, "deployment", input.mounts);
+    addDirectoryIssues(issues, deploymentPath, "deployment", input.mounts, blockNetworkDeployment);
     addFlatpakIssue(issues, deploymentPath, "deployment", input.steamPath);
 
     const requiredBytes = input.requiredBytesByDeploymentPath?.[deploymentPath];
@@ -135,6 +157,79 @@ export function assessLinuxEnvironment(
     ).values(),
   );
 
+  return {
+    blocking: deduplicated.some((issue) => issue.severity === "error"),
+    issues: deduplicated,
+  };
+}
+
+/** Run path probes incrementally so callers can expose progress and cancel between directories. */
+export async function assessLinuxEnvironmentAsync(
+  input: ILinuxEnvironmentAssessmentInput,
+  options: ILinuxEnvironmentAssessmentOptions = {},
+): Promise<ILinuxEnvironmentAssessmentResult> {
+  if (input.platform !== "linux") return { blocking: false, issues: [] };
+
+  const tasks: Array<{
+    input: ILinuxEnvironmentAssessmentInput;
+    path: string;
+    purpose: LinuxEnvironmentPathPurpose;
+  }> = [];
+  const addTask = (
+    targetPath: string | undefined,
+    purpose: LinuxEnvironmentPathPurpose,
+    extra: Partial<ILinuxEnvironmentAssessmentInput> = {},
+  ) => {
+    if (!targetPath) return;
+    tasks.push({
+      input: {
+        deploymentMethodId: input.deploymentMethodId,
+        mounts: input.mounts,
+        platform: input.platform,
+        steamPath: input.steamPath,
+        ...extra,
+      },
+      path: targetPath,
+      purpose,
+    });
+  };
+  addTask(input.gamePath, "game", { gamePath: input.gamePath });
+  addTask(input.stagingPath, "staging", { stagingPath: input.stagingPath });
+  addTask(input.prefixPath, "prefix", { prefixPath: input.prefixPath });
+  for (const deploymentPath of uniquePaths(input.deploymentPaths ?? [])) {
+    addTask(deploymentPath, "deployment", {
+      deploymentPaths: [deploymentPath],
+      requiredBytesByDeploymentPath:
+        input.requiredBytesByDeploymentPath?.[deploymentPath] === undefined
+          ? undefined
+          : { [deploymentPath]: input.requiredBytesByDeploymentPath[deploymentPath] },
+      stagingPath: input.stagingPath,
+    });
+  }
+
+  const issues: ILinuxEnvironmentIssue[] = [];
+  for (const [index, task] of tasks.entries()) {
+    if (options.signal?.aborted) {
+      const err = new Error("Linux environment assessment was cancelled");
+      err["code"] = "ECANCELED";
+      err.name = "AbortError";
+      throw err;
+    }
+    issues.push(...assessLinuxEnvironment(task.input).issues);
+    options.onProgress?.({
+      completed: index + 1,
+      path: task.path,
+      purpose: task.purpose,
+      total: tasks.length,
+    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+
+  const deduplicated = Array.from(
+    new Map(
+      issues.map((issue) => [`${issue.code}:${issue.purpose}:${issue.path}`, issue]),
+    ).values(),
+  );
   return {
     blocking: deduplicated.some((issue) => issue.severity === "error"),
     issues: deduplicated,
