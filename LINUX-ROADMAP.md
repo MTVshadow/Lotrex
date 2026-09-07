@@ -32,18 +32,29 @@ check in the columns to its right.
 
 ## Compatibility and reliability backlog
 
-| Workstream                                                  | Implemented | Integrated | Manually verified | Automated | Blocked | Remaining acceptance work                                                                                                                                    |
-| ----------------------------------------------------------- | :---------: | :--------: | :---------------: | :-------: | :-----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Steam discovery: native, external libraries, Flatpak, Snap  |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Keep fixtures aligned with Steam VDF changes.                                                                                                                |
-| Proton prefix/user/runtime discovery and cache invalidation |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Add packaged Flatpak and Snap smoke runs.                                                                                                                    |
-| Windows modding tools in the game prefix                    |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Manually repeat xEdit, BodySlide, Nemesis/Pandora, and Creation Kit with the unified provider.                                                               |
-| Case-insensitive Windows data paths                         |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Extend fixtures with Unicode and locale-sensitive names.                                                                                                     |
-| Safe archive separator/path normalization                   |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Add more Unicode and malformed-archive corpus cases.                                                                                                         |
-| Interrupted deployment recovery                             |      —      |     —      |         —         |     —     |   ⚠️    | Requires a transaction/rollback design covering process death between backup, link, manifest write, and purge.                                               |
-| External changes and Steam validation behavior              |     ✅      |     ✅     |         —         |    ✅     |    —    | Add a Linux hardlink-specific manual matrix.                                                                                                                 |
-| NTFS/exFAT ownership and inode reliability                  |     ✅      |     ✅     |         —         |    ✅     |   ⚠️    | Detection exists; representative real mounts are required for manual validation. Vortex must not remount or edit `fstab`.                                    |
-| Available disk-space preflight                              |     ✅      |     ✅     |         —         |    ✅     |    —    | Cross-filesystem move deployment estimates active mod/merge data and enforces destination capacity plus a safety reserve; packaged filesystem smoke remains. |
-| Symlink capability probe                                    |     ✅      |     ✅     |         —         |    ✅     |    —    | A reversible destination probe blocks an incompatible selected method and feeds Health Check; packaged filesystem smoke tests remain.                        |
+| Workstream                                                  | Implemented | Integrated | Manually verified | Automated | Blocked | Remaining acceptance work                                                                                                                                                                                                         |
+| ----------------------------------------------------------- | :---------: | :--------: | :---------------: | :-------: | :-----: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Steam discovery: native, external libraries, Flatpak, Snap  |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Keep fixtures aligned with Steam VDF changes.                                                                                                                                                                                     |
+| Proton prefix/user/runtime discovery and cache invalidation |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Add packaged Flatpak and Snap smoke runs.                                                                                                                                                                                         |
+| Windows modding tools in the game prefix                    |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Manually repeat xEdit, BodySlide, Nemesis/Pandora, and Creation Kit with the unified provider.                                                                                                                                    |
+| Case-insensitive Windows data paths                         |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Extend fixtures with Unicode and locale-sensitive names.                                                                                                                                                                          |
+| Safe archive separator/path normalization                   |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Add more Unicode and malformed-archive corpus cases.                                                                                                                                                                              |
+| Interrupted deployment recovery                             |      —      |     —      |         —         |     —     |   ⚠️    | Requires a transaction/rollback design covering process death between backup, link, manifest write, and purge.                                                                                                                    |
+| External changes and Steam validation behavior              |     ✅      |     ✅     |         —         |    ✅     |    —    | Add a Linux hardlink-specific manual matrix.                                                                                                                                                                                      |
+| NTFS/exFAT ownership and inode reliability                  |     ✅      |     ✅     |         —         |    ✅     |   ⚠️    | Detection exists; representative real mounts are required for manual validation. Vortex must not remount or edit `fstab`.                                                                                                         |
+| Available disk-space preflight                              |     ✅      |     ✅     |         —         |    ✅     |    —    | Cross-filesystem move deployment estimates active mod/merge data and enforces destination capacity plus a safety reserve; packaged filesystem smoke remains.                                                                      |
+| Symlink capability probe                                    |     ✅      |     ✅     |         —         |    ✅     |    —    | A reversible destination probe blocks an incompatible selected method and feeds Health Check; packaged filesystem smoke tests remain.                                                                                             |
+| Heroic and Lutris library discovery                         |   Partial   |  Partial   |      Partial      |    ✅     |    —    | Heroic native manifests parse installed Epic/GOG entries. Lutris checks native/Flatpak XDG data and legacy config roots, but needs an in-process, read-only `pga.db` fallback for entries whose YAML contains only a store AppID. |
+
+Launcher desktop verification note: a running native Heroic client exposed two readable manifests;
+all seven installed entries parsed without errors, and one optional per-game override was applied.
+The initial Lutris check exposed that its current native YAML files live under
+`$XDG_DATA_HOME/lutris/games`, not only the legacy config root. After adding native and Flatpak data
+roots, all seven YAML files are discovered without parse errors, but only one is self-contained.
+The other six intentionally remain unresolved because their YAML stores only an AppID while runner,
+slug, and other identity fields live in `pga.db`. Do not infer a launch slug from a filename; complete
+support requires a maintained in-process SQLite reader, read-only schema handling, deduplication, and
+fixtures for database migrations. No launcher or game was invoked during this verification.
 
 ## Distribution and daily Linux UX backlog
 
@@ -155,17 +166,17 @@ after the corresponding automated or packaged evidence changes.
 | Broken and hostile symlink handling     |   Partial   |  Partial   |         —         |  Partial  |    —    | Linux journal preflight rejects lexical root escapes and any existing symlinked parent below managed staging/data roots without following broken links or loops. Deployment rechecks target ancestors immediately before backup, link, and unlink; focused utility, journal, and lifecycle tests pass. Descriptor-relative (`openat2`/equivalent) mutation or a helper process is still required to eliminate the final check-to-use race.                                                                                                                                                                                                                                                                  |
 | Network filesystem behavior             |     ✅      |     ✅     |     Deferred      |    ✅     |    —    | Environment assessment recognizes NFS/NFS4, CIFS/SMB, SSHFS, 9p, Ceph, and GlusterFS mounts. It warns about reduced locking, identity, and atomicity guarantees during general assessment and blocks hardlink, symlink, or move deployment until game and staging data are moved to a local Linux filesystem. Detection and severity tests pass; verification on representative real network mounts is intentionally deferred.                                                                                                                                                                                                                                                                              |
 | Removable-disk disconnect recovery      |   Partial   |  Partial   |     Deferred      |  Partial  |    —    | Linux deployment journals capture the device and inode identity of the staging and target roots (or their nearest existing ancestor). Every phase transition, operation-plan write, reconciliation, rollback, and recovery revalidates availability and identity; a missing root raises `EDEPLOYMENTVOLUMEUNAVAILABLE`, while replacement at the same path raises `EDEPLOYMENTVOLUMECHANGED`. Storage-level `EIO`, `ESTALE`, `ENODEV`, `ENXIO`, and `EREMOTEIO` errors now abort link finalization instead of being treated as isolated file failures. Disconnect/replacement tests pass; scan cancellation and guided resume UX remain, while real removable-media verification is intentionally deferred. |
-| Filesystem becomes read-only mid-run    |   Partial   |  Partial   |         —         |  Partial  |    —    | `EROFS` is classified as a transaction-fatal storage error. Linking deployment now rejects immediately instead of counting it as an isolated file failure, preventing orchestration from advancing to manifest write/commit and leaving the applying journal available for recovery. Error translation and synthetic finalize-abort tests pass; a full orchestration regression proving the previous manifest and journal phase on disk remains.                                                                                                                                                                                                                                                            |
+| Filesystem becomes read-only mid-run    |     ✅      |     ✅     |         —         |    ✅     |    —    | `EROFS` is a transaction-fatal storage error. The production deploy path uses one ordered journal orchestrator; a fatal apply failure cannot advance to manifest-written/committed. Synthetic finalize and orchestration regressions prove the previous manifest remains byte-identical and the durable journal remains in applying for recovery. Packaged read-only-mount verification remains.                                                                                                                                                                                                                                                                                                            |
 
 ## Performance and scale backlog
 
 | Workstream                           | Implemented | Integrated | Manually verified | Automated | Blocked | Acceptance criteria                                                                                                       |
 | ------------------------------------ | :---------: | :--------: | :---------------: | :-------: | :-----: | ------------------------------------------------------------------------------------------------------------------------- |
 | 100k–500k file deployment benchmark  |      —      |     —      |         —         |     —     |   ⚠️    | Record time, peak memory, cancellation latency, and manifest size for representative cold/warm runs.                      |
-| Case-collision scan memory budget    |   Partial   |     ✅     |         —         |    ✅     |    —    | Collision detection remains bounded and reports progress on large loadouts.                                               |
-| Cached folder-size preflight         |   Partial   |     ✅     |         —         |    ✅     |    —    | Disk estimation avoids repeated full staging scans while invalidating cache on install/remove/merge changes.              |
-| Cancellable environment assessment   |   Partial   |     ✅     |         —         |    ✅     |    —    | Long Steam-library, mount, prefix, and filesystem scans expose progress and cancel without leaving probes.                |
-| Large Steam library/prefix discovery |   Partial   |     ✅     |         —         |    ✅     |    —    | Benchmark hundreds of library entries and compatdata prefixes with a defined startup budget and cache invalidation proof. |
+| Case-collision scan memory budget    |   Partial   |     ✅     |         —         |    ✅     |    —    | Collision detection is bounded and reports a dedicated deployment-progress phase. Add representative heap profiling.      |
+| Cached folder-size preflight         |     ✅      |     ✅     |         —         |    ✅     |    —    | Disk estimation avoids repeated full staging scans while invalidating cache on install/remove/merge changes.              |
+| Cancellable environment assessment   |     ✅      |     ✅     |         —         |    ✅     |    —    | Long Steam-library, mount, prefix, and filesystem scans expose progress and cancel without leaving probes.                |
+| Large Steam library/prefix discovery |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Benchmark hundreds of library entries and compatdata prefixes with a defined startup budget and cache invalidation proof. |
 
 Benchmark verification note: the opt-in `benchmark:linux-deployment` command now performs real
 source writes and hardlink deployment in a disposable directory, validates hardlink identity on a
@@ -176,23 +187,31 @@ latency. Normal and timed-cancellation smoke runs pass. Representative 100k and 
 Case-collision memory-budget status: **Partial / Integrated / Automated**. Production scanning now
 consumes an iterable instead of allocating a second deployment-entry array, reports progress every
 10,000 entries, and rejects above a deterministic 500,000-entry ceiling with
-`ECASECOLLISIONSCANLIMIT`. Iterable progress/limit and lifecycle tests pass. User-visible progress
-and representative heap profiling are **Deferred**.
+`ECASECOLLISIONSCANLIMIT`. The production deployment progress now identifies filename-collision
+checking as its own 50–60% phase before applying files at 60–100%, and a lifecycle regression covers
+the phase-aware callback. Existing iterable progress/limit and lifecycle tests pass. The new focused
+Vitest run was **Deferred** after the runner stalled without producing a result; representative heap
+profiling also remains **Deferred**.
 
-Cached folder-size preflight status: **Partial / Integrated / Automated**. Cross-device move
+Cached folder-size preflight status: **Complete / Integrated / Automated**. Cross-device move
 estimation caches completed folder scans using device, inode, modification-time, and change-time
 fingerprints, deduplicates concurrent requests, discards failed scans, and explicitly invalidates
 merge-output after every merge. Cache reuse, fingerprint changes, subtree invalidation, concurrent
-deduplication, and failure retry tests pass. Explicit invalidation hooks for every install/remove
-event remain before this item can be closed.
+deduplication, and failure retry tests pass. Completed install, single-remove, batch-remove, and
+merge events now invalidate their game staging subtree, so stale size estimates are not reused after
+managed changes.
 
-Cancellable environment-assessment status: **Partial / Integrated / Automated**. The production
-pre-deployment gate now assesses paths incrementally, reports progress in the first 0–4% of the
-deployment activity, yields between probes, and exposes an `AbortSignal` API that stops before the
-next path with `ECANCELED`. Progress and cancellation tests pass. Passing a signal from deployment
-UI and converting Steam-library/Proton-prefix discovery into cancellable incremental scans remain.
+Cancellable environment-assessment status: **Complete / Integrated / Automated**. The production
+pre-deployment gate now assesses paths incrementally, reports dedicated 0–100% preflight progress,
+yields between probes, and exposes an `AbortSignal` API that stops before the next path with
+`ECANCELED`. Linux Setup uses cancellable incremental Steam/Proton discovery, while
+deployment preflight presents a dedicated activity notification with progress and a Cancel action.
+Cancellation completes before journal creation or deployment writes, and the activity is removed on
+success, cancellation, or error. Progress and cancellation tests pass; packaged interaction remains
+unverified.
 
-Large Steam-library/runtime discovery status: **Partial / Integrated / Automated**. Parsed
+Large Steam-library/runtime discovery status: **Complete / Integrated / Manually verified /
+Automated**. Parsed
 `libraryfolders.vdf` results are reused while its device, inode, size, modification time, and change
 time remain unchanged. Proton runtime results are reused while the metadata of every unique search
 root remains unchanged, and both caches return defensive copies and expose explicit invalidation.
@@ -201,8 +220,18 @@ stage. Async Proton discovery yields between unique search roots, reports comple
 and checks cancellation between directories and entries. Linux Setup no longer scans during render:
 it starts discovery as an effect, displays phase progress, cancels stale/unmounted work, suppresses
 transient runtime errors while scanning, and offers cancel/retry actions. Metadata-change,
-caller-mutation, progress, and cancellation tests pass. Compatdata-prefix caching, a benchmark with
-hundreds of libraries/prefixes, and packaged UI verification remain.
+caller-mutation, progress, and cancellation tests pass. Successful compatdata resolution is cached
+with device, inode, modification-time, and change-time fingerprints for the prefix, `drive_c`, and
+user-profile root, so a rebuilt Wine profile invalidates stale resolved paths automatically. Prefix
+replacement tests pass. The opt-in `benchmark:linux-discovery` command creates 250 Steam-library
+entries and 250 initialized compatdata prefixes in a disposable directory, validates cold discovery,
+warm-cache identity, fingerprint invalidation, and a configurable 5-second startup budget. The
+recorded smoke run completed library discovery in 2.28 ms cold/0.07 ms warm and prefix discovery in
+70.98 ms cold/8.56 ms warm with about 10.5 MB peak heap. Packaged UI verification is **Deferred**.
+Desktop verification against a running native Steam installation found three visible library roots
+and nine usable runtimes across Steam, Experimental, and GE-Proton. It also exposed three symlink
+aliases per runtime; search roots are now canonicalized to physical paths, and the repeated desktop
+check returns exactly nine unique runtimes. Packaged UI verification remains **Deferred**.
 
 ## Linux UX and accessibility backlog
 
@@ -303,6 +332,125 @@ mount details, selected runtime, test result, and a privacy-safe diagnostic repo
 2. Confirm no unresolved data-loss, authentication-loss, launch, packaging, or complete-suite blockers.
 3. Publish known limitations, supported environments, recovery instructions, checksums, and signatures.
 4. Promote only after rollback and real-game lifecycle evidence is attached to the release record.
+
+## Development branch: adaptive cross-distribution Linux discovery
+
+This is a separate development branch after the primary Linux-workability gate. The immediate goal
+of the project is to make Vortex dependable for its declared Linux support matrix, not to support
+every launcher, package format, distribution, or custom layout at once. Work in this branch must not
+delay fixes for deployment integrity, game launch, recovery, authentication, or data safety.
+
+Start this branch only when Gates A–C are satisfied for the first supported environment. Features
+may be developed earlier behind an experimental boundary, but they must not replace a known-good
+path or be advertised as supported without repeatable evidence.
+
+### Product objective
+
+Evolve Vortex from a collection of fixed Linux paths into an evidence-driven resource-discovery
+system. It should locate launchers, libraries, games, compatibility runtimes, prefixes, modding
+tools, staging data, downloads, and desktop integrations across Linux systems without depending on
+one distribution's default layout.
+
+“Automatic discovery” does not mean recursively scanning every mounted filesystem. Unbounded disk
+search is slow, privacy-invasive, unreliable on removable/network storage, and unsafe inside
+sandboxes. Discovery must follow bounded, explainable sources and ask the user when evidence is
+ambiguous.
+
+### Unified Linux Resource Discovery architecture
+
+| Phase | Workstream                               | Status  | Completion criteria                                                                                                                                                                                                                   |
+| ----: | ---------------------------------------- | :-----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|     1 | Common discovery result contract         |    —    | Define stable resource kind, provider, canonical path, packaging context, evidence, confidence, validation state, source timestamp, and remediation fields. Results never use translated text as identity.                            |
+|     2 | Bounded source registry                  |    —    | Providers query XDG paths, environment, launcher manifests/databases, desktop files, portals, package metadata, registered URI handlers, and explicitly approved roots. No provider performs an unbounded home/disk crawl.            |
+|     3 | Packaging and sandbox detection          | Partial | Normalize native, Flatpak, Snap, AppImage, and portable installations. Add Nix/NixOS only after its store/profile behavior has fixtures. Report sandbox visibility separately from path existence.                                    |
+|     4 | Candidate validation and confidence      |    —    | Classify results as confirmed, probable, or user-confirmation-required using executable identity, manifest ownership, directory structure, permissions, and provider agreement. A discovered executable is never trusted implicitly.  |
+|     5 | Canonicalization and deduplication       | Partial | Resolve symlink aliases, normalize equivalent paths, retain the preferred user-visible source, and merge corroborating evidence. Steam/Proton runtime physical-path deduplication is the first implemented fixture.                   |
+|     6 | Cache and invalidation                   | Partial | Cache expensive successful and negative discoveries using filesystem/configuration fingerprints, invalidate on relevant changes and explicit refresh, bound memory, and never reuse an entry after its identity changes.              |
+|     7 | Async progress, cancellation, and limits | Partial | Every potentially expensive provider reports its phase, completed/total work when known, supports cancellation/timeouts, yields to the UI, and enforces directory/entry limits. Steam/Proton discovery provides the initial pattern.  |
+|     8 | User-approved custom roots               |    —    | Settings allow additional launcher/library/tool roots with validation, clear scope, remove/reset actions, and provenance. Manual roots augment automatic discovery and are not silently rewritten.                                    |
+|     9 | Discovery diagnostics UI                 |    —    | Show what was found, provider/source, confidence, package/sandbox context, validation failure, duplicate resolution, last refresh, and a safe rescan action. Permit copying a redacted report without exposing usernames or secrets.  |
+|    10 | Provider conformance suite               |    —    | Every provider passes shared fixtures for missing/corrupt/inaccessible data, custom XDG roots, symlink aliases, cancellation, cache invalidation, duplicates, removable storage, sandbox visibility, and forward-compatible unknowns. |
+
+### Initial provider sequence
+
+1. Consolidate existing Steam library, Proton runtime, compatdata prefix, and package-type discovery
+   behind the shared contract without regressing the current launch path.
+2. Complete Heroic native/Flatpak manifest and per-game configuration discovery, including custom
+   install and prefix paths.
+3. Complete Lutris native/Flatpak discovery with a maintained in-process, read-only `pga.db` reader;
+   combine database identity with YAML runner configuration and support XDG/custom data roots.
+4. Add Wine prefix and manually installed Windows-game providers with explicit ownership and trust
+   confirmation.
+5. Add Bottles only after its supported CLI/database contract and Flatpak portal behavior are
+   documented and fixture-backed.
+6. Add modding-tool discovery (LOOT, SKSE, xEdit, BodySlide, Nemesis/Pandora and similar tools) after
+   game/prefix ownership is reliable; tools inherit a confirmed game context rather than triggering
+   a broad executable search.
+
+### Cross-distribution compatibility strategy
+
+Implement against capabilities and standards, not distribution-name conditionals. Distribution
+identity may be reported for diagnostics and test selection, but runtime decisions should prefer XDG,
+filesystem capability probes, package/sandbox metadata, portals, libc/runtime compatibility, and
+available system services.
+
+| Compatibility dimension | Required behavior                                                                                                                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Distribution families   | Ubuntu/Debian, Arch, Fedora, and openSUSE use the same discovery contracts. Distribution-specific adapters require documented evidence and must degrade safely when absent.                      |
+| Immutable systems       | Detect read-only system areas and portal/container boundaries on Fedora Atomic variants and similar systems; keep mutable state in approved XDG locations. NixOS begins as experimental.         |
+| Desktop/session         | GNOME and KDE Plasma under Wayland and X11 use portals/default-app mechanisms where available; headless or minimal sessions receive actionable fallbacks rather than assumptions about a GUI.    |
+| Package formats         | Native packages, Flatpak, Snap, AppImage, and portable builds expose a normalized packaging context and visibility limits. No format is marked supported solely because its default path exists. |
+| Runtime services        | Keyring, URI registration, file opening, process supervision, and notifications detect available implementations and expose safe fallback/error states. Do not require systemd for core logic.   |
+| Filesystems/storage     | ext4, Btrfs, XFS, NTFS/exFAT, removable, and network mounts are selected by measured capabilities and mount metadata, not by distribution defaults.                                              |
+| User configuration      | Honor `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, and `XDG_STATE_HOME`; preserve explicit user overrides and validate relocated launcher libraries/configuration.                      |
+| libc/architecture       | Record glibc/musl and CPU architecture in diagnostics/build metadata. Treat musl and non-x86_64 targets as experimental until native dependencies and packaged smoke tests pass.                 |
+
+### Verification matrix and support levels
+
+The matrix grows in tiers so broad compatibility cannot hide regressions in the primary target.
+
+| Tier         | Initial environments                                                                  | Release meaning                                                                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Primary      | Ubuntu LTS + GNOME/Wayland; Arch + KDE Plasma/Wayland                                 | Required clean install, discovery, deployment, launch, restart, update, purge, rollback, and diagnostic smoke for a stable Linux release.           |
+| Regular      | Debian stable, Fedora Workstation; representative X11 sessions                        | Required before claiming broad distribution support; failures block that environment's support label but do not silently change primary behavior.   |
+| Packaging    | Native build plus each published Flatpak/Snap/AppImage format                         | Every distributed format has its own portal, URI, keyring, filesystem visibility, update, uninstall, and rollback evidence.                         |
+| Experimental | openSUSE, Fedora Atomic variants, NixOS, musl-based distributions, non-x86_64 systems | “Expected to work” is insufficient: retain experimental status until maintainers can run and reproduce the same matrix on every advertised release. |
+
+Repository and release documentation must distinguish **Supported**, **Tested**, **Expected to
+work**, **Experimental**, and **Unsupported**. “Supported” requires a maintained owner, current
+evidence, documented limitations, and a recovery path; popularity or one successful report is not
+enough.
+
+### Cross-distribution acceptance scenarios
+
+- Discover the same Steam, Heroic, or Lutris library after relocating it through supported launcher
+  settings or XDG variables, without adding a distribution-name special case.
+- Deduplicate native/symlink/container views of the same physical resource while retaining its
+  provenance and access boundary.
+- Explain why a host-visible path is unavailable inside Flatpak/Snap and provide a minimal,
+  user-approved remediation rather than changing permissions automatically.
+- Select deployment methods from filesystem capabilities and preserve the previous deployment when
+  a mount becomes read-only, unavailable, or changes identity.
+- Launch through a structured native/Steam/Heroic/Lutris/Proton plan without shell concatenation and
+  retain equivalent behavior on GNOME/KDE and Wayland/X11.
+- Preserve settings, discovered resources, authentication state, profiles, and recovery journals
+  across restart and package update.
+- Cancel a long discovery pass promptly without leaving processes, watchers, temporary files, or
+  partially updated cache state.
+- Produce a privacy-safe diagnostic report sufficient to reproduce a distribution/package-specific
+  failure without exposing usernames, tokens, or unrelated files.
+
+### Scope guardrails
+
+- Primary Linux workability, deployment safety, and recovery always take precedence over adding a
+  new provider or distribution.
+- Do not add heuristics that happen to work on one maintainer's machine without fixtures for missing,
+  relocated, inaccessible, malformed, and duplicate resources.
+- Do not execute discovered programs, import prefixes, grant sandbox permissions, remount storage,
+  or edit system configuration without an explicit user action and exact preview.
+- Do not claim full Linux compatibility. Publish the exact tested matrix and downgrade a support
+  claim when its evidence cannot be maintained.
+- Prefer a small set of reliable providers over many partially functioning integrations.
 
 ## Future feature opportunities
 

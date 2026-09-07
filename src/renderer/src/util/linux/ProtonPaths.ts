@@ -57,6 +57,28 @@ const SYSTEM_USER_DIRS = new Set(["public", "all users", "default user", "defaul
 type LogFunction = (level: string, message: string, metadata?: any) => void;
 let customLogger: LogFunction | undefined;
 
+interface IProtonPathsCacheEntry {
+  fingerprint: string;
+  result: IProtonPaths;
+}
+
+function pathFingerprint(targetPath: string): string {
+  try {
+    const stats = fs.statSync(targetPath);
+    return [targetPath, stats.dev, stats.ino, stats.mtimeMs, stats.ctimeMs].join(":");
+  } catch {
+    return `${targetPath}:missing`;
+  }
+}
+
+function prefixFingerprint(prefixPath: string): string {
+  return [
+    pathFingerprint(prefixPath),
+    pathFingerprint(path.join(prefixPath, "drive_c")),
+    pathFingerprint(path.join(prefixPath, "drive_c", "users")),
+  ].join("|");
+}
+
 /**
  * Встановити кастомну функцію логування (наприклад, з @nexusmods/vortex-api або renderer).
  */
@@ -75,7 +97,7 @@ function internalLog(level: string, message: string, metadata?: any): void {
  */
 export class ProtonPaths {
   // Кеш успішних резолвів для уникнення повторного синхронного парсингу маніфестів
-  private static cache: Map<string, IProtonPaths> = new Map();
+  private static cache: Map<string, IProtonPathsCacheEntry> = new Map();
 
   /**
    * Очистити весь кеш або запис для конкретної гри при перевідкритті/зміні шляхів.
@@ -390,9 +412,10 @@ export class ProtonPaths {
       appId,
       prefixPath,
     ])}`;
+    const fingerprint = prefixFingerprint(prefixPath);
     const cached = this.cache.get(cacheKey);
-    if (cached !== undefined) {
-      return cached;
+    if (cached?.fingerprint === fingerprint) {
+      return cached.result;
     }
 
     // Визначаємо профіль користувача
@@ -431,7 +454,7 @@ export class ProtonPaths {
     };
 
     // Кешуємо лише успішний результат
-    this.cache.set(cacheKey, result);
+    this.cache.set(cacheKey, { fingerprint, result });
 
     internalLog("info", "ProtonPaths: successfully resolved proton prefix paths", {
       gameMode: options.gameMode,

@@ -172,7 +172,7 @@ abstract class LinkingActivator implements IDeploymentMethod {
     gameId: string,
     dataPath: string,
     installationPath: string,
-    progressCB?: (files: number, total: number) => void,
+    progressCB?: (files: number, total: number, phase?: "case-collision") => void,
   ): PromiseLike<IDeployedFile[]> {
     if (this.mContext === undefined) {
       const err = new Error("No deployment in progress");
@@ -241,10 +241,12 @@ abstract class LinkingActivator implements IDeploymentMethod {
         };
       }
     }
+    const collisionItemCount = Object.keys(context.newDeployment).length;
     const caseCollisions =
       process.platform === "linux"
         ? detectCaseCollisions(collisionItems(), {
             onProgress: (scanned) => {
+              progressCB?.(scanned, collisionItemCount, "case-collision");
               if (scanned % 10_000 === 0) {
                 log("debug", "case-collision scan progress", { scanned });
               }

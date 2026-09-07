@@ -94,6 +94,21 @@ export interface IDeploymentJournalInspection {
   reconciliation?: IDeploymentReconciliation;
 }
 
+export interface IDeploymentOperationInput {
+  deploymentMethod: string;
+  gameId: string;
+  instanceId: string;
+  operation: DeploymentOperationKind;
+  profileId?: string;
+  stagingPath: string;
+  targetPaths: string[];
+}
+
+export interface IDeploymentOperationHooks {
+  onCommitted?: () => void;
+  onManifestWritten?: () => void;
+}
+
 interface IDeploymentJournalEnvelope {
   entry: IDeploymentJournalEntry;
   checksum: string;
@@ -274,15 +289,9 @@ export async function inspectDeploymentJournal(
   }
 }
 
-export async function beginDeploymentOperation(input: {
-  operation: DeploymentOperationKind;
-  gameId: string;
-  profileId?: string;
-  instanceId: string;
-  deploymentMethod: string;
-  stagingPath: string;
-  targetPaths: string[];
-}): Promise<IDeploymentJournalEntry> {
+export async function beginDeploymentOperation(
+  input: IDeploymentOperationInput,
+): Promise<IDeploymentJournalEntry> {
   assertLinuxPathLimits([input.stagingPath, journalPath(input.stagingPath), ...input.targetPaths]);
   const previous = await readDeploymentJournal(input.stagingPath);
   if (previous !== undefined && previous.phase !== "committed") {
@@ -317,6 +326,22 @@ export async function beginDeploymentOperation(input: {
     startedAt: now,
     updatedAt: now,
   });
+}
+
+/** Keep deployment work and durable journal phases in one ordered transaction boundary. */
+export async function executeDeploymentOperation(
+  input: IDeploymentOperationInput,
+  applyAndWriteManifest: () => Promise<void>,
+  hooks: IDeploymentOperationHooks = {},
+): Promise<IDeploymentJournalEntry> {
+  let entry = await beginDeploymentOperation(input);
+  entry = await advanceDeploymentOperation(entry, "applying");
+  await applyAndWriteManifest();
+  entry = await advanceDeploymentOperation(entry, "manifest-written");
+  hooks.onManifestWritten?.();
+  entry = await advanceDeploymentOperation(entry, "committed");
+  hooks.onCommitted?.();
+  return entry;
 }
 
 export async function advanceDeploymentOperation(

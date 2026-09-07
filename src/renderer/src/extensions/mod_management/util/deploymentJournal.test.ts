@@ -26,6 +26,7 @@ import {
   buildDeploymentRecoveryPlan,
   completeDeploymentRecovery,
   DEPLOYMENT_JOURNAL_FILE,
+  executeDeploymentOperation,
   inspectDeploymentJournal,
   isIncompleteDeploymentOperation,
   readDeploymentJournal,
@@ -50,6 +51,39 @@ afterEach(async () => {
 });
 
 describe("deployment journal", () => {
+  it("preserves the previous manifest and applying journal after a read-only failure", async () => {
+    const stagingPath = await temporaryDirectory();
+    const targetPath = await temporaryDirectory();
+    const manifestPath = path.join(stagingPath, "deployment-manifest.json");
+    await fs.writeFile(manifestPath, '{"version":"previous"}');
+    const readOnlyError = Object.assign(new Error("filesystem became read-only"), {
+      code: "EROFS",
+    });
+
+    await expect(
+      executeDeploymentOperation(
+        {
+          deploymentMethod: "hardlink_activator",
+          gameId: "skyrimse",
+          instanceId: "instance-1",
+          operation: "deploy",
+          profileId: "profile-1",
+          stagingPath,
+          targetPaths: [targetPath],
+        },
+        async () => {
+          throw readOnlyError;
+        },
+      ),
+    ).rejects.toBe(readOnlyError);
+
+    await expect(fs.readFile(manifestPath, "utf8")).resolves.toBe('{"version":"previous"}');
+    await expect(readDeploymentJournal(stagingPath)).resolves.toMatchObject({
+      operation: "deploy",
+      phase: "applying",
+    });
+  });
+
   it("persists an operation id and each ordered transaction phase", async () => {
     const stagingPath = await temporaryDirectory();
     let entry = await beginDeploymentOperation({

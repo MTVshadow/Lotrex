@@ -42,6 +42,7 @@
     "e2e:report": "pnpm nx run @vortex/e2e:e2e:report",
     "generate:query-types": "pnpm tsx scripts/generate-query-types.ts",
     "benchmark:linux-deployment": "pnpm tsx scripts/benchmark-linux-deployment.ts",
+    "benchmark:linux-discovery": "pnpm tsx scripts/benchmark-linux-discovery.ts",
     "game-extension": "pnpm --filter @vortex/game-extension-test"
   },
   "lint-staged": {

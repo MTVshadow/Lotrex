@@ -152,6 +152,20 @@ describe("synthetic Skyrim deployment lifecycle", () => {
       code: "ENOENT",
     });
   });
+
+  it("reports case-collision scan progress before applying files", async () => {
+    const normalize = (value: string) => value.toLocaleLowerCase("en-US");
+    const blacklist = { has: () => false } as unknown as BlacklistSet;
+    const progress: Array<{ files: number; phase?: string; total: number }> = [];
+
+    await activator.prepare(dataPath, true, [], normalize);
+    await activator.activate(path.join(stagingPath, "plugin-mod"), "plugin-mod", "", blacklist);
+    await activator.finalize("skyrimse", dataPath, stagingPath, (files, total, phase) =>
+      progress.push({ files, phase, total }),
+    );
+
+    expect(progress).toContainEqual({ files: 1, phase: "case-collision", total: 1 });
+  });
 });
 
 class SyntheticHardlinkDeployment extends LinkingDeployment {

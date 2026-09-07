@@ -109,8 +109,10 @@ async function deployMods(
   const cb =
     progressCB === undefined
       ? undefined
-      : (files: number, total: number) =>
-          progressCB(`${files}/${total} files`, 50 + (files * 50) / total);
+      : (files: number, total: number, phase?: "case-collision") =>
+          phase === "case-collision"
+            ? progressCB("Checking filename collisions", 50 + (files * 10) / Math.max(total, 1))
+            : progressCB(`${files}/${total} files`, 60 + (files * 40) / Math.max(total, 1));
   return method.finalize(gameId, destinationPath, installationPath, cb);
 }
 

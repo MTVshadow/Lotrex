@@ -124,10 +124,9 @@ import BlacklistSet from "./util/BlacklistSet";
 import { genSubDirFunc, purgeMods, purgeModsInPath } from "./util/deploy";
 import { runDeploymentFaultPoint } from "./util/deploymentFaultInjection";
 import {
-  advanceDeploymentOperation,
-  beginDeploymentOperation,
   buildDeploymentRecoveryPlan,
   completeDeploymentRecovery,
+  executeDeploymentOperation,
   inspectDeploymentJournal,
   rollbackApplyingDeployment,
   type IDeploymentJournalInspection,
@@ -780,20 +779,57 @@ function genUpdateModDeployment(installManager: InstallManager) {
     const deploymentPaths = Object.values(modPaths).filter(
       (entry): entry is string => typeof entry === "string" && entry.length > 0,
     );
-    const environment = await assessLinuxEnvironmentAsync(
-      {
-        deploymentMethodId: activator.id,
-        deploymentPaths,
-        gamePath: gameDiscovery.path,
-        platform: process.platform,
-        stagingPath,
-        steamPath: process.platform === "linux" ? findLinuxSteamPath() : undefined,
-      },
-      {
-        onProgress: ({ completed, total }) =>
-          progress(t("Assessing Linux environment"), Math.floor((completed * 4) / total)),
-      },
-    );
+    const assessmentController = new AbortController();
+    const assessmentNotificationId = "linux-deployment-environment-assessment";
+    if (process.platform === "linux") {
+      api.sendNotification({
+        actions: [
+          {
+            action: (dismiss) => {
+              assessmentController.abort();
+              dismiss();
+            },
+            title: t("Cancel"),
+          },
+        ],
+        id: assessmentNotificationId,
+        message: t("Assessing Linux environment"),
+        progress: 0,
+        title: t("Deploying"),
+        type: "activity",
+      });
+    }
+    let environment: Awaited<ReturnType<typeof assessLinuxEnvironmentAsync>>;
+    try {
+      environment = await assessLinuxEnvironmentAsync(
+        {
+          deploymentMethodId: activator.id,
+          deploymentPaths,
+          gamePath: gameDiscovery.path,
+          platform: process.platform,
+          stagingPath,
+          steamPath: process.platform === "linux" ? findLinuxSteamPath() : undefined,
+        },
+        {
+          onProgress: ({ completed, total }) =>
+            api.store.dispatch(
+              updateNotification(
+                assessmentNotificationId,
+                Math.floor((completed * 100) / total),
+                t("Assessing Linux environment"),
+              ),
+            ),
+          signal: assessmentController.signal,
+        },
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ECANCELED") return;
+      throw error;
+    } finally {
+      if (process.platform === "linux") {
+        api.store.dispatch(dismissNotification(assessmentNotificationId));
+      }
+    }
     if (environment.blocking) {
       const issue = environment.issues.find((candidate) => candidate.severity === "error");
       api.showErrorNotification(
@@ -998,38 +1034,34 @@ function genUpdateModDeployment(installManager: InstallManager) {
                     (typeId) => !truthy(modPaths[typeId]),
                   );
                   await validateDeploymentTarget(api, undiscovered);
-                  let deploymentOperation = await beginDeploymentOperation({
-                    operation: "deploy",
-                    gameId,
-                    profileId: profile.id,
-                    instanceId: state.app.instanceId,
-                    deploymentMethod: activator.id,
-                    stagingPath,
-                    targetPaths: deployableModTypes(modPaths).map((typeId) => modPaths[typeId]),
-                  });
-                  deploymentOperation = await advanceDeploymentOperation(
-                    deploymentOperation,
-                    "applying",
+                  await executeDeploymentOperation(
+                    {
+                      deploymentMethod: activator.id,
+                      gameId,
+                      instanceId: state.app.instanceId,
+                      operation: "deploy",
+                      profileId: profile.id,
+                      stagingPath,
+                      targetPaths: deployableModTypes(modPaths).map((typeId) => modPaths[typeId]),
+                    },
+                    () =>
+                      deployAllModTypes(
+                        api,
+                        activator,
+                        profile,
+                        sortedModList,
+                        stagingPath,
+                        mergeResult,
+                        modPaths,
+                        lastDeployment,
+                        newDeployment,
+                        deployProgress,
+                      ),
+                    {
+                      onCommitted: () => runDeploymentFaultPoint("after-commit"),
+                      onManifestWritten: () => runDeploymentFaultPoint("after-manifest-write"),
+                    },
                   );
-                  await deployAllModTypes(
-                    api,
-                    activator,
-                    profile,
-                    sortedModList,
-                    stagingPath,
-                    mergeResult,
-                    modPaths,
-                    lastDeployment,
-                    newDeployment,
-                    deployProgress,
-                  );
-                  deploymentOperation = await advanceDeploymentOperation(
-                    deploymentOperation,
-                    "manifest-written",
-                  );
-                  runDeploymentFaultPoint("after-manifest-write");
-                  await advanceDeploymentOperation(deploymentOperation, "committed");
-                  runDeploymentFaultPoint("after-commit");
                 },
               ),
             );
@@ -1777,6 +1809,14 @@ function once(api: IExtensionApi) {
       return Promise.resolve();
     },
   );
+
+  const invalidateGameFolderSizes = (gameMode: string) => {
+    const stagingPath = installPathForGame(api.getState(), gameMode);
+    if (truthy(stagingPath)) invalidateFolderSizeCache(stagingPath);
+  };
+  api.events.on("did-install-mod", invalidateGameFolderSizes);
+  api.events.on("did-remove-mod", invalidateGameFolderSizes);
+  api.events.on("did-remove-mods", invalidateGameFolderSizes);
 
   api.onAsync("deploy-single-mod", onDeploySingleMod(api));
 

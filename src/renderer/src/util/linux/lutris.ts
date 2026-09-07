@@ -8,12 +8,22 @@ import type {
   IGameStoreLaunchContext,
 } from "../../types/IGameStoreEntry";
 
-export function lutrisConfigDirectories(homePath: string, xdgConfigHome?: string): string[] {
+export function lutrisConfigDirectories(
+  homePath: string,
+  xdgConfigHome?: string,
+  xdgDataHome?: string,
+): string[] {
   const nativeConfig = xdgConfigHome || path.join(homePath, ".config");
-  return [
-    path.join(nativeConfig, "lutris", "games"),
-    path.join(homePath, ".var", "app", "net.lutris.Lutris", "config", "lutris", "games"),
-  ];
+  const nativeData = xdgDataHome || path.join(homePath, ".local", "share");
+  const flatpakRoot = path.join(homePath, ".var", "app", "net.lutris.Lutris");
+  return Array.from(
+    new Set([
+      path.join(nativeData, "lutris", "games"),
+      path.join(nativeConfig, "lutris", "games"),
+      path.join(flatpakRoot, "data", "lutris", "games"),
+      path.join(flatpakRoot, "config", "lutris", "games"),
+    ]),
+  );
 }
 
 export function parseLutrisGameConfig(

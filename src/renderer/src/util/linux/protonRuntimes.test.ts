@@ -160,4 +160,27 @@ describe("protonRuntimes", () => {
       discoverAvailableProtonRuntimesAsync(steamRoot, { signal: AbortSignal.abort() }),
     ).rejects.toMatchObject({ code: "ECANCELED" });
   });
+
+  it.runIf(process.platform !== "win32")(
+    "deduplicates runtime search directories that resolve through symlink aliases",
+    async () => {
+      const steamRoot = path.join(tmpDir, "mock-alias-steam");
+      const commonDir = path.join(steamRoot, "steamapps", "common");
+      const runtimeDir = path.join(commonDir, "Proton Alias");
+      fs.mkdirSync(runtimeDir, { recursive: true });
+      fs.writeFileSync(path.join(runtimeDir, "proton"), "#!/bin/sh", { mode: 0o755 });
+      fs.symlinkSync(commonDir, path.join(steamRoot, "compatibilitytools.d"));
+
+      const syncMatches = discoverAvailableProtonRuntimes(steamRoot).filter(
+        (runtime) => runtime.name === "Proton Alias",
+      );
+      invalidateProtonRuntimeCache();
+      const asyncMatches = (await discoverAvailableProtonRuntimesAsync(steamRoot)).filter(
+        (runtime) => runtime.name === "Proton Alias",
+      );
+
+      expect(syncMatches).toHaveLength(1);
+      expect(asyncMatches).toHaveLength(1);
+    },
+  );
 });

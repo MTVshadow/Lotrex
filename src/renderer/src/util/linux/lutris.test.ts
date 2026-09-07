@@ -5,9 +5,11 @@ import { describe, expect, it } from "vitest";
 import { lutrisConfigDirectories, lutrisLaunchUrl, parseLutrisGameConfig } from "./lutris";
 
 describe("Lutris integration", () => {
-  it("checks native and Flatpak configuration directories", () => {
-    expect(lutrisConfigDirectories("/home/user", "/config")).toEqual([
+  it("checks native and Flatpak data and configuration directories", () => {
+    expect(lutrisConfigDirectories("/home/user", "/config", "/data")).toEqual([
+      "/data/lutris/games",
       "/config/lutris/games",
+      "/home/user/.var/app/net.lutris.Lutris/data/lutris/games",
       "/home/user/.var/app/net.lutris.Lutris/config/lutris/games",
     ]);
   });

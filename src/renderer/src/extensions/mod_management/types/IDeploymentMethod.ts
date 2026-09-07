@@ -220,7 +220,7 @@ export interface IDeploymentMethod {
     gameId: string,
     dataPath: string,
     installationPath: string,
-    progressCB?: (files: number, total: number) => void,
+    progressCB?: (files: number, total: number, phase?: "case-collision") => void,
   ) => PromiseLike<IDeployedFile[]>;
 
   /**

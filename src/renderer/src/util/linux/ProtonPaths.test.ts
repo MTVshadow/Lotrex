@@ -242,4 +242,25 @@ describe("ProtonPaths", () => {
     expect(second).toBeDefined();
     expect(second).not.toBe(first);
   });
+
+  it("refreshes cached profile paths when the prefix user directory changes", () => {
+    const options = {
+      gameMode: "skyrimse",
+      appId: "489830",
+      discovery: { path: gameDir, store: "steam" },
+    };
+    const first = ProtonPaths.resolve(options);
+    expect(first?.userName).toBe("steamuser");
+
+    fs.rmSync(userDir, { force: true, recursive: true });
+    const replacementUser = path.join(pfx, "drive_c", "users", "replacement");
+    fs.mkdirSync(path.join(replacementUser, "Documents", "My Games"), { recursive: true });
+    const usersDir = path.join(pfx, "drive_c", "users");
+    const future = new Date(Date.now() + 2_000);
+    fs.utimesSync(usersDir, future, future);
+
+    const refreshed = ProtonPaths.resolve(options);
+    expect(refreshed?.userName).toBe("replacement");
+    expect(refreshed).not.toBe(first);
+  });
 });

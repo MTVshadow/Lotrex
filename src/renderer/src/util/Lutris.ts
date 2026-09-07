@@ -86,6 +86,7 @@ class Lutris implements IGameStore {
     for (const configDirectory of lutrisConfigDirectories(
       os.homedir(),
       process.env.XDG_CONFIG_HOME,
+      process.env.XDG_DATA_HOME,
     )) {
       let fileNames: string[];
       try {

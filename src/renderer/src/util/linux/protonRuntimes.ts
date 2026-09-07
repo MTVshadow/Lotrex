@@ -117,7 +117,18 @@ function protonCandidateDirectories(
       source: "compatibilitytools.d",
     },
   );
-  return Array.from(new Map(candidates.map((candidate) => [candidate.dir, candidate])).values());
+  return Array.from(
+    new Map(
+      candidates.map((candidate) => {
+        try {
+          const resolvedDirectory = fs.realpathSync(candidate.dir);
+          return [resolvedDirectory, { ...candidate, dir: resolvedDirectory }] as const;
+        } catch {
+          return [candidate.dir, candidate] as const;
+        }
+      }),
+    ).values(),
+  );
 }
 
 function isWithinPath(parentPath: string, candidatePath: string): boolean {
