@@ -45,8 +45,18 @@ import {
   setProfilesVisible,
   setRelativeTimes,
 } from "./actions/interface";
-import { nativeCountryName, nativeLanguageName } from "./languagemap";
-import { buildLanguageOptions, type ILanguage, type ILanguageOption } from "./languageOptions";
+import {
+  countryExists,
+  languageExists,
+  nativeCountryName,
+  nativeLanguageName,
+} from "./languagemap";
+import {
+  buildLanguageOptions,
+  type ILanguage,
+  type ILanguageOption,
+  selectedLanguageOptionId,
+} from "./languageOptions";
 import getText from "./texts";
 
 export interface IBaseProps {
@@ -148,18 +158,18 @@ class SettingsInterfaceImpl extends ComponentEx<IProps, {}> {
 
     const startMinimizedToggle = autoStart ? (
       <Toggle checked={startMinimized} onToggle={this.toggleMinimized}>
-        {t("Start Vortex in the background (Minimized)")}
+        {t("settings_interface::automation::start_minimized")}
       </Toggle>
     ) : null;
 
     const restartNotification = needRestart ? (
       <div className="flex items-center gap-x-4 rounded-lg border border-info-weak bg-info-950 p-3">
         <Typography brand="neutral-translucent" className="grow">
-          {t("You need to restart Vortex to activate this change")}
+          {t("settings_interface::restart::required")}
         </Typography>
 
         <Button brand="neutral" onClick={this.restart}>
-          {t("Restart now")}
+          {t("settings_interface::restart::action")}
         </Button>
       </div>
     ) : null;
@@ -171,14 +181,13 @@ class SettingsInterfaceImpl extends ComponentEx<IProps, {}> {
     this.languageOptions = buildLanguageOptions(languages, t);
     // Show the current language; a language may appear under more than one option (one
     // per extension), so pick the first matching entry as the native <select> did.
-    const selectedLanguageId =
-      this.languageOptions.find((option) => option.key === currentLanguage)?.id ?? "";
+    const selectedLanguageId = selectedLanguageOptionId(this.languageOptions, currentLanguage);
 
     return (
       <form>
         <FormGroup controlId="languageSelect">
           <div className="flex flex-col items-start gap-y-2">
-            <Typography as="span">{t("Language")}</Typography>
+            <Typography as="span">{t("settings_interface::language::label")}</Typography>
 
             <Picker<string>
               options={this.languageOptions.map((option) => ({
@@ -191,18 +200,18 @@ class SettingsInterfaceImpl extends ComponentEx<IProps, {}> {
             />
 
             <Typography appearance="subdued" typographyType="body-sm">
-              {t("When you select a language for the first time you may have to restart Vortex.")}
+              {t("settings_interface::language::first_use_restart_hint")}
             </Typography>
           </div>
         </FormGroup>
 
         <FormGroup controlId="customization">
-          <ControlLabel>{t("Customisation")}</ControlLabel>
+          <ControlLabel>{t("settings_interface::sections::customization")}</ControlLabel>
 
           <div>
             <div>
               <Toggle checked={customTitlebar} onToggle={this.toggleCustomTitlebar}>
-                {t("Custom Window Title Bar")}
+                {t("settings_interface::customization::custom_titlebar")}
               </Toggle>
             </div>
 
@@ -211,15 +220,18 @@ class SettingsInterfaceImpl extends ComponentEx<IProps, {}> {
                 checked={desktopNotifications !== false}
                 onToggle={this.toggleDesktopNotifications}
               >
-                {t("Enable Desktop Notifications")}
+                {t("settings_interface::customization::desktop_notifications")}
               </Toggle>
             </div>
 
             <div>
               <Toggle checked={hideTopLevelCategory} onToggle={this.toggleHideTopLevelCategory}>
-                {t("Hide Top-Level Category")}
+                {t("settings_interface::customization::hide_top_level_category")}
 
-                <More id="more-hide-toplevel-category" name={t("Top-Level Categories")}>
+                <More
+                  id="more-hide-toplevel-category"
+                  name={t("settings_interface::customization::top_level_categories")}
+                >
                   {getText("toplevel-categories", t)}
                 </More>
               </Toggle>
@@ -227,20 +239,20 @@ class SettingsInterfaceImpl extends ComponentEx<IProps, {}> {
 
             <div>
               <Toggle checked={relativeTimes} onToggle={this.toggleRelativeTimes}>
-                {t('Use relative times (e.g. "3 months ago")')}
+                {t("settings_interface::customization::relative_times")}
               </Toggle>
             </div>
           </div>
 
           <div>
             <Toggle checked={foregroundDL} onToggle={onSetForegroundDL}>
-              {t("Bring Vortex to foreground when starting downloads in browser")}
+              {t("settings_interface::customization::foreground_browser_downloads")}
             </Toggle>
           </div>
         </FormGroup>
 
         <FormGroup controlId="advanced">
-          <ControlLabel>{t("Advanced")}</ControlLabel>
+          <ControlLabel>{t("settings_interface::sections::advanced")}</ControlLabel>
 
           <div>
             {/*
@@ -258,9 +270,13 @@ class SettingsInterfaceImpl extends ComponentEx<IProps, {}> {
             */}
             <div>
               <Toggle checked={profilesVisible} onToggle={this.toggleProfiles}>
-                {t("Enable Profile Management")}
+                {t("settings_interface::advanced::profile_management")}
 
-                <More id="more-profile-settings" name={t("Profiles")} wikiId="profiles">
+                <More
+                  id="more-profile-settings"
+                  name={t("settings_interface::advanced::profiles")}
+                  wikiId="profiles"
+                >
                   {getTextProfiles("profiles", t)}
                 </More>
               </Toggle>
@@ -268,16 +284,13 @@ class SettingsInterfaceImpl extends ComponentEx<IProps, {}> {
 
             <div>
               <Toggle checked={startup.disableGPU !== true} onToggle={this.toggleAcceleration}>
-                {t("Enable GPU Acceleration")}
+                {t("settings_interface::advanced::gpu_acceleration")}
               </Toggle>
 
               {startup.disableGPU === true ? (
                 <div className="rounded-lg border border-warning-weak bg-warning-950 p-3">
                   <Typography brand="neutral-translucent">
-                    {t(
-                      "Disabling GPU acceleration will make the Vortex UI significantly less " +
-                        "responsive in places.",
-                    )}
+                    {t("settings_interface::advanced::gpu_disabled_warning")}
                   </Typography>
                 </div>
               ) : null}
@@ -286,27 +299,30 @@ class SettingsInterfaceImpl extends ComponentEx<IProps, {}> {
         </FormGroup>
 
         <FormGroup controlId="automation">
-          <ControlLabel>{t("Automation")}</ControlLabel>
+          <ControlLabel>{t("settings_interface::sections::automation")}</ControlLabel>
 
           <div>
             <Toggle checked={autoDeployment} onToggle={this.toggleAutoDeployment}>
-              {t("Deploy Mods when Enabled")}
+              {t("settings_interface::automation::deploy_enabled_mods")}
 
-              <More id="more-deploy-settings" name={t("Deployment")}>
+              <More
+                id="more-deploy-settings"
+                name={t("settings_interface::automation::deployment")}
+              >
                 {getTextModManagement("deployment", t)}
               </More>
             </Toggle>
 
             <Toggle checked={autoInstall} onToggle={this.toggleAutoInstall}>
-              {t("Install Mods when downloaded")}
+              {t("settings_interface::automation::install_downloaded_mods")}
             </Toggle>
 
             <Toggle checked={autoEnable} onToggle={this.toggleAutoEnable}>
-              {t("Enable Mods when installed (in current profile)")}
+              {t("settings_interface::automation::enable_installed_mods")}
             </Toggle>
 
             <Toggle checked={autoStart} onToggle={this.toggleAutoStart}>
-              {t("Run Vortex when my computer starts")}
+              {t("settings_interface::automation::run_on_startup")}
             </Toggle>
 
             {startMinimizedToggle}
@@ -314,15 +330,16 @@ class SettingsInterfaceImpl extends ComponentEx<IProps, {}> {
         </FormGroup>
 
         <FormGroup controlId="notifications">
-          <ControlLabel>{t("Notifications")}</ControlLabel>
+          <ControlLabel>{t("settings_interface::sections::notifications")}</ControlLabel>
 
           <div className="flex items-center gap-x-2">
             <Button brand="neutral" onClick={this.resetSuppression}>
-              {t("Reset suppressed notifications")}
+              {t("settings_interface::notifications::reset_suppressed")}
             </Button>
 
             <Typography appearance="subdued" typographyType="body-sm">
-              {t("({{count}} notification is being suppressed)", {
+              {t("settings_interface::notifications::suppressed_count", {
+                count: numSuppressed,
                 replace: { count: numSuppressed },
               })}
             </Typography>
@@ -434,20 +451,15 @@ class SettingsInterfaceImpl extends ComponentEx<IProps, {}> {
     if (profilesVisible) {
       onShowDialog(
         "question",
-        t("Disabling Profile Management"),
+        t("settings_interface::profile_dialog::title"),
         {
-          text: t(
-            "Please be aware that toggling this only disables the interface for profiles, " +
-              "meaning profiles don't get deleted and an active profile doesn't " +
-              "get disabled. The last active profile for each game will still be used " +
-              "(i.e. its mod selection and local savegames).",
-          ),
+          text: t("settings_interface::profile_dialog::description"),
           options: { translated: true, wrap: true },
         },
         [
-          { label: "Cancel" },
+          { label: t("settings_interface::profile_dialog::cancel") },
           {
-            label: "Continue",
+            label: t("settings_interface::profile_dialog::continue"),
             action: () => onSetProfilesVisible(!profilesVisible),
           },
         ],
@@ -542,6 +554,10 @@ const SettingsInterfaceMapped = translate(["common"])(
 
 function isValidLanguageCode(langId: string) {
   if (!truthy(langId)) {
+    return false;
+  }
+  const [language, country] = langId.split("-");
+  if (!languageExists(language) || (country !== undefined && !countryExists(country))) {
     return false;
   }
   try {

@@ -14,7 +14,12 @@ import {
 } from "../../../types/IHealthCheck";
 import { log } from "../../../util/log";
 import { activeGameId } from "../../../util/selectors";
-import { clearHealthCheckResult, setHealthCheckResult } from "../actions/session";
+import {
+  clearHealthCheckResult,
+  setHealthCheckResult,
+  setHealthCheckRunning,
+  setHealthCheckScanProgress,
+} from "../actions/session";
 import type { HealthCheckId } from "../types";
 import { runPerModCheck } from "./perModRunner";
 
@@ -31,6 +36,8 @@ export class HealthCheckRegistry {
   private mRerunRequested: Set<HealthCheckId> = new Set();
   /** The pending post-collision rerun timer, so it can be cancelled on disposal/teardown. */
   private mRerunTimers: Map<HealthCheckId, ReturnType<typeof setTimeout>> = new Map();
+  private mAbortControllers: Map<HealthCheckId, AbortController> = new Map();
+  private mCanceledChecks: Set<HealthCheckId> = new Set();
 
   constructor(api: IExtensionApi) {
     this.mApi = api;
@@ -203,6 +210,8 @@ export class HealthCheckRegistry {
 
       // Abort stops the body, not just the promise this awaits.
       const abort = new AbortController();
+      this.mAbortControllers.set(checkId, abort);
+      api.store?.dispatch(setHealthCheckRunning(checkId, true));
       const timeoutPromise = new Promise<IHealthCheckResult>((_, reject) => {
         timeoutHandle = setTimeout(() => {
           timedOut = true;
@@ -232,6 +241,11 @@ export class HealthCheckRegistry {
 
       const result = await Promise.race([checkPromise, timeoutPromise]);
 
+      if (this.mCanceledChecks.delete(checkId)) {
+        log("info", "Health check canceled by user", { id: checkId });
+        return undefined;
+      }
+
       result.checkId = checkId;
       result.timestamp = new Date();
       result.executionTime = Date.now() - startTime;
@@ -253,6 +267,10 @@ export class HealthCheckRegistry {
 
       return result;
     } catch (error) {
+      if (this.mCanceledChecks.delete(checkId)) {
+        log("info", "Health check canceled by user", { id: checkId });
+        return undefined;
+      }
       const err = error as Error;
       const errorResult: IHealthCheckResult = {
         checkId,
@@ -285,6 +303,8 @@ export class HealthCheckRegistry {
       if (timeoutHandle !== undefined) {
         clearTimeout(timeoutHandle);
       }
+      this.mAbortControllers.delete(checkId);
+      api.store?.dispatch(setHealthCheckRunning(checkId, false));
       // On timeout the body runs on and releases the slot from its settle handler; any other
       // exit means it is done.
       if (!timedOut) {
@@ -319,9 +339,19 @@ export class HealthCheckRegistry {
    * for disposal/teardown, so a pending timer doesn't fire into unrelated later work.
    */
   public cancelPendingReruns(): void {
+    this.mRerunTimers.forEach((_timer, checkId) => this.mExecutionQueue.delete(checkId));
     this.mRerunTimers.forEach((timer) => clearTimeout(timer));
     this.mRerunTimers.clear();
     this.mRerunRequested.clear();
+  }
+
+  /** Abort every check in the active batch and discard coalesced reruns. */
+  public cancelActiveChecks(): void {
+    this.cancelPendingReruns();
+    this.mAbortControllers.forEach((controller, checkId) => {
+      this.mCanceledChecks.add(checkId);
+      controller.abort();
+    });
   }
 
   /**
@@ -390,11 +420,24 @@ export class HealthCheckRegistry {
       count: checks.length,
     });
 
-    const results = await Promise.all(
-      checks.map((entry) => this.runHealthCheck(entry.healthCheck.id as HealthCheckId, api)),
-    );
+    let completed = 0;
+    api.store?.dispatch(setHealthCheckScanProgress(0, checks.length));
+    try {
+      const results = await Promise.all(
+        checks.map(async (entry) => {
+          try {
+            return await this.runHealthCheck(entry.healthCheck.id as HealthCheckId, api);
+          } finally {
+            completed++;
+            api.store?.dispatch(setHealthCheckScanProgress(completed, checks.length));
+          }
+        }),
+      );
 
-    return results.filter((result): result is IHealthCheckResult => result !== undefined);
+      return results.filter((result): result is IHealthCheckResult => result !== undefined);
+    } finally {
+      api.store?.dispatch(setHealthCheckScanProgress(0, 0));
+    }
   }
 
   /**

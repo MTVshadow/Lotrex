@@ -69,6 +69,7 @@ function init(context: IExtensionContext): boolean {
     menuBadge: HealthCheckMenuBadge,
     props: () => ({
       api: context.api,
+      onCancel: () => healthCheckApi?.cancelActiveChecks(),
       onRefresh: () => healthCheckApi?.runChecksByTrigger?.(HealthCheckTrigger.Manual),
       registerReset,
     }),

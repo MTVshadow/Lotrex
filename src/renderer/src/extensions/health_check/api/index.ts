@@ -35,6 +35,7 @@ export function createHealthCheckApi(
   const { trackScanCompleted, trackScanTriggered } = createHealthCheckTracker(api);
 
   return {
+    cancelActiveChecks: () => registry.cancelActiveChecks(),
     custom: customApi,
     legacy: legacyApi,
     results: resultsApi,

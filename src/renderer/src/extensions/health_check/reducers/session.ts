@@ -9,6 +9,8 @@ export interface IHealthCheckSessionState {
   results: { [checkId: string]: IHealthCheckResult };
   /** Check IDs that are currently running */
   runningChecks: string[];
+  /** Aggregate progress for the current trigger batch. */
+  scanProgress?: { completed: number; total: number };
   /** Timestamp of the last full health check run */
   lastFullRun?: number;
 }
@@ -45,10 +47,14 @@ export const sessionReducer: IReducerSpec<IHealthCheckSessionState> = {
       }
       return state;
     }),
+    on(actions.setHealthCheckScanProgress, (state, payload) =>
+      setSafe(state, ["scanProgress"], payload.total > 0 ? payload : undefined),
+    ),
   ]),
   defaults: {
     results: {},
     runningChecks: [],
+    scanProgress: undefined,
     lastFullRun: 0,
   },
 };

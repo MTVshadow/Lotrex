@@ -1,0 +1,217 @@
+{
+  "Do you really want to delete this archive?_0": "Ви справді хочете видалити цей архів?",
+  "Do you really want to delete this archive?_1": "Ви справді хочете видалити {{ count }} архіви?",
+  "Do you really want to delete this archive?_2": "Ви справді хочете видалити {{ count }} архівів?",
+  "Do you really want to delete this archive?_plural": "Ви справді хочете видалити {{ count }} архівів?",
+  "Do you really want to remove this mod{{insert}}?_0": "Ви справді хочете видалити цей мод{{insert}}?",
+  "Do you really want to remove this mod{{insert}}?_1": "Ви справді хочете видалити {{ count }} моди{{insert}}?",
+  "Do you really want to remove this mod{{insert}}?_2": "Ви справді хочете видалити {{ count }} модів{{insert}}?",
+  "Do you really want to remove this mod{{insert}}?_plural": "Ви справді хочете видалити {{ count }} модів{{insert}}?",
+  "English": "Англійська",
+  "Enable All": "Увімкнути",
+  "Enable All_0": "Увімкнути",
+  "Enable All_1": "Увімкнути всі",
+  "Enable All_2": "Увімкнути всі",
+  "Enable All_plural": "Увімкнути всі",
+  "Install All": "Установити",
+  "Install All_0": "Установити",
+  "Install All_1": "Установити всі",
+  "Install All_2": "Установити всі",
+  "Install All_plural": "Установити всі",
+  "Language": "Мова",
+  "The mod you {{enabled}} depends on other mods, do you want to {{enable}} those as well?": "Мод, для якого ви вибрали дію «{{enabled}}», залежить від інших модів. Виконати для них дію «{{enable}}»?",
+  "The mod you {{enabled}} depends on other mods, do you want to {{enable}} those as well?_0": "Мод, для якого ви вибрали дію «{{enabled}}», залежить від інших модів. Виконати для них дію «{{enable}}»?",
+  "The mod you {{enabled}} depends on other mods, do you want to {{enable}} those as well?_1": "Моди, для яких ви вибрали дію «{{enabled}}», залежать від інших модів. Виконати для них дію «{{enable}}»?",
+  "The mod you {{enabled}} depends on other mods, do you want to {{enable}} those as well?_2": "Моди, для яких ви вибрали дію «{{enabled}}», залежать від інших модів. Виконати для них дію «{{enable}}»?",
+  "The mod you {{enabled}} depends on other mods, do you want to {{enable}} those as well?_plural": "Моди, для яких ви вибрали дію «{{enabled}}», залежать від інших модів. Виконати для них дію «{{enable}}»?",
+  "Ukrainian": "Українська",
+  "{{ count }} active mod_0": "{{ count }} активний мод",
+  "{{ count }} active mod_1": "{{ count }} активні моди",
+  "{{ count }} active mod_2": "{{ count }} активних модів",
+  "{{ count }} active mod_plural": "{{ count }} активних модів",
+  "{{ count }} comments": "{{ count }} коментар",
+  "{{ count }} comments_0": "{{ count }} коментар",
+  "{{ count }} comments_1": "{{ count }} коментарі",
+  "{{ count }} comments_2": "{{ count }} коментарів",
+  "{{ count }} comments_plural": "{{ count }} коментарів",
+  "{{ count }} day ago_0": "{{ count }} день тому",
+  "{{ count }} day ago_1": "{{ count }} дні тому",
+  "{{ count }} day ago_2": "{{ count }} днів тому",
+  "{{ count }} day ago_plural": "{{ count }} днів тому",
+  "{{ count }} download_0": "{{ count }} завантаження",
+  "{{ count }} download_1": "{{ count }} завантаження",
+  "{{ count }} download_2": "{{ count }} завантажень",
+  "{{ count }} download_plural": "{{ count }} завантажень",
+  "{{ count }} error_0": "{{ count }} помилка",
+  "{{ count }} error_1": "{{ count }} помилки",
+  "{{ count }} error_2": "{{ count }} помилок",
+  "{{ count }} error_plural": "{{ count }} помилок",
+  "{{ count }} file_0": "{{ count }} файл",
+  "{{ count }} file_1": "{{ count }} файли",
+  "{{ count }} file_2": "{{ count }} файлів",
+  "{{ count }} file_plural": "{{ count }} файлів",
+  "{{ count }} hour ago_0": "{{ count }} годину тому",
+  "{{ count }} hour ago_1": "{{ count }} години тому",
+  "{{ count }} hour ago_2": "{{ count }} годин тому",
+  "{{ count }} hour ago_plural": "{{ count }} годин тому",
+  "{{ count }} item selected_0": "Вибрано {{ count }} елемент",
+  "{{ count }} item selected_1": "Вибрано {{ count }} елементи",
+  "{{ count }} item selected_2": "Вибрано {{ count }} елементів",
+  "{{ count }} item selected_plural": "Вибрано {{ count }} елементів",
+  "{{ count }} minute ago_0": "{{ count }} хвилину тому",
+  "{{ count }} minute ago_1": "{{ count }} хвилини тому",
+  "{{ count }} minute ago_2": "{{ count }} хвилин тому",
+  "{{ count }} minute ago_plural": "{{ count }} хвилин тому",
+  "{{ count }} month ago_0": "{{ count }} місяць тому",
+  "{{ count }} month ago_1": "{{ count }} місяці тому",
+  "{{ count }} month ago_2": "{{ count }} місяців тому",
+  "{{ count }} month ago_plural": "{{ count }} місяців тому",
+  "{{ count }} notification is being suppressed_0": "Приховано {{ count }} сповіщення",
+  "{{ count }} notification is being suppressed_1": "Приховано {{ count }} сповіщення",
+  "{{ count }} notification is being suppressed_2": "Приховано {{ count }} сповіщень",
+  "{{ count }} notification is being suppressed_plural": "Приховано {{ count }} сповіщень",
+  "{{ count }} week ago_0": "{{ count }} тиждень тому",
+  "{{ count }} week ago_1": "{{ count }} тижні тому",
+  "{{ count }} week ago_2": "{{ count }} тижнів тому",
+  "{{ count }} week ago_plural": "{{ count }} тижнів тому",
+  "{{ count }} year ago_0": "{{ count }} рік тому",
+  "{{ count }} year ago_1": "{{ count }} роки тому",
+  "{{ count }} year ago_2": "{{ count }} років тому",
+  "{{ count }} year ago_plural": "{{ count }} років тому",
+  "{{ count }} extensions will be updated": "Буде оновлено {{ count }} розширення",
+  "{{ count }} extensions will be updated_0": "Буде оновлено {{ count }} розширення",
+  "{{ count }} extensions will be updated_1": "Буде оновлено {{ count }} розширення",
+  "{{ count }} extensions will be updated_2": "Буде оновлено {{ count }} розширень",
+  "{{ count }} extensions will be updated_plural": "Буде оновлено {{ count }} розширень",
+  "settings_analytics": {
+    "allow_usage_data": "Дозволити програмі збирати дані про використання для покращення роботи",
+    "data_details_link": "Докладніше про дані, які ми збираємо",
+    "description": "Допоможіть нам покращити роботу з модами. З вашого дозволу програма збиратиме аналітичні дані та надсилатиме їх команді для покращення якості й швидкодії. Ці дані надсилаються анонімно та не передаються третім сторонам.",
+    "privacy_policy_link": "Політика конфіденційності",
+    "title": "Дані та конфіденційність"
+  },
+  "settings_application": {
+    "multi_user": {
+      "description": "Типово кожен обліковий запис у системі має окремий екземпляр Lotrex із власними налаштуваннями, модами та профілями. У спільному режимі ці дані зберігаються в загальносистемному розташуванні й доступні всім користувачам, зокрема облікові дані Nexus Mods та інша потенційно конфіденційна інформація, введена в Lotrex. Перемикання режиму не видаляє жоден набір даних, тому згодом можна безпечно повернутися назад.",
+      "label": "Багатокористувацький режим",
+      "per_user": "Окремо для кожного користувача",
+      "shared": "Спільний"
+    },
+    "restart": {
+      "action": "Перезапустити зараз",
+      "required": "Щоб застосувати цю зміну, потрібно перезапустити Lotrex"
+    }
+  },
+  "settings_interface": {
+    "advanced": {
+      "gpu_acceleration": "Увімкнути прискорення GPU",
+      "gpu_disabled_warning": "Без прискорення GPU інтерфейс Lotrex у деяких місцях працюватиме значно повільніше.",
+      "profile_management": "Увімкнути керування профілями",
+      "profiles": "Профілі"
+    },
+    "automation": {
+      "deploy_enabled_mods": "Розгортати моди після ввімкнення",
+      "deployment": "Розгортання",
+      "enable_installed_mods": "Вмикати встановлені моди в поточному профілі",
+      "install_downloaded_mods": "Встановлювати завантажені моди",
+      "run_on_startup": "Запускати Lotrex разом із системою",
+      "start_minimized": "Запускати Lotrex згорнутим у фоновому режимі"
+    },
+    "customization": {
+      "custom_titlebar": "Власна панель заголовка вікна",
+      "desktop_notifications": "Увімкнути сповіщення робочого столу",
+      "foreground_browser_downloads": "Виводити Lotrex на передній план під час запуску завантажень у браузері",
+      "hide_top_level_category": "Приховувати категорію верхнього рівня",
+      "relative_times": "Використовувати відносний час (наприклад, «3 місяці тому»)",
+      "top_level_categories": "Категорії верхнього рівня"
+    },
+    "language": {
+      "extension_by_author": "Розширення від {{author}}",
+      "first_use_restart_hint": "Після першого вибору мови може знадобитися перезапустити Lotrex.",
+      "label": "Мова",
+      "unknown_author": "невідомого автора"
+    },
+    "notifications": {
+      "reset_suppressed": "Скинути приховані сповіщення",
+      "suppressed_count": "({{count}} сповіщення приховано)",
+      "suppressed_count_0": "({{count}} сповіщення приховано)",
+      "suppressed_count_1": "({{count}} сповіщення приховано)",
+      "suppressed_count_2": "({{count}} сповіщень приховано)",
+      "suppressed_count_plural": "({{count}} сповіщень приховано)"
+    },
+    "profile_dialog": {
+      "cancel": "Скасувати",
+      "continue": "Продовжити",
+      "description": "Вимкнення цього параметра лише приховає інтерфейс профілів. Профілі не буде видалено, а активний профіль не буде вимкнено. Останній активний профіль кожної гри й надалі визначатиме вибір модів і локальних збережень.",
+      "title": "Вимкнення керування профілями"
+    },
+    "restart": {
+      "action": "Перезапустити зараз",
+      "required": "Щоб застосувати цю зміну, потрібно перезапустити Lotrex"
+    },
+    "sections": {
+      "advanced": "Розширені",
+      "automation": "Автоматизація",
+      "customization": "Персоналізація",
+      "notifications": "Сповіщення"
+    }
+  },
+  "settings_metaserver": {
+    "actions": {
+      "add": "Додати сервер метаданих",
+      "remove": "Видалити сервер"
+    },
+    "description": "Сервер метаданих надає додаткові відомості про моди та їхні залежності. За замовчуванням Lotrex використовує nexusmods.com, але тут можна додати інші сумісні сервери.",
+    "help": "Сервери, у яких виконуються запити метаданих модів.",
+    "title": "Сервер метаданих"
+  },
+  "settings_updater": {
+    "actions": {
+      "cancel": "Скасувати"
+    },
+    "beta_dialog": {
+      "confirm": "Перейти на Beta",
+      "description": "Тестові версії Lotrex можуть працювати нестабільно й завдати непоправної шкоди середовищу модів. Використовуйте канал Beta, лише якщо розумієте ризики та готові повідомляти про знайдені проблеми. Повернення з Beta на Stable не рекомендоване. Перейти на канал оновлень Beta?",
+      "title": "Перехід на канал оновлень Beta"
+    },
+    "channel": {
+      "beta": "Beta",
+      "description": "Виберіть Stable, щоб отримувати автоматичні оновлення після перевірки спільнотою, Beta — щоб одразу отримувати найновіші функції, або вимкніть автоматичні оновлення. Частота ручних перевірок обмежена.",
+      "disabled": "Без автоматичних оновлень",
+      "label": "Канал оновлень",
+      "stable": "Stable"
+    },
+    "check_now": "Перевірити зараз",
+    "development_mode": "Lotrex працює в режимі розробки. Оновлення буде перевірено та завантажено, але його не можна встановити автоматично.",
+    "disable_dialog": {
+      "confirm": "Вимкнути оновлення",
+      "description": "Сповіщення про оновлення Lotrex буде вимкнено. Це не рекомендовано, оскільки важливі виправлення безпеки та стабільності виходять регулярно. Вимкнути оновлення?",
+      "title": "Вимкнення оновлень"
+    },
+    "disabled_warning": "Дуже старі версії Lotrex із часом можуть втратити доступ до мережевих функцій, тому підтримуйте Lotrex в актуальному стані.",
+    "label": "Оновлення",
+    "managed": {
+      "linux_development": "Автоматичні оновлення недоступні для цієї Linux-збірки для розробки. Оновлюйте початковий код засобами розробки.",
+      "third_party": "Lotrex установлено через сторонню службу, яка керує його оновленнями."
+    },
+    "preview_channel": "Lotrex працює в режимі попереднього перегляду та використовує прихований канал оновлень 'next'."
+  },
+  "actions": {
+    "search": "Пошук"
+  },
+  "active": "Активні",
+  "back": "Назад",
+  "beta": "Бета",
+  "cancel": "Скасувати",
+  "hidden": "Приховані",
+  "helpful": "Корисно",
+  "hide": "Приховати",
+  "hide_all": "Приховати все",
+  "not_helpful": "Не корисно",
+  "refresh": "Оновити",
+  "settings": "Налаштування",
+  "thanks_for_your_feedback": "Дякуємо за відгук",
+  "unhide": "Показати",
+  "unhide_all": "Показати все",
+  "view_all": "Переглянути все"
+}

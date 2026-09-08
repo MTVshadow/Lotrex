@@ -28,7 +28,6 @@ import { log } from "../../util/log";
 import { setSafe } from "../../util/storeHelper";
 import DNDContainer from "../../views/DNDContainer";
 import { addMetaserver, removeMetaserver, setPriorities } from "./actions";
-import getText from "./texts";
 
 interface IServerEntry {
   url: string;
@@ -135,7 +134,7 @@ class ServerRow extends React.Component<RowProps, {}> {
             <Button
               className="btn-embed pull-right"
               id="remove"
-              tooltip={t("Remove")}
+              tooltip={t("settings_metaserver::actions::remove")}
               onClick={this.removeServer}
             >
               <Icon name="remove" />
@@ -211,7 +210,7 @@ class ServerList extends React.Component<IListProps, IListState> {
               key="input-add-metaserver"
               groupId="settings-buttons"
               icon="add"
-              tooltip={t("Add a Metaserver")}
+              tooltip={t("settings_metaserver::actions::add")}
               onConfirmed={onAddMetaserver}
             />
           </ListGroupItem>
@@ -291,9 +290,9 @@ class SettingsMetaserver extends ComponentEx<IProps, IState> {
       <form>
         <FormGroup>
           <ControlLabel>
-            {t("Meta Server")}
-            <More id="more-metaserver" name={t("Meta Server")}>
-              {getText("meta-server", t)}
+            {t("settings_metaserver::title")}
+            <More id="more-metaserver" name={t("settings_metaserver::title")}>
+              {t("settings_metaserver::description")}
             </More>
           </ControlLabel>
           <DNDContainer>
@@ -305,7 +304,7 @@ class SettingsMetaserver extends ComponentEx<IProps, IState> {
               onSetMetaserverPriority={onSetMetaserverPriority}
             />
           </DNDContainer>
-          <HelpBlock>{t("Servers to query for meta data.")}</HelpBlock>
+          <HelpBlock>{t("settings_metaserver::help")}</HelpBlock>
         </FormGroup>
       </form>
     );

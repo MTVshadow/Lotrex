@@ -86,6 +86,46 @@ describe("HealthCheckRegistry timeout handling", () => {
   });
 });
 
+describe("HealthCheckRegistry user cancellation", () => {
+  test("aborts an active check without replacing its result with an error", async ({
+    makeHealthCheck,
+  }) => {
+    const harness = makeHealthCheck();
+    const parked = harness.parkCheck({ id: "cancelable-check", timeout: 100000 });
+
+    const run = harness.run(parked.id);
+    await vi.waitFor(() => expect(parked.ticks()).toBeGreaterThan(0), SETTLE);
+    harness.registry.cancelActiveChecks();
+
+    expect(await run).toBeUndefined();
+    await vi.waitFor(() => expect(parked.hasSettled()).toBe(true), SETTLE);
+    expect(harness.resultFor(parked.id)).toBeUndefined();
+  });
+
+  test("publishes aggregate progress and clears it when the batch finishes", async ({
+    makeHealthCheck,
+  }) => {
+    const harness = makeHealthCheck();
+    const dispatch = vi.spyOn(harness.api.store!, "dispatch");
+    harness.parkCheck({ id: "progress-check", timeout: 100000 });
+
+    const run = harness.registry.runChecksByTrigger(HealthCheckTrigger.Manual, harness.api);
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalled(), SETTLE);
+    harness.registry.cancelActiveChecks();
+    await run;
+
+    const progressPayloads = dispatch.mock.calls
+      .map(([action]) => action as { payload?: unknown; type?: string })
+      .filter((action) => action.type === "SET_HEALTH_CHECK_SCAN_PROGRESS")
+      .map((action) => action.payload);
+    expect(progressPayloads).toEqual([
+      { completed: 0, total: 1 },
+      { completed: 1, total: 1 },
+      { completed: 0, total: 0 },
+    ]);
+  });
+});
+
 /** What the registry does when a request collides with a run already in flight. */
 describe("HealthCheckRegistry busy-collision handling", () => {
   test("reruns once after the current run settles, coalescing several collisions", async ({

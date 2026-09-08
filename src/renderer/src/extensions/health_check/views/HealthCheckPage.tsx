@@ -39,6 +39,7 @@ import { createHealthCheckTracker } from "../hooks/healthCheckTracker";
 import { HealthCheckTrackingProvider, IssueProvider } from "../hooks/HealthCheckTracking.context";
 import {
   fileRequirementsCheckResult,
+  healthCheckScanProgress,
   hiddenFileRequirements,
   hiddenModRequirements,
   isAnyHealthCheckRunning,
@@ -54,6 +55,7 @@ import HealthCheckDetailPage from "./HealthCheckDetailPage";
 
 interface IHealthCheckPageProps {
   api: IExtensionApi;
+  onCancel?: () => void;
   onRefresh?: () => void;
   active?: boolean;
   /** Registers a handler the Menu calls when Health check is clicked while already active. */
@@ -98,7 +100,13 @@ const collectInstallAllItems = (state: IState, api: IExtensionApi): IBulkInstall
   return out;
 };
 
-const HealthCheckPage = ({ api, onRefresh, active, registerReset }: IHealthCheckPageProps) => {
+const HealthCheckPage = ({
+  api,
+  onCancel,
+  onRefresh,
+  active,
+  registerReset,
+}: IHealthCheckPageProps) => {
   const { t } = useTranslation(["health_check", "common"]);
   const dispatch = useDispatch();
   const [selected, setSelected] = useState<IListedEntry | null>(null);
@@ -152,7 +160,9 @@ const HealthCheckPage = ({ api, onRefresh, active, registerReset }: IHealthCheck
   const showPremiumAd = useSelector(shouldShowPremiumAd);
   const [showInstallAllPremium, setShowInstallAllPremium] = useState(false);
   const isRefreshing = useSelector(isAnyHealthCheckRunning);
+  const scanProgress = useSelector(healthCheckScanProgress);
   const wasRefreshingRef = useRef(false);
+  const canceledRef = useRef(false);
   const [refreshStatus, setRefreshStatus] = useState("");
   // Every check that talks to Nexus Mods skips itself while logged out, so an empty
   // list then means "we couldn't run the checks", not "your loadout is healthy".
@@ -162,10 +172,18 @@ const HealthCheckPage = ({ api, onRefresh, active, registerReset }: IHealthCheck
     if (isRefreshing) {
       setRefreshStatus(t("listing::refreshing"));
     } else if (wasRefreshingRef.current) {
-      setRefreshStatus(t("listing::refresh_complete"));
+      setRefreshStatus(
+        canceledRef.current ? t("listing::refresh_canceled") : t("listing::refresh_complete"),
+      );
+      canceledRef.current = false;
     }
     wasRefreshingRef.current = isRefreshing;
   }, [isRefreshing, t]);
+
+  const cancelRefresh = () => {
+    canceledRef.current = true;
+    onCancel?.();
+  };
 
   // selectListedEntries / collectInstallAllItems read the slices above from the live
   // state; those slices fully determine their results. exhaustive-deps can't see the
@@ -252,6 +270,7 @@ const HealthCheckPage = ({ api, onRefresh, active, registerReset }: IHealthCheck
         content={selected.content}
         entry={selected.entry}
         onBack={closeDetailAndRestoreFocus}
+        onRefresh={onRefresh}
       />
     );
   }
@@ -419,6 +438,22 @@ const HealthCheckPage = ({ api, onRefresh, active, registerReset }: IHealthCheck
           <div aria-atomic="true" aria-live="polite" className="sr-only" role="status">
             {refreshStatus}
           </div>
+          {isRefreshing && scanProgress !== undefined && (
+            <div aria-live="polite" className="flex items-center gap-x-3">
+              <progress
+                aria-label={t("listing::progress_label")}
+                className="h-2 grow"
+                max={scanProgress.total}
+                value={scanProgress.completed}
+              />
+              <Typography typographyType="body-sm">
+                {t("listing::progress", scanProgress)}
+              </Typography>
+              <Button data-testid="health-check-cancel" size="sm" onClick={cancelRefresh}>
+                {t("common:::cancel")}
+              </Button>
+            </div>
+          )}
           {supportsHide ? (
             <TabProvider
               tab={selectedTab}

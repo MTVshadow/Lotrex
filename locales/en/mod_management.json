@@ -1,3 +1,12 @@
 {
-  "_comment": "Mod management operations and UI strings - to be populated during migration"
+  "_comment": "Mod management operations and UI strings - migration in progress",
+  "settings": {
+    "workarounds": {
+      "cleanup": {
+        "description": "By default, Lotrex removes empty directories during deployment only when a game or related tool would otherwise fail. Empty directories are usually harmless, and removing them makes deployment take longer. Enable this workaround only if empty directories cause a problem, and report the affected game or tool so the behavior can be improved.",
+        "title": "Clean up empty directories",
+        "toggle": "Clean up empty directories during deployment"
+      }
+    }
+  }
 }

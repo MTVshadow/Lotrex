@@ -11,7 +11,6 @@ import { Button } from "../../ui/components/button/Button";
 import { Picker } from "../../ui/components/picker/Picker";
 import { Typography } from "../../ui/components/typography/Typography";
 import { relaunch } from "../../util/commandLine";
-import getText from "./texts";
 
 interface IConnectedProps {
   multiUser: boolean;
@@ -44,11 +43,11 @@ class SettingsVortex extends ComponentEx<IProps, IComponentState> {
       multiUser === oldMultiUser ? null : (
         <div className="flex items-center gap-x-4 rounded-lg border border-info-weak bg-info-950 p-3">
           <Typography brand="neutral-translucent" className="grow">
-            {t("You need to restart Vortex to activate this change")}
+            {t("settings_application::restart::required")}
           </Typography>
 
           <Button brand="neutral" onClick={this.restart}>
-            {t("Restart now")}
+            {t("settings_application::restart::action")}
           </Button>
         </div>
       );
@@ -58,17 +57,17 @@ class SettingsVortex extends ComponentEx<IProps, IComponentState> {
         <FormGroup controlId="muMode">
           <div className="flex flex-col items-start gap-y-2">
             <Typography as="span">
-              {t("Multi-User Mode")}
+              {t("settings_application::multi_user::label")}
 
-              <More id="more-multi-user" name={t("Multi-User Mode")}>
-                {getText("multi-user", t)}
+              <More id="more-multi-user" name={t("settings_application::multi_user::label")}>
+                {t("settings_application::multi_user::description")}
               </More>
             </Typography>
 
             <Picker<"on" | "off">
               options={[
-                { label: t("Shared"), value: "on" },
-                { label: t("Per-User"), value: "off" },
+                { label: t("settings_application::multi_user::shared"), value: "on" },
+                { label: t("settings_application::multi_user::per_user"), value: "off" },
               ]}
               placement="left"
               value={multiUser ? "on" : "off"}

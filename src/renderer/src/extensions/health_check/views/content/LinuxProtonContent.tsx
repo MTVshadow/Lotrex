@@ -39,7 +39,7 @@ const ListingRow = ({ entry, onOpen }: IListingRowProps) => {
   );
 };
 
-const DetailView = ({ api, entry }: IDetailViewProps) => {
+export const DetailView = ({ api, entry, onRefresh }: IDetailViewProps) => {
   const { t } = useTranslation("health_check");
   const issue = entry.data as ILinuxProtonIssue;
   const severity = severityStyleMap[entry.severity];
@@ -64,10 +64,16 @@ const DetailView = ({ api, entry }: IDetailViewProps) => {
     [entry.severity, issue],
   );
   const [copyStatus, setCopyStatus] = React.useState("");
+  const [commandCopyStatus, setCommandCopyStatus] = React.useState("");
 
   const copyReport = () => {
     window.api.clipboard.writeText(report);
     setCopyStatus(t("linux_proton::report::copied"));
+  };
+  const copyCommand = () => {
+    if (issue.command === undefined) return;
+    window.api.clipboard.writeText(issue.command);
+    setCommandCopyStatus(t("linux_proton::command::copied"));
   };
   const saveReport = async () => {
     try {
@@ -104,6 +110,37 @@ const DetailView = ({ api, entry }: IDetailViewProps) => {
           <Typography as="p">
             {t(`linux_proton::issues::${issue.reason}::remediation`, translationOptions)}
           </Typography>
+        )}
+
+        {issue.command !== undefined && (
+          <section aria-labelledby="linux-proton-command-title" className="space-y-3">
+            <Typography as="h4" id="linux-proton-command-title" typographyType="heading-xs">
+              {t("linux_proton::command::title")}
+            </Typography>
+            <Typography appearance="subdued" as="p" typographyType="body-sm">
+              {t("linux_proton::command::description")}
+            </Typography>
+            <pre
+              aria-label={t("linux_proton::command::preview")}
+              className="overflow-auto rounded-sm bg-surface-low p-4 text-sm whitespace-pre-wrap"
+              tabIndex={0}
+            >
+              {issue.command}
+            </pre>
+            <div className="flex gap-2">
+              <Button appearance="subdued" data-testid="linux-command-copy" onClick={copyCommand}>
+                {t("linux_proton::command::copy")}
+              </Button>
+              {issue.reason === "flatpak-permission-missing" && (
+                <Button data-testid="linux-permission-recheck" onClick={onRefresh}>
+                  {t("linux_proton::command::recheck")}
+                </Button>
+              )}
+            </div>
+            <div aria-live="polite" className="sr-only" role="status">
+              {commandCopyStatus}
+            </div>
+          </section>
         )}
 
         {diagnostics.length > 0 && (

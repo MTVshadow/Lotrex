@@ -27,16 +27,14 @@ class SettingsAnalytics extends ComponentEx<IProps, {}> {
     return (
       <form>
         <FormGroup controlId="analytics">
-          <ControlLabel>{t("Data & Privacy")}</ControlLabel>
+          <ControlLabel>{t("settings_analytics::title")}</ControlLabel>
 
           <Toggle checked={analytics} disabled={!userInfo} onToggle={this.toggleAnalytics}>
-            {t("Allow this app to collect usage data to improve your experience")}
+            {t("settings_analytics::allow_usage_data")}
           </Toggle>
 
           <HelpBlock>
-            {t(
-              "Help us provide you with the best modding experience. With your permission, we will collect analytics information and send it to our team to help us improve quality and performance. This information is sent anonymously and will never be shared with a 3rd party.",
-            )}
+            {t("settings_analytics::description")}
             <br />
             <br />
             <TypographyLink
@@ -45,7 +43,7 @@ class SettingsAnalytics extends ComponentEx<IProps, {}> {
                 opn(HELP_ARTICLE).catch(() => undefined);
               }}
             >
-              {t("More about the data we track")}
+              {t("settings_analytics::data_details_link")}
             </TypographyLink>{" "}
             |{" "}
             <TypographyLink
@@ -54,7 +52,7 @@ class SettingsAnalytics extends ComponentEx<IProps, {}> {
                 opn(PRIVACY_POLICY).catch(() => undefined);
               }}
             >
-              {t("Privacy Policy")}
+              {t("settings_analytics::privacy_policy_link")}
             </TypographyLink>
           </HelpBlock>
         </FormGroup>

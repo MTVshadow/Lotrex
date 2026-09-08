@@ -26,6 +26,9 @@
     "hidden_issues": "Hidden Health Check issues",
     "refreshing": "Health Check is running",
     "refresh_complete": "Health Check finished",
+    "refresh_canceled": "Health Check canceled",
+    "progress_label": "Health Check progress",
+    "progress": "{{completed}} of {{total}} checks completed",
     "item": {
       "title": "Additional mod file may be required for: {{modName}}",
       "description": "Missing mod: {{dependencyModName}}",
@@ -122,6 +125,14 @@
     "file_requirements": "Missing file requirements warnings"
   },
   "linux_proton": {
+    "command": {
+      "title": "Suggested command",
+      "description": "Review this narrowly scoped command before copying it. Vortex will never run it automatically.",
+      "preview": "Command preview",
+      "copy": "Copy command",
+      "copied": "Command copied",
+      "recheck": "Recheck access"
+    },
     "title": "Proton setup for {{gameName}}",
     "report": {
       "preview": "Preview privacy-safe diagnostic report",

@@ -63,7 +63,6 @@ import {
   Section,
   Content,
 } from "../../../util/util";
-import getTextMod from "../../mod_management/texts";
 import { PREMIUM_PATH } from "../../nexus_integration/constants";
 import {
   setCopyOnIFF,
@@ -73,11 +72,11 @@ import {
   setCollectionConcurrency,
 } from "../actions/settings";
 import { setTransferDownloads } from "../actions/transactions";
-import getText from "../texts";
 import { DOWNLOADS_DIR_TAG, writeDownloadsTag } from "../util/downloadDirectory";
 import getDownloadPath, { getDownloadPathPattern } from "../util/getDownloadPath";
 
 const MB = 1024 * 1024;
+const CANCEL_ACTION = "download_management:::settings::actions::cancel";
 
 interface IConnectedProps {
   parallelDownloads: number;
@@ -162,9 +161,9 @@ class Settings extends ComponentEx<IProps, IComponentState> {
         <FormGroup validationState={validationState.state}>
           <div id="download-path-form">
             <ControlLabel>
-              {t("Downloads Folder")}
-              <More id="more-paths" name={t("Downloads Folder")}>
-                {getTextMod("downloadspath", t)}
+              {t("download_management:::settings::folder::label")}
+              <More id="more-paths" name={t("download_management:::settings::folder::label")}>
+                {t("download_management:::settings::folder::description")}
               </More>
             </ControlLabel>
             <FlexLayout type="row" fill={false} className="download-path-row">
@@ -173,12 +172,15 @@ class Settings extends ComponentEx<IProps, IComponentState> {
                   <FormControl
                     className="download-path-input"
                     value={getDownloadPathPattern(downloadPath)}
-                    placeholder={t("Download Folder")}
+                    placeholder={t("download_management:::settings::folder::placeholder")}
                     onChange={this.setDownloadPathEvt as any}
                     onKeyPress={changed && pathValid ? this.keyPressEvt : null}
                   />
                   <InputGroup.Button className="inset-btn">
-                    <Button tooltip={t("Browse")} onClick={this.browseDownloadPath}>
+                    <Button
+                      tooltip={t("download_management:::settings::folder::browse")}
+                      onClick={this.browseDownloadPath}
+                    >
                       <Icon name="browse" />
                     </Button>
                   </InputGroup.Button>
@@ -190,7 +192,7 @@ class Settings extends ComponentEx<IProps, IComponentState> {
                     disabled={!changed || validationState.state === "error" || hasActivity}
                     onClick={this.onApply}
                   >
-                    {hasActivity ? <Spinner /> : t("Apply")}
+                    {hasActivity ? <Spinner /> : t("download_management:::settings::folder::apply")}
                   </BSButton>
                 </InputGroup.Button>
               </FlexLayout.Fixed>
@@ -218,9 +220,14 @@ class Settings extends ComponentEx<IProps, IComponentState> {
         </FormGroup>
         <FormGroup>
           <ControlLabel>
-            {t("Download Threads") + ": " + parallelDownloads.toString()}
-            <More id="more-download-threads" name={t("Download Threads")}>
-              {getText("download-threads", t)}
+            {t("download_management:::settings::threads::label_with_count", {
+              replace: { count: parallelDownloads },
+            })}
+            <More
+              id="more-download-threads"
+              name={t("download_management:::settings::threads::label")}
+            >
+              {t("download_management:::settings::threads::description")}
             </More>
           </ControlLabel>
           <div style={{ display: "flex" }}>
@@ -235,32 +242,27 @@ class Settings extends ComponentEx<IProps, IComponentState> {
             {!isPremium ? (
               <BSButton id="get-premium-button" onClick={this.goBuyPremium}>
                 <Image srcs={[electricBoltIconPath]} />
-                {t("Unlock max download speeds")}
+                {t("download_management:::settings::threads::unlock_speed")}
               </BSButton>
             ) : null}
           </div>
           <div>
             {!isPremium ? (
-              <p>
-                {t(
-                  "Regular users are restricted to 1 download thread - " +
-                    "Go Premium for up to 10 download threads!",
-                )}
-              </p>
+              <p>{t("download_management:::settings::threads::premium_limit")}</p>
             ) : null}
           </div>
         </FormGroup>
         <FormGroup id="download-bandwidth-limit">
-          <ControlLabel>{t("Limit Bandwidth")}</ControlLabel>
+          <ControlLabel>{t("download_management:::settings::bandwidth::label")}</ControlLabel>
           <div style={{ display: "flex", alignItems: "center" }}>
             <FormInput
               value={maxBandwidth > 0 ? (maxBandwidth / MB).toString() : ""}
-              placeholder={t("Unlimited")}
+              placeholder={t("download_management:::settings::bandwidth::unlimited")}
               onChange={this.changeMaxBandwidth}
               type="number"
               min={0}
             />
-            MB/s
+            {t("download_management:::settings::bandwidth::unit")}
           </div>
         </FormGroup>
         <FormGroup>
@@ -268,10 +270,10 @@ class Settings extends ComponentEx<IProps, IComponentState> {
             checked={this.props.collectionsInstallWhileDownloading}
             onToggle={this.toggleCollectionInstallConcurrency}
           >
-            {t("Install mods during collection downloads")}
+            {t("download_management:::settings::collections::install_while_downloading")}
           </Toggle>
           <Toggle checked={copyOnIFF} onToggle={this.toggleCopyOnIFF}>
-            {t('Copy files when using "Install From File"')}
+            {t("download_management:::settings::install_from_file::copy_files")}
           </Toggle>
         </FormGroup>
       </form>
@@ -325,7 +327,7 @@ class Settings extends ComponentEx<IProps, IComponentState> {
       if (normalizedInstallPath === normalizedInput || isChildPath(input, modsInstallPath)) {
         return {
           state: "error",
-          reason: "Download folder can't be a subdirectory of the mods staging folder",
+          reason: "download_management:::settings::validation::inside_staging_folder",
         };
       }
     }
@@ -333,42 +335,42 @@ class Settings extends ComponentEx<IProps, IComponentState> {
     if (isReservedDirectory(input)) {
       return {
         state: "error",
-        reason: "Invalid downloads folder, please choose a different directory",
+        reason: "download_management:::settings::validation::reserved_directory",
       };
     }
 
     if (isChildPath(input, getVortexPath("application"))) {
       return {
         state: "error",
-        reason: "Download folder can't be a subdirectory of the Vortex application folder.",
+        reason: "download_management:::settings::validation::inside_application_folder",
       };
     }
 
     if (input.length > 100) {
       return {
         state: input.length > 200 ? "error" : "warning",
-        reason: "Download path shouldn't be too long, otherwise downloads may fail.",
+        reason: "download_management:::settings::validation::path_too_long",
       };
     }
 
     if (!path.isAbsolute(input)) {
       return {
         state: "error",
-        reason: "Download folder needs to be an absolute path.",
+        reason: "download_management:::settings::validation::absolute_path_required",
       };
     }
 
     if (!isPathValid(input)) {
       return {
         state: "error",
-        reason: "Path cannot contain illegal characters or reserved names",
+        reason: "download_management:::settings::validation::illegal_characters",
       };
     }
 
     if (!this.isPathSensible(input)) {
       return {
         state: "error",
-        reason: "Path cannot be the root of a partition",
+        reason: "download_management:::settings::validation::partition_root",
       };
     }
 
@@ -443,11 +445,11 @@ class Settings extends ComponentEx<IProps, IComponentState> {
       if (statNew.ino === statOld.ino) {
         return onShowDialog(
           "error",
-          "Invalid path selected",
+          "download_management:::settings::transfer::invalid_path::title",
           {
-            text: "The path you selected refers to the same directory on disk as the existing one.",
+            text: "download_management:::settings::transfer::invalid_path::same_directory",
           },
-          [{ label: "Close" }],
+          [{ label: "download_management:::settings::actions::close" }],
         );
       }
     } catch (err) {
@@ -457,63 +459,50 @@ class Settings extends ComponentEx<IProps, IComponentState> {
     if (isReservedDirectory(newPath)) {
       return onShowDialog(
         "error",
-        "Invalid path selected",
+        "download_management:::settings::transfer::invalid_path::title",
         {
-          text:
-            "You have selected an invalid path for your downloads folder. " +
-            "It would become impossible for Vortex to move your downloads folder " +
-            "anywhere else without attempting to move the entire contents of the " +
-            "selected directory alongside it.",
+          text: "download_management:::settings::transfer::invalid_path::reserved_directory",
         },
-        [{ label: "Close" }],
+        [{ label: "download_management:::settings::actions::close" }],
       );
     }
 
     if (!path.isAbsolute(newPath) || isChildPath(newPath, vortexPath, normalize)) {
       return onShowDialog(
         "error",
-        "Invalid path selected",
+        "download_management:::settings::transfer::invalid_path::title",
         {
-          text:
-            "You can not put downloads into the vortex application directory. " +
-            "This directory gets removed during updates so you would lose all your " +
-            "files on the next update.",
+          text: "download_management:::settings::transfer::invalid_path::application_directory",
         },
-        [{ label: "Close" }],
+        [{ label: "download_management:::settings::actions::close" }],
       );
     }
 
     if (isChildPath(oldPath, newPath, normalize)) {
       return onShowDialog(
         "error",
-        "Invalid path selected",
+        "download_management:::settings::transfer::invalid_path::title",
         {
-          text:
-            "You can't change the download folder to be the parent of the old folder. " +
-            "This is because the new download folder has to be empty and it isn't " +
-            "empty if it contains the old download folder.",
+          text: "download_management:::settings::transfer::invalid_path::parent_of_old_folder",
         },
-        [{ label: "Close" }],
+        [{ label: "download_management:::settings::actions::close" }],
       );
     }
 
     const notEnoughDiskSpace = () => {
       return onShowDialog(
         "error",
-        "Insufficient disk space",
+        "download_management:::settings::transfer::disk_space::title",
         {
-          text:
-            "You do not have enough disk space to move the downloads folder to your " +
-            "proposed destination folder.\n\n" +
-            "Please select a different destination or free up some space and try again!",
+          text: "download_management:::settings::transfer::disk_space::description",
         },
-        [{ label: "Close" }],
+        [{ label: "download_management:::settings::actions::close" }],
       );
     };
 
     let deleteOldDestination = true;
     this.nextState.progress = 0;
-    this.nextState.busy = t("Moving");
+    this.nextState.busy = t("download_management:::settings::transfer::progress::moving");
     return withTrackedActivity(
       "vortex.downloads",
       "downloads.transfer",
@@ -527,7 +516,9 @@ class Settings extends ComponentEx<IProps, IComponentState> {
           .then(() => this.checkTargetEmpty(oldPath, newPath))
           .then(() => {
             if (oldPath !== newPath) {
-              this.nextState.busy = t("Moving download folder");
+              this.nextState.busy = t(
+                "download_management:::settings::transfer::progress::moving_folder",
+              );
               return this.transferPath().then(() => writeDownloadsTag(this.context.api, newPath));
             } else {
               return PromiseBB.resolve();
@@ -546,79 +537,82 @@ class Settings extends ComponentEx<IProps, IComponentState> {
             this.context.api.events.emit("did-move-downloads");
             onShowDialog(
               "info",
-              "Cleanup failed",
+              "download_management:::settings::transfer::cleanup::title",
               {
                 bbcode: t(
-                  "The downloads folder has been copied [b]successfully[/b] to " +
-                    "your chosen destination!<br />" +
-                    "Clean-up of the old downloads folder has been cancelled.<br /><br />" +
-                    `Old downloads folder: [url]{{thePath}}[/url]`,
+                  "download_management:::settings::transfer::cleanup::old_folder_retained",
                   { replace: { thePath: oldPath } },
                 ),
               },
-              [{ label: "Close", action: () => PromiseBB.resolve() }],
+              [
+                {
+                  label: "download_management:::settings::actions::close",
+                  action: () => PromiseBB.resolve(),
+                },
+              ],
             );
 
             if (!(err.errorObject instanceof UserCanceled)) {
-              this.context.api.showErrorNotification("Clean-up failed", err.errorObject);
+              this.context.api.showErrorNotification(
+                "download_management:::settings::transfer::cleanup::title",
+                err.errorObject,
+              );
             }
           })
           .catch(InsufficientDiskSpace, () => notEnoughDiskSpace())
           .catch(UnsupportedOperatingSystem, () =>
             onShowError(
-              "Unsupported operating system",
-              "This functionality is currently unavailable for your operating system!",
+              "download_management:::settings::transfer::errors::unsupported_os_title",
+              "download_management:::settings::transfer::errors::unsupported_os_description",
               false,
             ),
           )
           .catch(NotFound, () =>
             onShowError(
-              "Invalid destination",
-              "The destination partition you selected is invalid - please choose a different " +
-                "destination",
+              "download_management:::settings::transfer::errors::invalid_destination_title",
+              "download_management:::settings::transfer::errors::invalid_destination_description",
               false,
             ),
           )
           .catch((err) => {
             if (err !== null) {
               if (err.code === "EPERM") {
-                onShowError("Directories are locked", err, false);
+                onShowError(
+                  "download_management:::settings::transfer::errors::directories_locked",
+                  err,
+                  false,
+                );
               } else if (err.code === "EINVAL") {
-                onShowError("Invalid path", err.message, false);
+                onShowError(
+                  "download_management:::settings::transfer::errors::invalid_path",
+                  err.message,
+                  false,
+                );
               } else if (err.code === "EIO") {
                 // Input/Output file operations have been interrupted.
                 //  this is not a bug in Vortex but rather a hardware/networking
                 //  issue (depending on the user's setup).
                 onShowError(
-                  "File operations interrupted",
-                  "Input/Output file operations have been interrupted. This is not a bug in Vortex, " +
-                    "but rather a problem with your environment!<br /><br />" +
-                    "Possible reasons behind this issue:<br />" +
-                    "1. Your HDD/Removable drive has become unseated during transfer.<br />" +
-                    "2. File operations were running on a network drive and said drive has become " +
-                    "disconnected for some reason (Network hiccup?)<br />" +
-                    "3. An overzealous third party tool (possibly Anti-Virus or virus) " +
-                    "which is blocking Vortex from completing its operations.<br />" +
-                    "4. A faulty HDD/Removable drive.<br /><br />" +
-                    "Please test your environment and try again once you've confirmed it's fixed.",
+                  "download_management:::settings::transfer::errors::io_interrupted_title",
+                  "download_management:::settings::transfer::errors::io_interrupted_description",
                   false,
                   true,
                 );
               } else if (err.code === "UNKNOWN" && err?.["nativeCode"] === 1392) {
                 // The file or directory is corrupted and unreadable.
                 onShowError(
-                  "Failed to move directories",
-                  t(
-                    "Vortex has encountered a corrupted and unreadable file/directory " +
-                      "and is unable to complete the transfer. Vortex was attempting " +
-                      'to move the following file/directory: "{{culprit}}" when your operating system ' +
-                      "raised the error. Please test your environment and try again once you've confirmed it's fixed.",
-                    { replace: { culprit: err.path } },
-                  ),
+                  "download_management:::settings::transfer::errors::move_failed",
+                  t("download_management:::settings::transfer::errors::corrupted_entry", {
+                    replace: { culprit: err.path },
+                  }),
                   false,
                 );
               } else {
-                onShowError("Failed to move directories", err, !(err instanceof ProcessCanceled));
+                onShowError(
+                  "download_management:::settings::transfer::errors::move_failed",
+                  err,
+                  !(err instanceof ProcessCanceled),
+                );
               }
             }
           })
@@ -650,13 +644,16 @@ class Settings extends ComponentEx<IProps, IComponentState> {
                     onSetTransfer(undefined);
                   } else if (err.code === "EPERM") {
                     onShowError(
-                      "Destination folder is not writable",
-                      "Vortex is unable to clean up " +
-                        "the destination folder due to a permissions issue.",
+                      "download_management:::settings::transfer::cleanup::not_writable_title",
+                      "download_management:::settings::transfer::cleanup::not_writable_description",
                       false,
                     );
                   } else {
-                    onShowError("Transfer clean-up failed", err, true);
+                    onShowError(
+                      "download_management:::settings::transfer::cleanup::failed",
+                      err,
+                      true,
+                    );
                   }
                 });
             } else {
@@ -668,19 +665,19 @@ class Settings extends ComponentEx<IProps, IComponentState> {
   };
 
   private confirmElevate = (): PromiseBB<void> => {
-    const { t, onShowDialog } = this.props;
+    const { onShowDialog } = this.props;
     return onShowDialog(
       "question",
-      "Access denied",
+      "download_management:::settings::transfer::elevation::title",
       {
-        text:
-          "This directory is not writable to the current windows user account. " +
-          "Vortex can try to create the directory as administrator but it will " +
-          "then have to give access to it to all logged in users.",
+        text: "download_management:::settings::transfer::elevation::description",
       },
-      [{ label: "Cancel" }, { label: "Create as Administrator" }],
+      [
+        { label: CANCEL_ACTION },
+        { label: "download_management:::settings::transfer::elevation::create_with_elevation" },
+      ],
     ).then((result) =>
-      result.action === "Cancel" ? PromiseBB.reject(new UserCanceled()) : PromiseBB.resolve(),
+      result.action === CANCEL_ACTION ? PromiseBB.reject(new UserCanceled()) : PromiseBB.resolve(),
     );
   };
 
@@ -722,36 +719,32 @@ class Settings extends ComponentEx<IProps, IComponentState> {
             if (tagInstance !== undefined) {
               return this.props.onShowDialog(
                 "question",
-                "Confirm",
+                "download_management:::settings::transfer::existing_folder::title",
                 {
-                  text:
-                    "This is an existing download folder for a different Vortex " +
-                    'instance. If you\'re using Vortex in "shared" and "regular" mode, do not use ' +
-                    "the same download folder for both!\n" +
-                    "If you continue, your current downloads will be merged into that folder and " +
-                    "this Vortex instance will take over the download folder.\n" +
-                    'There is no "undo" for this! ' +
-                    "Please continue only if you're absolutely certain.",
+                  text: "download_management:::settings::transfer::existing_folder::description",
                 },
                 [
                   {
-                    label: "Cancel",
+                    label: CANCEL_ACTION,
                     action: () => reject(new UserCanceled()),
                     default: true,
                   },
-                  { label: "Continue", action: () => resolve() },
+                  {
+                    label: "download_management:::settings::actions::continue",
+                    action: () => resolve(),
+                  },
                 ],
               );
             } else {
               this.props.onShowDialog(
                 "info",
-                "Invalid Destination",
+                "download_management:::settings::transfer::empty_destination::title",
                 {
-                  text: "The destination folder has to be empty",
+                  text: "download_management:::settings::transfer::empty_destination::description",
                 },
                 [
                   {
-                    label: "Ok",
+                    label: "download_management:::settings::actions::ok",
                     action: () => reject(new UserCanceled()),
                     default: true,
                   },
@@ -766,7 +759,7 @@ class Settings extends ComponentEx<IProps, IComponentState> {
   }
 
   private transferPath() {
-    const { t, onSetTransfer, onShowDialog } = this.props;
+    const { onSetTransfer, onShowDialog } = this.props;
     const oldPath = getDownloadPath(this.props.downloadPath);
     const newPath = getDownloadPath(this.state.downloadPath);
 
@@ -794,24 +787,18 @@ class Settings extends ComponentEx<IProps, IComponentState> {
             ? PromiseBB.resolve()
             : onShowDialog(
                 "question",
-                "Missing downloads folder",
+                "download_management:::settings::transfer::missing_source::title",
                 {
-                  bbcode:
-                    "Vortex is unable to find your current downloads folder; " +
-                    "this can happen when: <br />" +
-                    "1. You or an external application removed this folder.<br />" +
-                    "2. Your HDD/removable drive became faulty or unseated.<br />" +
-                    "3. The downloads folder was located on a network drive which has been " +
-                    "disconnected for some reason.<br /><br />" +
-                    "Please diagnose your system and ensure that the downloads folder is detectable " +
-                    "by your operating system.<br /><br />" +
-                    'Alternatively, if you want to force Vortex to "re-initialize" your downloads ' +
-                    "folder at the destination you have chosen, Vortex can do this for you but " +
-                    "note that the folder will be empty as nothing will be transferred inside it!",
+                  bbcode: "download_management:::settings::transfer::missing_source::description",
                 },
-                [{ label: "Cancel" }, { label: "Reinitialize" }],
+                [
+                  { label: CANCEL_ACTION },
+                  {
+                    label: "download_management:::settings::transfer::missing_source::reinitialize",
+                  },
+                ],
               ).then((result) =>
-                result.action === "Cancel"
+                result.action === CANCEL_ACTION
                   ? PromiseBB.reject(new UserCanceled())
                   : PromiseBB.resolve(),
               );
