@@ -165,6 +165,7 @@ import {} from "./util/extensionRequire";
 import { setTFunction } from "./util/fs";
 import GlobalNotifications from "./util/GlobalNotifications";
 import { init as getI18n, changeLanguage, fallbackTFunc, type TFunction } from "./util/i18n";
+import { normalizeLocale } from "./util/localization/localePolicy";
 import { showError } from "./util/message";
 import migrate from "./util/migrate";
 import { readStartupSettings } from "./util/startupSettings";
@@ -776,21 +777,27 @@ async function init(): Promise<ExtensionManager | null> {
     eventEmitter.on(event, (...args) => ipcRenderer.send("relay-event", event, ...args));
   });
 
-  let currentLanguage: string = store.getState().settings.interface.language;
+  let currentLanguage: string = normalizeLocale(store.getState().settings.interface.language);
+  let requestedLanguage = currentLanguage;
+  let languageRequestId = 0;
   store.subscribe(() => {
     const newLanguage: string = store.getState().settings.interface.language;
-    if (newLanguage !== currentLanguage) {
-      try {
-        new Date().toLocaleString(newLanguage);
-      } catch (err) {
-        store.dispatch(setLanguage(currentLanguage));
-        log("warn", "Attempt to set invalid language", newLanguage);
+    if (newLanguage !== requestedLanguage) {
+      const normalizedLanguage = normalizeLocale(newLanguage);
+      if (normalizedLanguage !== newLanguage) {
+        store.dispatch(setLanguage(normalizedLanguage));
+        log("warn", "Attempt to set unavailable language", newLanguage);
         return;
       }
-      currentLanguage = newLanguage;
-
+      requestedLanguage = newLanguage;
+      const requestId = ++languageRequestId;
       changeLanguage(newLanguage, (err: Error) => {
-        if (err !== undefined) {
+        if (requestId !== languageRequestId) return;
+        if (err === undefined) {
+          currentLanguage = newLanguage;
+        } else {
+          requestedLanguage = currentLanguage;
+          store.dispatch(setLanguage(currentLanguage));
           if (Array.isArray(err)) {
             // don't show ENOENT errors because it shouldn't really matter
             const filtErr = err.filter((iter) => iter.code !== "ENOENT");
@@ -805,7 +812,7 @@ async function init(): Promise<ExtensionManager | null> {
             });
           }
         }
-      });
+      }).catch(() => {});
     }
   });
 
@@ -871,10 +878,13 @@ async function load(extensions: ExtensionManager): Promise<void> {
     }
   }
 
-  log("info", "activating language", {
-    lang: store.getState().settings.interface.language,
-  });
-  await changeLanguage(store.getState().settings.interface.language);
+  const configuredLanguage = store.getState().settings.interface.language;
+  const startupLanguage = normalizeLocale(configuredLanguage);
+  if (startupLanguage !== configuredLanguage) {
+    store.dispatch(setLanguage(startupLanguage));
+  }
+  log("info", "activating language", { lang: startupLanguage });
+  await changeLanguage(startupLanguage);
 
   extensions.setUIReady();
   log("debug", "render with language", { language: i18n.language });

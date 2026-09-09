@@ -44,6 +44,8 @@
     "benchmark:linux-deployment": "pnpm tsx scripts/benchmark-linux-deployment.ts",
     "benchmark:linux-discovery": "pnpm tsx scripts/benchmark-linux-discovery.ts",
     "benchmark:linux-case-collisions": "pnpm tsx scripts/benchmark-linux-case-collisions.ts",
+    "i18n:coverage": "node scripts/i18n-locale-coverage.mjs",
+    "i18n:create": "node scripts/i18n-create-locale.mjs",
     "game-extension": "pnpm --filter @vortex/game-extension-test"
   },
   "lint-staged": {

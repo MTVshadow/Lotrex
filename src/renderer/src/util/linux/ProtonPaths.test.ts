@@ -263,4 +263,83 @@ describe("ProtonPaths", () => {
     expect(refreshed?.userName).toBe("replacement");
     expect(refreshed).not.toBe(first);
   });
+
+  describe("translateWindowsPath", () => {
+    it("translates Windows environment variables to Proton prefix directories", () => {
+      const proton = ProtonPaths.resolve({
+        gameMode: "skyrimse",
+        appId: "489830",
+        discovery: { path: gameDir, store: "steam" },
+      })!;
+
+      expect(
+        ProtonPaths.translateWindowsPath(
+          "%LOCALAPPDATA%\\Skyrim Special Edition\\plugins.txt",
+          proton,
+          "linux",
+        ),
+      ).toBe(path.join(proton.appDataLocalPath, "Skyrim Special Edition", "plugins.txt"));
+
+      expect(
+        ProtonPaths.translateWindowsPath("%APPDATA%\\ModOrganizer\\settings.ini", proton, "linux"),
+      ).toBe(path.join(proton.appDataRoamingPath, "ModOrganizer", "settings.ini"));
+
+      expect(
+        ProtonPaths.translateWindowsPath("%USERPROFILE%\\Saved Games\\save1.ess", proton, "linux"),
+      ).toBe(path.join(proton.userProfilePath, "Saved Games", "save1.ess"));
+
+      expect(
+        ProtonPaths.translateWindowsPath(
+          "%DOCUMENTS%\\My Games\\Skyrim Special Edition\\Skyrim.ini",
+          proton,
+          "linux",
+        ),
+      ).toBe(path.join(proton.documentsPath, "My Games", "Skyrim Special Edition", "Skyrim.ini"));
+    });
+
+    it("translates Windows drive paths to Proton drive_c directories", () => {
+      const proton = ProtonPaths.resolve({
+        gameMode: "skyrimse",
+        appId: "489830",
+        discovery: { path: gameDir, store: "steam" },
+      })!;
+
+      expect(
+        ProtonPaths.translateWindowsPath(
+          "C:\\Program Files (x86)\\Common Files\\test.dll",
+          proton,
+          "linux",
+        ),
+      ).toBe(
+        path.join(proton.prefixPath, "drive_c", "Program Files (x86)", "Common Files", "test.dll"),
+      );
+
+      // Translates C:\users\<user>\AppData\Local to appDataLocalPath
+      expect(
+        ProtonPaths.translateWindowsPath(
+          "C:\\users\\steamuser\\AppData\\Local\\Skyrim Special Edition\\loadorder.txt",
+          proton,
+          "linux",
+        ),
+      ).toBe(path.join(proton.appDataLocalPath, "Skyrim Special Edition", "loadorder.txt"));
+    });
+
+    it("enforces 255-byte component limits on translated paths", () => {
+      const proton = ProtonPaths.resolve({
+        gameMode: "skyrimse",
+        appId: "489830",
+        discovery: { path: gameDir, store: "steam" },
+      })!;
+
+      const longName = "a".repeat(256);
+      expect(() =>
+        ProtonPaths.translateWindowsPath(`%LOCALAPPDATA%\\${longName}`, proton, "linux"),
+      ).toThrow(
+        expect.objectContaining({
+          code: "ENAMETOOLONG",
+          limitBytes: 255,
+        }),
+      );
+    });
+  });
 });

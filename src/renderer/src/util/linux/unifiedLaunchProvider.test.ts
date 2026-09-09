@@ -123,10 +123,35 @@ describe("unifiedLaunchProvider", () => {
           steamPath: "/steam",
         },
         protonRuntimePreference: { path: runtimePath, type: "custom" },
+        protonRuntimeValidation: { checkDefaultUntrustedRoots: false },
       });
 
       expect(result.mode).toBe("custom-proton");
       expect(result.executable).toBe(path.join(runtimePath, "proton"));
+    } finally {
+      fs.rmSync(runtimePath, { force: true, recursive: true });
+    }
+  });
+
+  it("rejects custom runtime in unsafe temporary directories by default", () => {
+    const runtimePath = fs.mkdtempSync(path.join(os.tmpdir(), "vortex-unsafe-proton-"));
+    fs.writeFileSync(path.join(runtimePath, "proton"), "#!/bin/sh", { mode: 0o755 });
+    try {
+      expect(() =>
+        resolveUnifiedLaunch({
+          executablePath: "/tools/xEdit.exe",
+          gameId: "skyrimse",
+          isGame: false,
+          protonContext: {
+            appId: "489830",
+            gamePath: "/games/Skyrim",
+            prefixPath: "/steam/compatdata/489830/pfx",
+            protonPath: "/steam/common/Proton 9.0",
+            steamPath: "/steam",
+          },
+          protonRuntimePreference: { path: runtimePath, type: "custom" },
+        }),
+      ).toThrowError(/unsafe temporary, download, or staging content/);
     } finally {
       fs.rmSync(runtimePath, { force: true, recursive: true });
     }

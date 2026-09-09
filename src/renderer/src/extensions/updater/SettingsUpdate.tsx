@@ -81,21 +81,13 @@ class SettingsUpdate extends ComponentEx<IProps, ISettingsUpdateState> {
     // managed or development
     if (installType === "managed") {
       if (process.env.NODE_ENV === "development" && process.platform !== "win32") {
-        return this.renderCallout(
-          t(
-            "Automatic updates are unavailable for this Linux development build. Update the source checkout with your development tools.",
-          ),
-        );
+        return this.renderCallout(t("settings_updater::managed::linux_development"));
       }
 
       // Managed builds are updated by their package manager. Windows development
       // keeps the updater UI available for testing the installer flow.
       if (process.env.NODE_ENV !== "development" || process.platform !== "win32") {
-        return this.renderCallout(
-          t(
-            "Vortex was installed through a third-party service which will take care of updating it.",
-          ),
-        );
+        return this.renderCallout(t("settings_updater::managed::third_party"));
       }
 
       // managed and development
@@ -107,31 +99,23 @@ class SettingsUpdate extends ComponentEx<IProps, ISettingsUpdateState> {
         <FormGroup controlId="updateChannel">
           <div className="flex flex-col items-start gap-y-2">
             {process.env.NODE_ENV === "development"
-              ? this.renderCallout(
-                  t(
-                    "Vortex is running in development mode. Updates will be checked and downloaded but can't be installed.",
-                  ),
-                )
+              ? this.renderCallout(t("settings_updater::development_mode"))
               : null}
 
             <Typography as="span">
-              {t("Update")}
+              {t("settings_updater::label")}
 
-              <More id="more-update-channel" name={t("Update Channel")}>
-                {t(
-                  "You can choose to either receive automatic updates only after they went through some " +
-                    "community testing (Stable) or to always get the newest features (Beta). Manual checking for updates is " +
-                    "restricted to every 10 minutes.",
-                )}
+              <More id="more-update-channel" name={t("settings_updater::channel::label")}>
+                {t("settings_updater::channel::description")}
               </More>
             </Typography>
 
             <div className="flex items-center gap-x-2">
               <Picker<UpdateChannel>
                 options={[
-                  { label: t("Stable"), value: "stable" },
-                  { label: t("Beta"), value: "beta" },
-                  { label: t("No automatic updates"), value: "none" },
+                  { label: t("settings_updater::channel::stable"), value: "stable" },
+                  { label: t("settings_updater::channel::beta"), value: "beta" },
+                  { label: t("settings_updater::channel::disabled"), value: "none" },
                 ]}
                 placement="left"
                 value={updateChannel}
@@ -143,26 +127,16 @@ class SettingsUpdate extends ComponentEx<IProps, ISettingsUpdateState> {
                 disabled={checkUpdateButtonDisabled}
                 onClick={this.manualUpdateCheck}
               >
-                {t("Check now")}
+                {t("settings_updater::check_now")}
               </Button>
             </div>
 
             {updateChannel === "next"
-              ? this.renderCallout(
-                  t(
-                    "Vortex is running in preview mode and using the hidden 'next' update channel.",
-                  ),
-                )
+              ? this.renderCallout(t("settings_updater::preview_channel"))
               : null}
 
             {updateChannel === "none"
-              ? this.renderCallout(
-                  t(
-                    "Very old versions of Vortex will be locked out of network features eventually " +
-                      "so please do keep Vortex up-to-date.",
-                  ),
-                  "warning",
-                )
+              ? this.renderCallout(t("settings_updater::disabled_warning"), "warning")
               : null}
           </div>
         </FormGroup>
@@ -183,18 +157,14 @@ class SettingsUpdate extends ComponentEx<IProps, ISettingsUpdateState> {
       if (newChannel === "beta") {
         this.context.api.showDialog(
           "question",
-          "Switching to Beta update channel",
+          "settings_updater::beta_dialog::title",
           {
-            text: `Development versions of Vortex can be unstable and cause irreparable damage to your modding environment. 
-
-We recommend using the Beta channel only if you are comfortable with the risks and are willing to report any issues you encounter. We don't recommend downgrading back from beta to stable.
-
-Are you sure you want to switch to the Beta update channel?`,
+            text: "settings_updater::beta_dialog::description",
           },
           [
-            { label: "Cancel" },
+            { label: "settings_updater::actions::cancel" },
             {
-              label: "Switch to Beta",
+              label: "settings_updater::beta_dialog::confirm",
               action: () => this.props.onSetUpdateChannel(newChannel),
             },
           ],
@@ -207,18 +177,14 @@ Are you sure you want to switch to the Beta update channel?`,
 
         this.context.api.showDialog(
           "question",
-          "Turning off updates",
+          "settings_updater::disable_dialog::title",
           {
-            text: `This will stop notifications about Vortex updates.
-
-This is not recommended as important security and stability updates are released regularly.
-
-Are you sure you want to turn off updates?`,
+            text: "settings_updater::disable_dialog::description",
           },
           [
-            { label: "Cancel" },
+            { label: "settings_updater::actions::cancel" },
             {
-              label: "Turn off updates",
+              label: "settings_updater::disable_dialog::confirm",
               action: () => this.props.onSetUpdateChannel(newChannel),
             },
           ],

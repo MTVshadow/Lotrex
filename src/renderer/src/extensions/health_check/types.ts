@@ -194,6 +194,9 @@ export interface IModRequirementsCheckMetadata {
  * Organized into separate namespaces for different functionality
  */
 export interface IHealthCheckApi {
+  /** Abort checks in the currently running batch. */
+  cancelActiveChecks: () => void;
+
   /** Custom health checks */
   custom: ICustomCheckApi;
 

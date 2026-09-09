@@ -50,6 +50,7 @@ export interface IDetailViewProps {
   entry: IHealthCheckEntry;
   api: IExtensionApi;
   onBack: () => void;
+  onRefresh?: () => void;
 }
 
 /**

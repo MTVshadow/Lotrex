@@ -1,14 +1,23 @@
+import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 
 import PromiseBB from "bluebird";
+import { load as loadYaml } from "js-yaml";
 
 import type { IExtensionApi } from "../types/IExtensionContext";
 import type { IGameStore } from "../types/IGameStore";
 import { GameEntryNotFound } from "../types/IGameStore";
 import type { IGameStoreEntry } from "../types/IGameStoreEntry";
-import * as fs from "./fs";
-import { lutrisConfigDirectories, lutrisLaunchUrl, parseLutrisGameConfig } from "./linux/lutris";
+import {
+  lutrisConfigDirectories,
+  lutrisDatabaseGameToEntry,
+  lutrisLaunchUrl,
+  matchLutrisDatabaseGame,
+  parseLutrisGameConfig,
+  readAllLutrisDatabases,
+  type ILutrisDatabaseGame,
+} from "./linux/lutris";
 import { log } from "./log";
 import opn from "./opn";
 
@@ -83,14 +92,27 @@ class Lutris implements IGameStore {
 
   private async loadGames(): Promise<IGameStoreEntry[]> {
     const games: IGameStoreEntry[] = [];
-    for (const configDirectory of lutrisConfigDirectories(
-      os.homedir(),
-      process.env.XDG_CONFIG_HOME,
-      process.env.XDG_DATA_HOME,
-    )) {
+    const home = os.homedir();
+    const xdgConfig = process.env.XDG_CONFIG_HOME;
+    const xdgData = process.env.XDG_DATA_HOME;
+
+    // 1. Read all pga.db databases (native and Flatpak)
+    let dbGames: ILutrisDatabaseGame[] = [];
+    try {
+      dbGames = readAllLutrisDatabases(home, xdgData);
+    } catch (err) {
+      log("warn", "Failed to read Lutris database", {
+        error: err instanceof Error ? err.message : "unknown error",
+      });
+    }
+
+    const matchedDbGameIds = new Set<number>();
+
+    // 2. Discover YAML game configs
+    for (const configDirectory of lutrisConfigDirectories(home, xdgConfig, xdgData)) {
       let fileNames: string[];
       try {
-        fileNames = await fs.readdirAsync(configDirectory);
+        fileNames = await fs.readdir(configDirectory);
       } catch (err) {
         if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
           log("warn", "Failed to list Lutris game configurations", {
@@ -104,8 +126,23 @@ class Lutris implements IGameStore {
       for (const fileName of fileNames.filter((name) => /\.ya?ml$/i.test(name))) {
         const configPath = path.join(configDirectory, fileName);
         try {
-          const content = await fs.readFileAsync(configPath, { encoding: "utf8" });
-          const game = parseLutrisGameConfig(content, fileName, os.homedir());
+          const content = await fs.readFile(configPath, { encoding: "utf8" });
+          let rawConfig: Record<string, unknown> = {};
+          try {
+            const parsed = loadYaml(content);
+            if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+              rawConfig = parsed as Record<string, unknown>;
+            }
+          } catch {
+            // Ignore YAML parse error here; parseLutrisGameConfig will handle it
+          }
+
+          const dbGame = matchLutrisDatabaseGame(dbGames, rawConfig, fileName);
+          if (dbGame) {
+            matchedDbGameIds.add(dbGame.id);
+          }
+
+          const game = parseLutrisGameConfig(content, fileName, home, dbGame);
           if (game) games.push(game);
         } catch (err) {
           log("warn", "Failed to read Lutris game configuration", {
@@ -115,6 +152,15 @@ class Lutris implements IGameStore {
         }
       }
     }
+
+    // 3. Include any installed pga.db games that did not have a matching YAML config
+    for (const dbGame of dbGames) {
+      if (dbGame.installed && !matchedDbGameIds.has(dbGame.id)) {
+        const entry = lutrisDatabaseGameToEntry(dbGame, home);
+        if (entry) games.push(entry);
+      }
+    }
+
     return Array.from(new Map(games.map((game) => [game.appid, game])).values());
   }
 }

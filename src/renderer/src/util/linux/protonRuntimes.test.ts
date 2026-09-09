@@ -42,7 +42,7 @@ describe("protonRuntimes", () => {
     fs.writeFileSync(protonBin, "#!/bin/sh\nexit 0\n");
     fs.chmodSync(protonBin, 0o755);
 
-    const result = validateCustomProtonPath(validDir);
+    const result = validateCustomProtonPath(validDir, { checkDefaultUntrustedRoots: false });
     expect(result.valid).toBe(true);
   });
 
@@ -54,7 +54,12 @@ describe("protonRuntimes", () => {
       fs.mkdirSync(runtimeDir);
       fs.writeFileSync(protonBin, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
 
-      expect(validateCustomProtonPath(runtimeDir, { requireApproval: true })).toMatchObject({
+      expect(
+        validateCustomProtonPath(runtimeDir, {
+          requireApproval: true,
+          checkDefaultUntrustedRoots: false,
+        }),
+      ).toMatchObject({
         valid: false,
         error: expect.stringContaining("selected again"),
       });
@@ -63,6 +68,7 @@ describe("protonRuntimes", () => {
           approvedPath: runtimeDir,
           requireApproval: true,
           untrustedRoots: [tmpDir],
+          checkDefaultUntrustedRoots: false,
         }),
       ).toMatchObject({ valid: false, error: expect.stringContaining("staging content") });
       expect(
@@ -70,6 +76,7 @@ describe("protonRuntimes", () => {
           approvedPath: runtimeDir,
           currentUid: (process.getuid?.() ?? 0) + 1,
           requireApproval: true,
+          checkDefaultUntrustedRoots: false,
         }),
       ).toMatchObject({ valid: false, error: expect.stringContaining("current user") });
 
@@ -78,8 +85,113 @@ describe("protonRuntimes", () => {
         validateCustomProtonPath(runtimeDir, {
           approvedPath: runtimeDir,
           requireApproval: true,
+          checkDefaultUntrustedRoots: false,
         }),
       ).toMatchObject({ valid: false, error: expect.stringContaining("group or other") });
+    },
+  );
+
+  it.runIf(process.platform !== "win32")(
+    "enforces trust boundaries against unsafe directories and parent permissions",
+    () => {
+      const runtimeDir = path.join(tmpDir, "temp-proton");
+      const protonBin = path.join(runtimeDir, "proton");
+      fs.mkdirSync(runtimeDir);
+      fs.writeFileSync(protonBin, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+
+      // 1. By default, /tmp is an untrusted root and is rejected
+      expect(validateCustomProtonPath(runtimeDir)).toMatchObject({
+        valid: false,
+        error: expect.stringContaining("unsafe temporary, download, or staging content"),
+      });
+
+      // 2. Reject runtime in staging paths
+      expect(
+        validateCustomProtonPath(runtimeDir, {
+          checkDefaultUntrustedRoots: false,
+          stagingPaths: [tmpDir],
+        }),
+      ).toMatchObject({
+        valid: false,
+        error: expect.stringContaining("unsafe temporary, download, or staging content"),
+      });
+
+      // 3. Reject runtime in download paths
+      expect(
+        validateCustomProtonPath(runtimeDir, {
+          checkDefaultUntrustedRoots: false,
+          downloadPaths: [tmpDir],
+        }),
+      ).toMatchObject({
+        valid: false,
+        error: expect.stringContaining("unsafe temporary, download, or staging content"),
+      });
+
+      // 4. Reject world-writable runtime directory
+      fs.chmodSync(runtimeDir, 0o777);
+      expect(
+        validateCustomProtonPath(runtimeDir, {
+          checkDefaultUntrustedRoots: false,
+        }),
+      ).toMatchObject({
+        valid: false,
+        error: expect.stringContaining("writable by other users"),
+      });
+
+      // 5. Reject world-writable proton binary
+      fs.chmodSync(runtimeDir, 0o755);
+      fs.chmodSync(protonBin, 0o777);
+      expect(
+        validateCustomProtonPath(runtimeDir, {
+          checkDefaultUntrustedRoots: false,
+        }),
+      ).toMatchObject({
+        valid: false,
+        error: expect.stringContaining("writable by other users"),
+      });
+
+      // 6. Reject parent directory writable by others without sticky bit
+      const subParent = path.join(tmpDir, "unsticky-parent");
+      const subRuntime = path.join(subParent, "proton-dist");
+      const subBin = path.join(subRuntime, "proton");
+      fs.mkdirSync(subRuntime, { recursive: true });
+      fs.writeFileSync(subBin, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      fs.chmodSync(subParent, 0o777); // world-writable without sticky bit (0o1000)
+      expect(
+        validateCustomProtonPath(subRuntime, {
+          checkDefaultUntrustedRoots: false,
+        }),
+      ).toMatchObject({
+        valid: false,
+        error: expect.stringContaining(
+          "parent directory of the custom Proton runtime is writable by other users without a sticky bit",
+        ),
+      });
+    },
+  );
+
+  it.runIf(process.platform !== "win32")(
+    "rejects a proton symlink that resolves outside the approved runtime",
+    () => {
+      const runtimeDir = path.join(tmpDir, "symlink-runtime");
+      const outsideDir = path.join(tmpDir, "download-content");
+      const outsideProton = path.join(outsideDir, "proton");
+      fs.mkdirSync(runtimeDir);
+      fs.mkdirSync(outsideDir);
+      fs.writeFileSync(outsideProton, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      fs.symlinkSync(outsideProton, path.join(runtimeDir, "proton"));
+
+      expect(
+        validateCustomProtonPath(runtimeDir, {
+          approvedPath: runtimeDir,
+          checkDefaultUntrustedRoots: false,
+          downloadPaths: [outsideDir],
+          requireApproval: true,
+        }),
+      ).toMatchObject({
+        valid: false,
+        error: expect.stringContaining("inside the selected runtime directory"),
+      });
     },
   );
 

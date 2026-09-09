@@ -137,6 +137,10 @@ export const isHealthCheckRunning = (state: IState, checkId: HealthCheckId): boo
 export const isAnyHealthCheckRunning = (state: IState): boolean =>
   healthCheckState(state).runningChecks.length > 0;
 
+export const healthCheckScanProgress = (
+  state: IState,
+): { completed: number; total: number } | undefined => healthCheckState(state).scanProgress;
+
 /**
  * Get the health check persistent state
  */

@@ -92,7 +92,7 @@ function LinuxSetup(props: IProps): JSX.Element {
 
 interface IDiscoveryProgress {
   completed: number;
-  label: string;
+  labelKey: string;
   total: number;
 }
 
@@ -117,7 +117,7 @@ function LinuxSetupContent(props: IProps): JSX.Element {
     setDiscoveryError(undefined);
     setDiscoveryProgress({
       completed: 0,
-      label: "Steam libraries",
+      labelKey: "mod_management:::linux_setup::discovery_libraries_label",
       total: steamInstallations.length,
     });
 
@@ -130,7 +130,7 @@ function LinuxSetupContent(props: IProps): JSX.Element {
         discovered.push(...libraries);
         setDiscoveryProgress({
           completed: index + 1,
-          label: "Steam libraries",
+          labelKey: "mod_management:::linux_setup::discovery_libraries_label",
           total: steamInstallations.length,
         });
       }
@@ -138,7 +138,11 @@ function LinuxSetupContent(props: IProps): JSX.Element {
     })();
     const runtimesPromise = discoverAvailableProtonRuntimesAsync(proton?.steamPath, {
       onProgress: ({ completed, total }) =>
-        setDiscoveryProgress({ completed, label: "Proton runtimes", total }),
+        setDiscoveryProgress({
+          completed,
+          labelKey: "mod_management:::linux_setup::discovery_runtimes_label",
+          total,
+        }),
       signal: controller.signal,
     });
 
@@ -234,52 +238,70 @@ function LinuxSetupContent(props: IProps): JSX.Element {
       proton?.prefixPath,
       resolvedRuntime.error,
     );
+    const healthCheckLabel = t("mod_management:::linux_setup::open_health_check");
+    const closeLabel = t("mod_management:::linux_setup::close");
     const result = await props.api.showDialog(
       assessment.blocking || problems.some((problem) => problem.startsWith("ERROR"))
         ? "error"
         : "info",
-      "Linux configuration assessment",
-      { text: problems.length > 0 ? problems.join("\n") : "Configuration checks passed." },
-      [{ label: "Open Health Check" }, { label: "Close" }],
+      t("mod_management:::linux_setup::assessment_dialog_title"),
+      {
+        text:
+          problems.length > 0
+            ? problems.join("\n")
+            : t("mod_management:::linux_setup::assessment_passed"),
+      },
+      [{ label: healthCheckLabel }, { label: closeLabel }],
     );
-    if (result.action === "Open Health Check") props.onOpenHealthCheck();
+    if (result.action === healthCheckLabel) props.onOpenHealthCheck();
   };
+
+  const steamTypeKey = {
+    Flatpak: "mod_management:::linux_setup::steam_type::flatpak",
+    Native: "mod_management:::linux_setup::steam_type::native",
+    "Not detected": "mod_management:::linux_setup::steam_type::not_detected",
+    Snap: "mod_management:::linux_setup::steam_type::snap",
+  }[steamType];
 
   return (
     <Panel aria-labelledby="linux-setup-heading" id="linux-setup-assistant" role="region">
       <Panel.Body>
-        <ControlLabel id="linux-setup-heading">{t("Linux setup assistant")}</ControlLabel>
+        <ControlLabel id="linux-setup-heading">
+          {t("mod_management:::linux_setup::assistant_title")}
+        </ControlLabel>
         {!props.linuxSetupCompleted ? (
           <Alert aria-live="polite" bsStyle="info">
-            {t("Review this configuration before your first deployment.")}
+            {t("mod_management:::linux_setup::review_alert")}
           </Alert>
         ) : null}
-        <dl aria-label={t("Detected Linux configuration")}>
-          <dt>{t("Steam installation")}</dt>
-          <dd>{t(steamType)}</dd>
-          <dt>{t("Discovered Steam libraries")}</dt>
-          <dd>{steamLibraries.join(", ") || t("None")}</dd>
-          <dt>{t("Staging path")}</dt>
-          <dd>{props.stagingPath || t("Not configured")}</dd>
-          <dt>{t("Recommended staging path")}</dt>
+        <dl aria-label={t("mod_management:::linux_setup::detected_configuration")}>
+          <dt>{t("mod_management:::linux_setup::steam_installation")}</dt>
+          <dd>{t(steamTypeKey)}</dd>
+          <dt>{t("mod_management:::linux_setup::discovered_libraries")}</dt>
+          <dd>{steamLibraries.join(", ") || t("mod_management:::linux_setup::none")}</dd>
+          <dt>{t("mod_management:::linux_setup::staging_path")}</dt>
+          <dd>{props.stagingPath || t("mod_management:::linux_setup::not_configured")}</dd>
+          <dt>{t("mod_management:::linux_setup::recommended_staging_path")}</dt>
           <dd>{recommendedStagingPath}</dd>
-          <dt>{t("Recommended deployment method")}</dt>
+          <dt>{t("mod_management:::linux_setup::recommended_deployment_method")}</dt>
           <dd>
-            {recommendation.activator ? t(recommendation.activator.name) : t("None")} —{" "}
-            {t(recommendation.reason)}
+            {recommendation.activator
+              ? t(recommendation.activator.name)
+              : t("mod_management:::linux_setup::none")}{" "}
+            — {t(recommendation.reason)}
           </dd>
-          <dt>{t("Proton prefix")}</dt>
-          <dd>{proton?.prefixPath || t("Not detected")}</dd>
+          <dt>{t("mod_management:::linux_setup::proton_prefix")}</dt>
+          <dd>{proton?.prefixPath || t("mod_management:::linux_setup::not_detected")}</dd>
         </dl>
         {discoveryProgress !== undefined ? (
           <FormGroup aria-atomic="true" aria-busy="true" aria-live="polite" role="status">
             <ControlLabel id="linux-discovery-progress-label">
-              {t("Discovering Linux environment")}
+              {t("mod_management:::linux_setup::discovering_environment")}
             </ControlLabel>
             <ProgressBar
               aria-labelledby="linux-discovery-progress-label"
               id="linux-discovery-progress"
-              label={`${t(discoveryProgress.label)}: ${discoveryProgress.completed}/${discoveryProgress.total}`}
+              label={`${t(discoveryProgress.labelKey)}: ${discoveryProgress.completed}/${discoveryProgress.total}`}
               max={Math.max(discoveryProgress.total, 1)}
               now={discoveryProgress.completed}
             />
@@ -287,18 +309,20 @@ function LinuxSetupContent(props: IProps): JSX.Element {
               aria-controls="linux-discovery-progress"
               onClick={() => discoveryController.current?.abort()}
             >
-              {t("Cancel")}
+              {t("mod_management:::linux_setup::cancel")}
             </Button>
           </FormGroup>
         ) : null}
         {discoveryError !== undefined ? (
           <Alert aria-atomic="true" aria-live="assertive" bsStyle="warning" role="alert">
-            {t("Linux environment discovery failed")}: {discoveryError}{" "}
-            <Button onClick={startDiscovery}>{t("Retry")}</Button>
+            {t("mod_management:::linux_setup::discovery_failed")}: {discoveryError}{" "}
+            <Button onClick={startDiscovery}>{t("mod_management:::linux_setup::retry")}</Button>
           </Alert>
         ) : null}
         <FormGroup validationState={resolvedRuntime.error ? "error" : undefined}>
-          <ControlLabel htmlFor="linux-proton-runtime">{t("Proton runtime")}</ControlLabel>
+          <ControlLabel htmlFor="linux-proton-runtime">
+            {t("mod_management:::linux_setup::proton_runtime")}
+          </ControlLabel>
           <FormControl
             aria-describedby={resolvedRuntime.error ? "linux-proton-runtime-error" : undefined}
             componentClass="select"
@@ -306,8 +330,10 @@ function LinuxSetupContent(props: IProps): JSX.Element {
             value={preferenceValue}
             onChange={selectRuntime}
           >
-            <option value="auto">{t("Automatic")}</option>
-            <option value="steam-selected">{t("Steam-selected")}</option>
+            <option value="auto">{t("mod_management:::linux_setup::runtime_auto")}</option>
+            <option value="steam-selected">
+              {t("mod_management:::linux_setup::runtime_steam_selected")}
+            </option>
             {runtimes.map((runtime) => (
               <option
                 disabled={!runtime.isUsable}
@@ -315,14 +341,16 @@ function LinuxSetupContent(props: IProps): JSX.Element {
                 value={`runtime:${runtime.path}`}
               >
                 {runtime.name} ({runtime.source})
-                {runtime.isUsable ? "" : ` — ${t("Not executable")}`}
+                {runtime.isUsable
+                  ? ""
+                  : ` — ${t("mod_management:::linux_setup::runtime_not_executable")}`}
               </option>
             ))}
             {props.preference?.type === "custom" &&
             props.preference.path !== undefined &&
             !runtimes.some((runtime) => runtime.path === props.preference.path) ? (
               <option value={`runtime:${props.preference.path}`}>
-                {t("Custom")}: {props.preference.path}
+                {t("mod_management:::linux_setup::runtime_custom")}: {props.preference.path}
               </option>
             ) : null}
           </FormControl>
@@ -331,28 +359,33 @@ function LinuxSetupContent(props: IProps): JSX.Element {
               {t(resolvedRuntime.error)}
             </HelpBlock>
           ) : null}
-          <Button onClick={browseRuntime}>{t("Choose custom runtime")}</Button>{" "}
+          <Button onClick={browseRuntime}>
+            {t("mod_management:::linux_setup::choose_custom_runtime")}
+          </Button>{" "}
           <Button
             disabled={effectiveRuntimePath === undefined}
             onClick={() => {
               if (effectiveRuntimePath !== undefined) {
                 void opn(effectiveRuntimePath).catch((err) =>
-                  props.api.showErrorNotification("Failed to open Proton runtime directory", err),
+                  props.api.showErrorNotification(
+                    t("mod_management:::linux_setup::open_runtime_dir_failed"),
+                    err,
+                  ),
                 );
               }
             }}
           >
-            {t("Open runtime directory")}
+            {t("mod_management:::linux_setup::open_runtime_dir")}
           </Button>
         </FormGroup>
-        <HelpBlock>
-          {t(
-            "Hardlinks are fastest and require staging and the game on the same filesystem. Symlinks can cross filesystems but may be restricted by the destination or sandbox.",
-          )}
-        </HelpBlock>
-        <Button onClick={checkConfiguration}>{t("Check configuration")}</Button>{" "}
+        <HelpBlock>{t("mod_management:::linux_setup::hardlinks_symlinks_hint")}</HelpBlock>
+        <Button onClick={checkConfiguration}>
+          {t("mod_management:::linux_setup::check_configuration")}
+        </Button>{" "}
         {!props.linuxSetupCompleted ? (
-          <Button onClick={props.onComplete}>{t("Mark setup complete")}</Button>
+          <Button onClick={props.onComplete}>
+            {t("mod_management:::linux_setup::mark_setup_complete")}
+          </Button>
         ) : null}
       </Panel.Body>
     </Panel>
@@ -387,6 +420,6 @@ function mapDispatchToProps(dispatch: ThunkDispatch<any, null, Redux.Action>): I
   };
 }
 
-export default withTranslation(["common", "health_check"])(
+export default withTranslation(["common", "health_check", "mod_management"])(
   connect(mapStateToProps, mapDispatchToProps)(LinuxSetup),
 ) as React.ComponentClass<IBaseProps>;

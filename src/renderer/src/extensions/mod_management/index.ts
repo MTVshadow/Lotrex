@@ -123,14 +123,7 @@ import * as basicInstaller from "./util/basicInstaller";
 import BlacklistSet from "./util/BlacklistSet";
 import { genSubDirFunc, purgeMods, purgeModsInPath } from "./util/deploy";
 import { runDeploymentFaultPoint } from "./util/deploymentFaultInjection";
-import {
-  buildDeploymentRecoveryPlan,
-  completeDeploymentRecovery,
-  executeDeploymentOperation,
-  inspectDeploymentJournal,
-  rollbackApplyingDeployment,
-  type IDeploymentJournalInspection,
-} from "./util/deploymentJournal";
+import { executeDeploymentOperation } from "./util/deploymentJournal";
 import { withDeploymentLock } from "./util/deploymentLock";
 import {
   getAllActivators,
@@ -139,6 +132,10 @@ import {
   getSupportedActivators,
   registerDeploymentMethod,
 } from "./util/deploymentMethods";
+import {
+  checkDeploymentJournalsAtStartup,
+  showDeploymentRecoveryDetails,
+} from "./util/deploymentRecoveryUI";
 import { NoDeployment } from "./util/exceptions";
 import extendApi from "./util/extendAPI";
 import { dealWithExternalChanges } from "./util/externalChanges";
@@ -1062,6 +1059,7 @@ function genUpdateModDeployment(installManager: InstallManager) {
                         deployProgress,
                       ),
                     {
+                      onPrepared: () => runDeploymentFaultPoint("after-prepared"),
                       onCommitted: () => runDeploymentFaultPoint("after-commit"),
                       onManifestWritten: () => runDeploymentFaultPoint("after-manifest-write"),
                     },
@@ -1593,148 +1591,6 @@ function onNeedToDeploy(api: IExtensionApi, current: any) {
     });
   } else {
     api.dismissNotification("deployment-necessary");
-  }
-}
-
-function showDeploymentRecoveryDetails(
-  api: IExtensionApi,
-  gameId: string,
-  inspection: IDeploymentJournalInspection,
-) {
-  const entry = inspection.entry;
-  const text =
-    inspection.status === "invalid"
-      ? "The deployment journal could not be validated. Vortex will not start another deployment " +
-        "or purge in this staging folder until the journal is repaired or reviewed."
-      : "Vortex found a deployment operation that did not reach its committed state. " +
-        "No automatic recovery has been attempted.";
-  const details =
-    inspection.status === "invalid"
-      ? inspection.error?.message
-      : [
-          `Operation: ${entry.operation}`,
-          `Operation ID: ${entry.operationId}`,
-          `Phase: ${entry.phase}`,
-          `Game: ${entry.gameId}`,
-          `Staging: ${inspection.stagingPath}`,
-          `Targets: ${entry.targetPaths.join(", ")}`,
-          inspection.reconciliation !== undefined
-            ? `Files: ${inspection.reconciliation.counts.applied} applied, ${inspection.reconciliation.counts["backed-up"]} backed up, ${inspection.reconciliation.counts["not-started"]} not started, ${inspection.reconciliation.counts["rolled-back"]} rolled back, ${inspection.reconciliation.counts.ambiguous} ambiguous, ${inspection.reconciliation.counts.unsafe} unsafe`
-            : undefined,
-        ]
-          .filter(truthy)
-          .join("\n");
-
-  return api.showDialog(
-    "error",
-    "Deployment recovery required",
-    { text, message: details, parameters: { gameId } },
-    [{ label: "Close" }],
-  );
-}
-
-async function checkDeploymentJournalsAtStartup(api: IExtensionApi): Promise<void> {
-  const state = api.getState();
-  const configuredGameIds = Object.keys(state.settings.mods.installPath ?? {});
-  const stagingPaths = new Map<string, string>();
-  for (const gameId of configuredGameIds) {
-    const stagingPath = installPathForGame(state, gameId);
-    if (truthy(stagingPath) && !stagingPaths.has(stagingPath)) {
-      stagingPaths.set(stagingPath, gameId);
-    }
-  }
-
-  const inspections = await Promise.all(
-    Array.from(stagingPaths.entries()).map(async ([stagingPath, gameId]) => ({
-      gameId,
-      inspection: await inspectDeploymentJournal(stagingPath),
-    })),
-  );
-
-  for (const { gameId, inspection } of inspections) {
-    if (inspection === undefined) {
-      continue;
-    }
-    const entry = inspection.entry;
-    const recoveryPlan =
-      entry !== undefined
-        ? buildDeploymentRecoveryPlan(entry, inspection.reconciliation)
-        : undefined;
-    const recoveryActions =
-      recoveryPlan?.safe === true && recoveryPlan.action !== undefined
-        ? [
-            {
-              action: (dismiss: () => void) => {
-                void api
-                  .showDialog(
-                    "question",
-                    recoveryPlan.action === "rollback"
-                      ? "Roll back interrupted deployment?"
-                      : "Finish interrupted deployment?",
-                    {
-                      text: recoveryPlan.reason,
-                      message: `Operation ID: ${recoveryPlan.operationId}\nAffected paths: ${recoveryPlan.affectedPaths.join(", ")}`,
-                    },
-                    [
-                      { label: "Cancel", default: true },
-                      {
-                        label:
-                          recoveryPlan.action === "rollback"
-                            ? "Roll back deployment"
-                            : "Finish recovery",
-                      },
-                    ],
-                  )
-                  .then(async (result) => {
-                    const confirmedAction =
-                      recoveryPlan.action === "rollback"
-                        ? "Roll back deployment"
-                        : "Finish recovery";
-                    if (result.action !== confirmedAction) {
-                      return;
-                    }
-                    await withActivationLock(() =>
-                      entry.phase === "applying"
-                        ? rollbackApplyingDeployment(entry)
-                        : completeDeploymentRecovery(entry, recoveryPlan.action),
-                    );
-                    dismiss();
-                    api.sendNotification({
-                      id: `deployment-recovery-complete-${entry.operationId}`,
-                      message:
-                        recoveryPlan.action === "rollback"
-                          ? "The prepared operation was rolled back without changing managed files."
-                          : "The completed manifests were accepted and the operation was committed.",
-                      title: "Deployment recovery completed",
-                      type: "success",
-                    });
-                  })
-                  .catch((err) =>
-                    api.showErrorNotification("Deployment recovery failed", err, {
-                      allowReport: false,
-                    }),
-                  );
-              },
-              title: recoveryPlan.action === "rollback" ? "Roll back" : "Finish recovery",
-            },
-          ]
-        : [];
-    api.sendNotification({
-      actions: [
-        ...recoveryActions,
-        {
-          action: () => showDeploymentRecoveryDetails(api, gameId, inspection),
-          title: "Details",
-        },
-      ],
-      id: `deployment-recovery-${entry?.operationId ?? gameId}`,
-      message:
-        inspection.status === "invalid"
-          ? "A deployment journal is damaged. Deployment and purge are blocked for this staging folder."
-          : `An interrupted ${entry.operation} operation was found at phase ${entry.phase}.`,
-      title: "Deployment recovery required",
-      type: "warning",
-    });
   }
 }
 

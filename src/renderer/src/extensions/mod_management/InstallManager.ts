@@ -119,6 +119,11 @@ import {
 } from "../../util/errorHandling";
 import * as fs from "../../util/fs";
 import type { TFunction } from "../../util/i18n";
+import {
+  assertArchiveSafeToExtract,
+  assertLinuxSafeExtractedTree,
+} from "../../util/linux/archiveSafety";
+import { assertLinuxExtractionSafety } from "../../util/linux/pathSafety";
 import { prettifyNodeErrorMessage } from "../../util/message";
 import {
   activeGameId,
@@ -1120,14 +1125,14 @@ class InstallManager {
         new ArchiveBrokenError(path.basename(archivePath), "file type on avoidlist"),
       );
     } else {
-      extractProm = Promise.resolve(
+      extractProm = this.preflightArchiveExtraction(simulationZip, archivePath, tempPath, () =>
+        this.queryPassword(api.store),
+      ).then((password) =>
         simulationZip
-          .extractFull(
-            archivePath,
-            tempPath,
-            { ssc: false },
-            progress,
-            () => this.queryPassword(api.store) as any,
+          .extractFull(archivePath, tempPath, { ssc: false }, progress, () =>
+            password !== undefined
+              ? Promise.resolve(password)
+              : (this.queryPassword(api.store) as any),
           )
           .catch((err: Error) =>
             this.isCritical(err.message)
@@ -1167,6 +1172,8 @@ class InstallManager {
         }
       })
       .then(async () => {
+        // Enforce POSIX device safety, decompression limits, and valid symlinks in extracted tree
+        await assertLinuxSafeExtractedTree(tempPath, { archivePath });
         await repairWindowsSeparators(tempPath);
         fileList = await buildFileList(tempPath);
         if (truthy(extractList) && extractList.length > 0) {
@@ -3903,10 +3910,11 @@ class InstallManager {
     archivePath: string,
     tempPath: string,
     progress: (files: string[], percent: number) => void,
-    queryPassword: () => PromiseLike<string>,
+    queryPassword: () => Promise<string>,
     maxRetries: number = 3,
     retryDelayMs: number = 1000,
   ): Promise<{ code: number; errors: string[] }> {
+    let archivePassword: string | undefined;
     const attemptExtract = (retriesLeft: number): Promise<{ code: number; errors: string[] }> => {
       const retryIfFileInUse = (errorMessages: string[]) => {
         if (retriesLeft > 0 && errorMessages.some((msg) => this.isFileInUse(msg))) {
@@ -3937,10 +3945,22 @@ class InstallManager {
       //   );
       // }
       // clean up any stale temp directory from a previous failed attempt
-      return Promise.resolve(fs.removeAsync(tempPath)).then(() =>
-        Promise.resolve(
+      return Promise.resolve(fs.removeAsync(tempPath)).then(async () => {
+        if (archivePassword === undefined) {
+          archivePassword = await this.preflightArchiveExtraction(
+            zip,
+            archivePath,
+            tempPath,
+            queryPassword,
+          );
+        }
+        return Promise.resolve(
           zip
-            .extractFull(archivePath, tempPath, { ssc: false }, progress, queryPassword as any)
+            .extractFull(archivePath, tempPath, { ssc: false }, progress, () =>
+              archivePassword !== undefined
+                ? Promise.resolve(archivePassword)
+                : (queryPassword() as any),
+            )
             .then((result: { code: number; errors: string[] }) => {
               // 7z can resolve (not reject) with a non-zero exit code and
               // file-in-use errors. Retry in that case instead of proceeding
@@ -3961,10 +3981,28 @@ class InstallManager {
                   : Promise.reject(error))
               );
             }),
-        ),
-      );
+        );
+      });
     };
     return attemptExtract(maxRetries);
+  }
+
+  private async preflightArchiveExtraction(
+    zip: Zip,
+    archivePath: string,
+    tempPath: string,
+    queryPassword: () => Promise<string>,
+  ): Promise<string | undefined> {
+    try {
+      await assertArchiveSafeToExtract(zip, archivePath, tempPath);
+      return undefined;
+    } catch (err: unknown) {
+      const message = getErrorMessageOrDefault(err).toLowerCase();
+      if (!message.includes("password") && !message.includes("encrypted")) throw err;
+      const password = await queryPassword();
+      await assertArchiveSafeToExtract(zip, archivePath, tempPath, { password });
+      return password;
+    }
   }
 
   /**
@@ -4035,6 +4073,8 @@ class InstallManager {
         }
       })
       .then(async () => {
+        // Enforce POSIX device safety, decompression limits, and valid symlinks in extracted tree
+        await assertLinuxSafeExtractedTree(tempPath, { archivePath });
         fileList = await buildFileList(tempPath);
         const hasFomodSegment = (file: string) => {
           const segments = file.toLowerCase().split(path.sep);
@@ -7536,6 +7576,14 @@ class InstallManager {
     const ioConcurrency = Math.min(256, Math.max(8, cpuCount * 8));
 
     try {
+      // Preflight filesystem robustness checks on Linux:
+      // 1. Enforce 255-byte component and 4096-byte path limits
+      // 2. Reject root escapes, hostile redirects, and broken symlink structures before modifying disk
+      await assertLinuxExtractionSafety(
+        destinationPath,
+        jobs.map((job) => job.dst),
+      );
+
       // create parent directories
       await mapWithConcurrency(Array.from(dirs), (d) => fs.ensureDirAsync(d), dirConcurrency);
 

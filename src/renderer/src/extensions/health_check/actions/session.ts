@@ -32,3 +32,8 @@ export const setHealthCheckRunning = safeCreateAction(
   "SET_HEALTH_CHECK_RUNNING",
   (checkId: string, running: boolean) => ({ checkId, running }),
 );
+
+export const setHealthCheckScanProgress = safeCreateAction(
+  "SET_HEALTH_CHECK_SCAN_PROGRESS",
+  (completed: number, total: number) => ({ completed, total }),
+);

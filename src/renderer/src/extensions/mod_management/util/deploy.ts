@@ -1,3 +1,5 @@
+import * as path from "node:path";
+
 import { getErrorCode } from "@vortex/shared";
 import { generate as shortid } from "shortid";
 
@@ -32,7 +34,12 @@ import {
   withActivationLock,
 } from "./activationStore";
 import { runDeploymentFaultPoint } from "./deploymentFaultInjection";
-import { advanceDeploymentOperation, beginDeploymentOperation } from "./deploymentJournal";
+import {
+  advanceDeploymentOperation,
+  beginDeploymentOperation,
+  type IDeploymentFileOperation,
+  recordPlannedFileOperations,
+} from "./deploymentJournal";
 import { withDeploymentLock } from "./deploymentLock";
 import { getActivator, getCurrentActivator } from "./deploymentMethods";
 import { NoDeployment } from "./exceptions";
@@ -262,6 +269,7 @@ async function purgeModsImpl(
                 stagingPath,
                 targetPaths: modTypes.map((typeId) => modPaths[typeId]),
               });
+              runDeploymentFaultPoint("after-prepared");
               deploymentOperation = await advanceDeploymentOperation(
                 deploymentOperation,
                 "applying",
@@ -276,6 +284,31 @@ async function purgeModsImpl(
                 stagingPath,
               );
               lastDeployment = deployments;
+
+              const plannedPurgeOperations: IDeploymentFileOperation[] = [];
+              const seenPurgeTargets = new Set<string>();
+              for (const typeId of modTypes) {
+                const files = deployments[typeId] ?? [];
+                const targetRoot = modPaths[typeId];
+                for (const file of files) {
+                  const targetPath = path.join(targetRoot, file.target || "", file.relPath);
+                  if (!seenPurgeTargets.has(targetPath)) {
+                    seenPurgeTargets.add(targetPath);
+                    plannedPurgeOperations.push({
+                      id: `remove:${targetPath}`,
+                      action: "remove",
+                      sourcePath: path.join(stagingPath, file.source, file.relPath),
+                      targetPath,
+                      backupPath: targetPath + ".vortex_backup",
+                      replace: false,
+                      restoreBackup: true,
+                    });
+                  }
+                }
+              }
+              if (plannedPurgeOperations.length > 0) {
+                await recordPlannedFileOperations(stagingPath, plannedPurgeOperations);
+              }
 
               await api.emitAndAwait("will-purge", profile.id, lastDeployment);
               onProgress(10, "Removing links");
@@ -454,11 +487,42 @@ export function purgeModsInPath(
                 stagingPath,
                 targetPaths: [modPath],
               });
+              runDeploymentFaultPoint("after-prepared");
               deploymentOperation = await advanceDeploymentOperation(
                 deploymentOperation,
                 "applying",
               );
               await activator.prePurge(stagingPath);
+
+              const deployedFiles = await loadActivation(
+                api,
+                gameId,
+                typeId,
+                modPath,
+                stagingPath,
+                activator,
+              );
+              const plannedPurgeOperations: IDeploymentFileOperation[] = [];
+              const seenPurgeTargets = new Set<string>();
+              for (const file of deployedFiles ?? []) {
+                const targetPath = path.join(modPath, file.target || "", file.relPath);
+                if (!seenPurgeTargets.has(targetPath)) {
+                  seenPurgeTargets.add(targetPath);
+                  plannedPurgeOperations.push({
+                    id: `remove:${targetPath}`,
+                    action: "remove",
+                    sourcePath: path.join(stagingPath, file.source, file.relPath),
+                    targetPath,
+                    backupPath: targetPath + ".vortex_backup",
+                    replace: false,
+                    restoreBackup: true,
+                  });
+                }
+              }
+              if (plannedPurgeOperations.length > 0) {
+                await recordPlannedFileOperations(stagingPath, plannedPurgeOperations);
+              }
+
               onProgress(25, "Removing links");
               await activator.purge(stagingPath, modPath, gameId);
               runDeploymentFaultPoint("after-purge");

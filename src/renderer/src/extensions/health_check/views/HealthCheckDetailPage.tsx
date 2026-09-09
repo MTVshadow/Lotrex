@@ -34,6 +34,7 @@ interface IHealthCheckDetailPageProps {
   content: IHealthCheckContent;
   entry: IHealthCheckEntry;
   onBack: () => void;
+  onRefresh?: () => void;
   active?: boolean;
 }
 
@@ -76,6 +77,7 @@ function HealthCheckDetailPage({
   content,
   entry,
   onBack,
+  onRefresh,
   active,
 }: IHealthCheckDetailPageProps) {
   const { t } = useTranslation(["health_check", "common"]);
@@ -136,7 +138,7 @@ function HealthCheckDetailPage({
           </PageHeader>
 
           <PageScroll className="space-y-6 p-6">
-            <DetailView api={api} entry={shownEntry} onBack={onBack} />
+            <DetailView api={api} entry={shownEntry} onBack={onBack} onRefresh={onRefresh} />
 
             <PremiumBanner
               api={api}

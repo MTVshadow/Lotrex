@@ -27,6 +27,8 @@ const stubCode = `if (process.platform !== 'win32') {
   module.exports = new Proxy(knownStubs, {
     get(target, prop) {
       if (typeof prop === 'symbol') return undefined;
+      if (prop === 'then' || prop === '$$typeof' || prop === '__esModule') return undefined;
+      if (prop === 'default') return target;
       if (prop in target) return target[prop];
       return dummyFn;
     },

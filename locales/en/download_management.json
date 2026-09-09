@@ -1,3 +1,99 @@
 {
-  "_comment": "Download manager strings - to be populated during migration"
+  "_comment": "Download manager strings - migration in progress",
+  "settings": {
+    "actions": {
+      "cancel": "Cancel",
+      "close": "Close",
+      "continue": "Continue",
+      "ok": "OK"
+    },
+    "bandwidth": {
+      "label": "Limit Bandwidth",
+      "unit": "MB/s",
+      "unlimited": "Unlimited"
+    },
+    "collections": {
+      "install_while_downloading": "Install mods during collection downloads"
+    },
+    "folder": {
+      "apply": "Apply",
+      "browse": "Browse",
+      "description": "The downloads folder stores mod archives for every managed game, with a separate subfolder for each game. Changing it moves existing downloads automatically. Choose a location with enough free space and write permission. You can use {USERDATA} in the path; Lotrex replaces it with the current platform's user-data directory.",
+      "label": "Downloads Folder",
+      "placeholder": "Download Folder"
+    },
+    "install_from_file": {
+      "copy_files": "Copy files when using \"Install From File\""
+    },
+    "threads": {
+      "description": "Set the number of parallel download requests to the server. Multiple requests can improve speed only when an internet provider, download server, or router limits each request. Lotrex can download chunks of one file in parallel so installation can begin sooner. If additional threads do not improve speed, use a lower value to reduce server load.",
+      "label": "Download Threads",
+      "label_with_count": "Download Threads: {{count}}",
+      "premium_limit": "Regular users are restricted to 1 download thread. Go Premium for up to 10 download threads!",
+      "unlock_speed": "Unlock max download speeds"
+    },
+    "transfer": {
+      "cleanup": {
+        "failed": "Transfer clean-up failed",
+        "not_writable_description": "Lotrex cannot clean up the destination folder because it does not have permission to write there.",
+        "not_writable_title": "Destination folder is not writable",
+        "old_folder_retained": "The downloads folder was copied [b]successfully[/b] to the selected destination.<br />Clean-up of the old downloads folder was cancelled.<br /><br />Old downloads folder: [url]{{thePath}}[/url]",
+        "title": "Clean-up failed"
+      },
+      "disk_space": {
+        "description": "There is not enough disk space to move the downloads folder to the selected destination. Choose another destination or free some space and try again.",
+        "title": "Insufficient disk space"
+      },
+      "elevation": {
+        "create_with_elevation": "Create with elevated permissions",
+        "description": "The current user account cannot write to this directory. Lotrex can try to create it with elevated permissions, but may need to grant access to other users of this system.",
+        "title": "Access denied"
+      },
+      "empty_destination": {
+        "description": "The destination folder must be empty.",
+        "title": "Invalid destination"
+      },
+      "errors": {
+        "corrupted_entry": "Lotrex encountered a corrupted or unreadable file or directory and cannot complete the transfer. The operating system reported the error while moving: \"{{culprit}}\". Check the storage device or filesystem, then try again.",
+        "directories_locked": "Directories are locked",
+        "invalid_destination_description": "The selected destination partition is invalid. Choose a different destination.",
+        "invalid_destination_title": "Invalid destination",
+        "invalid_path": "Invalid path",
+        "io_interrupted_description": "Input/output file operations were interrupted. This indicates an environment, storage, or network problem rather than a Lotrex defect.<br /><br />Possible causes include a disconnected removable drive, an unavailable network drive, another tool blocking file access, or a failing storage device.<br /><br />Check the environment and try again after resolving the problem.",
+        "io_interrupted_title": "File operations interrupted",
+        "move_failed": "Failed to move directories",
+        "unsupported_os_description": "This operation is currently unavailable on your operating system.",
+        "unsupported_os_title": "Unsupported operating system"
+      },
+      "existing_folder": {
+        "description": "This downloads folder belongs to another Lotrex instance. Do not use one folder for both shared and per-user modes. Continuing will merge the current downloads into that folder and let this instance take ownership. This cannot be undone. Continue only if you are certain.",
+        "title": "Existing downloads folder"
+      },
+      "invalid_path": {
+        "application_directory": "Downloads cannot be stored in the Lotrex application directory because that directory may be removed during an update.",
+        "parent_of_old_folder": "The new downloads folder cannot be a parent of the old folder because the destination must be empty.",
+        "reserved_directory": "The selected directory cannot safely be used for downloads because moving it later could also move unrelated contents.",
+        "same_directory": "The selected path refers to the same directory on disk as the existing downloads folder.",
+        "title": "Invalid path selected"
+      },
+      "missing_source": {
+        "description": "Lotrex cannot find the current downloads folder. It may have been removed, its storage device may be unavailable, or its network drive may be disconnected.<br /><br />Check that the folder is accessible to the operating system.<br /><br />You can instead reinitialize the downloads folder at the selected destination, but it will be empty because no files can be transferred from the missing source.",
+        "reinitialize": "Reinitialize",
+        "title": "Missing downloads folder"
+      },
+      "progress": {
+        "moving": "Moving",
+        "moving_folder": "Moving downloads folder"
+      }
+    },
+    "validation": {
+      "absolute_path_required": "The downloads folder must use an absolute path.",
+      "illegal_characters": "The path cannot contain illegal characters or reserved names.",
+      "inside_application_folder": "The downloads folder cannot be inside the Lotrex application folder.",
+      "inside_staging_folder": "The downloads folder cannot be inside the mods staging folder.",
+      "partition_root": "The path cannot be the root of a partition.",
+      "path_too_long": "The download path should not be too long, otherwise downloads may fail.",
+      "reserved_directory": "This downloads folder is reserved. Choose a different directory."
+    }
+  }
 }

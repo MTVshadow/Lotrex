@@ -11,7 +11,6 @@ import { DropdownButton as DropdownButton_2 } from 'react-bootstrap';
 import { EndorsedStatus } from '@nexusmods/nexus-api';
 import { FC } from 'react';
 import { i18n } from 'i18next';
-import I18next from 'i18next';
 import { ICollection } from '@nexusmods/nexus-api';
 import { ICollectionManifest } from '@nexusmods/nexus-api';
 import { ICollectionSearchOptions } from '@nexusmods/nexus-api';
@@ -772,10 +771,8 @@ interface IBaseProps$11 {
     instanceId?: string | string[];
     // (undocumented)
     orientation?: "horizontal" | "vertical";
-    // Warning: (ae-forgotten-export) The symbol "TFunction$1" needs to be exported by the entry point api.d.ts
-    //
     // (undocumented)
-    t: TFunction$1;
+    t: TFunction;
 }
 
 // @public (undocumented)
@@ -879,7 +876,7 @@ interface IBaseProps$6 {
     // (undocumented)
     showAll?: boolean;
     // (undocumented)
-    t: TFunction$1;
+    t: TFunction;
     // (undocumented)
     tooltipPlacement?: "top" | "right" | "bottom" | "left";
 }
@@ -1293,7 +1290,7 @@ interface IContextMenuProps {
     // (undocumented)
     position?: IContextPosition;
     // (undocumented)
-    t?: TFunction$1;
+    t?: TFunction;
     // (undocumented)
     visible: boolean;
 }
@@ -1362,7 +1359,7 @@ interface IDeploymentMethod {
     readonly compatible?: string[];
     deactivate: (sourcePath: string, dataPath: string, sourceName: string) => PromiseLike<void>;
     readonly description: string;
-    detailedDescription: (t: TFunction$1) => string;
+    detailedDescription: (t: TFunction) => string;
     // Warning: (ae-forgotten-export) The symbol "IFileChange" needs to be exported by the entry point api.d.ts
     externalChanges: (gameId: string, installPath: string, dataPath: string, activation: IDeployedFile[]) => PromiseLike<IFileChange[]>;
     finalize: (gameId: string, dataPath: string, installationPath: string, progressCB?: (files: number, total: number, phase?: "case-collision") => void) => PromiseLike<IDeployedFile[]>;
@@ -1796,7 +1793,7 @@ interface IExtensionApi {
     getState: <T extends IState = IState>() => T;
     highlightControl: (selector: string, durationMS: number, text?: string, altStyle?: boolean) => void;
     isOutdated: () => boolean;
-    laterT: TFunction$1;
+    laterT: TFunction;
     locale: () => string;
     // Warning: (ae-forgotten-export) The symbol "ILookupDetails" needs to be exported by the entry point api.d.ts
     lookupModMeta: (details: ILookupDetails, ignoreCache?: boolean) => default_2<ILookupResult[]>;
@@ -1835,7 +1832,7 @@ interface IExtensionApi {
     // Warning: (ae-forgotten-export) The symbol "ThunkStore" needs to be exported by the entry point api.d.ts
     store?: ThunkStore<any>;
     suppressNotification?: (id: string, suppress?: boolean) => void;
-    translate: TFunction$1;
+    translate: TFunction;
     withPrePost: (<TEvent extends ApiEventName>(eventName: string, callback: (...args: ApiEventArgs<TEvent>) => PromiseLike<ApiEventResult<TEvent>>) => (...args: ApiEventArgs<TEvent>) => Promise<ApiEventResult<TEvent>>) & (<TResult, TArgs extends readonly unknown[] = unknown[]>(eventName: string, callback: (...args: TArgs) => PromiseLike<TResult>) => (...args: TArgs) => Promise<TResult>);
 }
 
@@ -2049,7 +2046,7 @@ interface IFilterProps {
     // (undocumented)
     onSetFilter: (attributeId: string, value: any) => void;
     // (undocumented)
-    t: TFunction$1;
+    t: TFunction;
 }
 
 // @public (undocumented)
@@ -2248,7 +2245,7 @@ interface IGameSpecificInterfaceProps {
     // (undocumented)
     revisionInfo: IRevision;
     // (undocumented)
-    t: TFunction$1;
+    t: TFunction;
 }
 
 // @public
@@ -2442,6 +2439,10 @@ interface IHealthCheckSessionState {
         [checkId: string]: IHealthCheckResult;
     };
     runningChecks: string[];
+    scanProgress?: {
+        completed: number;
+        total: number;
+    };
 }
 
 // @public (undocumented)
@@ -4321,11 +4322,11 @@ interface ISupportedResult {
 
 // @public
 interface ITableAttribute<T = any> {
-    calc?: (object: T, t: TFunction$1) => any | Promise<any>;
+    calc?: (object: T, t: TFunction) => any | Promise<any>;
     condition?: () => boolean;
     cssClass?: (object: T, enabled: boolean) => string;
     // Warning: (ae-forgotten-export) The symbol "ICustomProps" needs to be exported by the entry point api.d.ts
-    customRenderer?: (object: T | T[], detailCell: boolean, t: TFunction$1, props: ICustomProps) => JSX.Element;
+    customRenderer?: (object: T | T[], detailCell: boolean, t: TFunction, props: ICustomProps) => JSX.Element;
     description?: string | ITString;
     edit: {
         readOnly?: (object: any) => boolean;
@@ -4349,7 +4350,7 @@ interface ITableAttribute<T = any> {
     isDefaultSort?: boolean | "desc";
     isDefaultVisible?: boolean;
     isExtensible?: boolean;
-    isGroupable?: boolean | ((object: T, t: TFunction$1) => string);
+    isGroupable?: boolean | ((object: T, t: TFunction) => string);
     isSortable?: boolean;
     isToggleable?: boolean;
     isVolatile?: boolean;
@@ -4545,7 +4546,7 @@ interface IToolIconProps {
     // (undocumented)
     onRun?: () => void;
     // (undocumented)
-    t?: TFunction$1;
+    t?: TFunction;
     // (undocumented)
     valid: boolean;
 }
@@ -4602,10 +4603,10 @@ interface IUIBlocker {
 
 // @public
 interface IUnavailableReason {
-    description: (t: TFunction$1) => string;
+    description: (t: TFunction) => string;
     fixCallback?: (api: IExtensionApi) => PromiseLike<void>;
     order?: number;
-    solution?: (t: TFunction$1) => string;
+    solution?: (t: TFunction) => string;
 }
 
 // @public
@@ -5044,7 +5045,7 @@ type RegisterSettings = (title: string, element: React$2.ComponentClass<any> | R
 // Warning: (ae-forgotten-export) The symbol "ToDoType" needs to be exported by the entry point api.d.ts
 //
 // @public (undocumented)
-type RegisterToDo = (id: string, type: ToDoType, props: (state: any) => any, icon: ((props: any) => JSX.Element) | string, text: ((t: TFunction$1, props: any) => JSX.Element) | string, action: (props: any) => void, condition: (props: any) => boolean, value: ((t: TFunction$1, props: any) => JSX.Element) | string, priority: number) => void;
+type RegisterToDo = (id: string, type: ToDoType, props: (state: any) => any, icon: ((props: any) => JSX.Element) | string, text: ((t: TFunction, props: any) => JSX.Element) | string, action: (props: any) => void, condition: (props: any) => boolean, value: ((t: TFunction, props: any) => JSX.Element) | string, priority: number) => void;
 
 // @public
 type Revertability = "yes" | "never" | "invalid";
@@ -5151,9 +5152,6 @@ class TextFilterComponent extends React$2.Component<IFilterProps, {}> {
     // (undocumented)
     render(): JSX.Element;
 }
-
-// @public (undocumented)
-type TFunction$1 = typeof I18next.t;
 
 // @public (undocumented)
 interface ThunkStore<S> extends Redux.Store<S> {
@@ -5385,39 +5383,39 @@ export class ZoomableImage extends React$2.Component<IZoomableImageProps, {
 // lib/api.d.ts:735:3 - (ae-forgotten-export) The symbol "ByteRange" needs to be exported by the entry point api.d.ts
 // lib/api.d.ts:1122:5 - (ae-forgotten-export) The symbol "IDiscoveredTool" needs to be exported by the entry point api.d.ts
 // lib/api.d.ts:1230:5 - (ae-forgotten-export) The symbol "IItemRendererProps" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:1919:3 - (ae-forgotten-export) The symbol "IChoices" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:2832:5 - (ae-forgotten-export) The symbol "IEditChoice" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:3178:5 - (ae-forgotten-export) The symbol "ICollectionModInstallInfo" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:3479:5 - (ae-forgotten-export) The symbol "IProfileMod" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:3536:5 - (ae-forgotten-export) The symbol "IMod" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:3870:3 - (ae-forgotten-export) The symbol "IGameDetail" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:4299:5 - (ae-forgotten-export) The symbol "IStateVerifier" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:4916:5 - (ae-forgotten-export) The symbol "IQueryArgEntry" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5275:7 - (ae-forgotten-export) The symbol "IProgress" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5280:5 - (ae-forgotten-export) The symbol "IExtensionLoadFailure" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5283:5 - (ae-forgotten-export) The symbol "IRunningTool" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5286:5 - (ae-forgotten-export) The symbol "IUIBlocker" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5301:5 - (ae-forgotten-export) The symbol "IRowState" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5344:5 - (ae-forgotten-export) The symbol "IExtensionState$1" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5367:5 - (ae-forgotten-export) The symbol "IDownload" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5370:5 - (ae-forgotten-export) The symbol "DownloadCheckpoint" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5388:5 - (ae-forgotten-export) The symbol "IDashletSettings" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5453:5 - (ae-forgotten-export) The symbol "IAttributeState" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5459:5 - (ae-forgotten-export) The symbol "IProtonRuntimePreference" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5520:7 - (ae-forgotten-export) The symbol "IGameInfoEntry" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5552:5 - (ae-forgotten-export) The symbol "IOverlay" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5598:7 - (ae-forgotten-export) The symbol "IProfile" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5600:5 - (ae-forgotten-export) The symbol "IModTable" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5601:5 - (ae-forgotten-export) The symbol "IStateDownloads" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5602:5 - (ae-forgotten-export) The symbol "ICollectionsPersistentState" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5604:7 - (ae-forgotten-export) The symbol "ICategoryDictionary" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5606:5 - (ae-forgotten-export) The symbol "IStateGameMode" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5615:5 - (ae-forgotten-export) The symbol "IStateTransactions" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5616:5 - (ae-forgotten-export) The symbol "IHistoryPersistent" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5617:5 - (ae-forgotten-export) The symbol "IHealthCheckPersistentState" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:5633:5 - (ae-forgotten-export) The symbol "IDiscoveryPhase" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:8970:3 - (ae-forgotten-export) The symbol "MainPageBody" needs to be exported by the entry point api.d.ts
-// lib/api.d.ts:8971:3 - (ae-forgotten-export) The symbol "MainPageHeader" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:1917:3 - (ae-forgotten-export) The symbol "IChoices" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:2830:5 - (ae-forgotten-export) The symbol "IEditChoice" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:3176:5 - (ae-forgotten-export) The symbol "ICollectionModInstallInfo" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:3477:5 - (ae-forgotten-export) The symbol "IProfileMod" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:3534:5 - (ae-forgotten-export) The symbol "IMod" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:3868:3 - (ae-forgotten-export) The symbol "IGameDetail" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:4297:5 - (ae-forgotten-export) The symbol "IStateVerifier" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:4914:5 - (ae-forgotten-export) The symbol "IQueryArgEntry" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5278:7 - (ae-forgotten-export) The symbol "IProgress" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5283:5 - (ae-forgotten-export) The symbol "IExtensionLoadFailure" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5286:5 - (ae-forgotten-export) The symbol "IRunningTool" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5289:5 - (ae-forgotten-export) The symbol "IUIBlocker" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5304:5 - (ae-forgotten-export) The symbol "IRowState" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5347:5 - (ae-forgotten-export) The symbol "IExtensionState$1" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5370:5 - (ae-forgotten-export) The symbol "IDownload" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5373:5 - (ae-forgotten-export) The symbol "DownloadCheckpoint" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5391:5 - (ae-forgotten-export) The symbol "IDashletSettings" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5456:5 - (ae-forgotten-export) The symbol "IAttributeState" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5462:5 - (ae-forgotten-export) The symbol "IProtonRuntimePreference" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5523:7 - (ae-forgotten-export) The symbol "IGameInfoEntry" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5555:5 - (ae-forgotten-export) The symbol "IOverlay" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5601:7 - (ae-forgotten-export) The symbol "IProfile" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5603:5 - (ae-forgotten-export) The symbol "IModTable" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5604:5 - (ae-forgotten-export) The symbol "IStateDownloads" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5605:5 - (ae-forgotten-export) The symbol "ICollectionsPersistentState" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5607:7 - (ae-forgotten-export) The symbol "ICategoryDictionary" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5609:5 - (ae-forgotten-export) The symbol "IStateGameMode" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5618:5 - (ae-forgotten-export) The symbol "IStateTransactions" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5619:5 - (ae-forgotten-export) The symbol "IHistoryPersistent" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5620:5 - (ae-forgotten-export) The symbol "IHealthCheckPersistentState" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:5636:5 - (ae-forgotten-export) The symbol "IDiscoveryPhase" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:8973:3 - (ae-forgotten-export) The symbol "MainPageBody" needs to be exported by the entry point api.d.ts
+// lib/api.d.ts:8974:3 - (ae-forgotten-export) The symbol "MainPageHeader" needs to be exported by the entry point api.d.ts
 
 // (No @packageDocumentation comment for this package)
 

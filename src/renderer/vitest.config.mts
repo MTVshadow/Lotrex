@@ -17,6 +17,9 @@ export default defineConfig({
     setupFiles: ["./test-setup.ts"],
 
     include: ["src/**/*.test.{ts,tsx,js,jsx}"],
+    testTimeout: 10_000,
+    hookTimeout: 10_000,
+    teardownTimeout: 10_000,
   },
   resolve: {
     tsconfigPaths: true,

@@ -14,20 +14,134 @@
   "{{ count }} item selected_plural": "{{ count }} items selected",
   "{{ count }} comments": "1 comment",
   "{{ count }} comments_plural": "{{ count }} comments",
+  "English": "English",
   "Enable All": "Enable",
   "Enable All_plural": "Enable All",
   "Install All": "Install",
   "Install All_plural": "Install All",
+  "Language": "Language",
+  "Ukrainian": "Ukrainian",
   "{{ count }} notification is being suppressed_plural": "{{ count }} notifications are being suppressed",
   "{{ count }} extensions will be updated": "An extension will be updated",
   "{{ count }} extensions will be updated_plural": "{{ count }} extensions will be updated",
   "The mod you {{enabled}} depends on other mods, do you want to {{enable}} those as well?": "The mod you {{enabled}} depends on other mods, do you want to {{enable}} those as well?",
   "The mod you {{enabled}} depends on other mods, do you want to {{enable}} those as well?_plural": "The mods you {{enabled}} depend on other mods, do you want to {{enable}} those as well?",
+  "settings_analytics": {
+    "allow_usage_data": "Allow this app to collect usage data to improve your experience",
+    "data_details_link": "More about the data we track",
+    "description": "Help us provide you with the best modding experience. With your permission, we will collect analytics information and send it to our team to help us improve quality and performance. This information is sent anonymously and will never be shared with a third party.",
+    "privacy_policy_link": "Privacy Policy",
+    "title": "Data & Privacy"
+  },
+  "settings_application": {
+    "multi_user": {
+      "description": "By default, each user account on this system has a separate Lotrex instance with its own settings, mods, and profiles. Shared mode stores this data in a system-wide location available to every user, including Nexus Mods credentials and other potentially confidential information entered in Lotrex. Switching modes does not delete either data set, so you can safely switch back later.",
+      "label": "Multi-User Mode",
+      "per_user": "Per-User",
+      "shared": "Shared"
+    },
+    "restart": {
+      "action": "Restart now",
+      "required": "You need to restart Lotrex to activate this change"
+    }
+  },
+  "settings_interface": {
+    "advanced": {
+      "gpu_acceleration": "Enable GPU Acceleration",
+      "gpu_disabled_warning": "Disabling GPU acceleration will make the Lotrex UI significantly less responsive in places.",
+      "profile_management": "Enable Profile Management",
+      "profiles": "Profiles"
+    },
+    "automation": {
+      "deploy_enabled_mods": "Deploy Mods when Enabled",
+      "deployment": "Deployment",
+      "enable_installed_mods": "Enable Mods when installed (in current profile)",
+      "install_downloaded_mods": "Install Mods when downloaded",
+      "run_on_startup": "Run Lotrex when my computer starts",
+      "start_minimized": "Start Lotrex in the background (Minimized)"
+    },
+    "customization": {
+      "custom_titlebar": "Custom Window Title Bar",
+      "desktop_notifications": "Enable Desktop Notifications",
+      "foreground_browser_downloads": "Bring Lotrex to foreground when starting downloads in browser",
+      "hide_top_level_category": "Hide Top-Level Category",
+      "relative_times": "Use relative times (e.g. \"3 months ago\")",
+      "top_level_categories": "Top-Level Categories"
+    },
+    "language": {
+      "extension_by_author": "Extension by {{author}}",
+      "first_use_restart_hint": "When you select a language for the first time you may have to restart Lotrex.",
+      "label": "Language",
+      "unknown_author": "unknown author"
+    },
+    "notifications": {
+      "reset_suppressed": "Reset suppressed notifications",
+      "suppressed_count": "({{count}} notification is being suppressed)",
+      "suppressed_count_plural": "({{count}} notifications are being suppressed)"
+    },
+    "profile_dialog": {
+      "cancel": "Cancel",
+      "continue": "Continue",
+      "description": "Disabling this setting only hides the profile interface. Profiles are not deleted, and the active profile is not disabled. The last active profile for each game will still provide its mod selection and local savegames.",
+      "title": "Disabling Profile Management"
+    },
+    "restart": {
+      "action": "Restart now",
+      "required": "You need to restart Lotrex to activate this change"
+    },
+    "sections": {
+      "advanced": "Advanced",
+      "automation": "Automation",
+      "customization": "Customisation",
+      "notifications": "Notifications"
+    }
+  },
+  "settings_metaserver": {
+    "actions": {
+      "add": "Add a metadata server",
+      "remove": "Remove server"
+    },
+    "description": "A metadata server provides additional details and dependency information about mods. Lotrex uses nexusmods.com by default, but you can add other compatible servers here.",
+    "help": "Servers queried for mod metadata.",
+    "title": "Metadata Server"
+  },
+  "settings_updater": {
+    "actions": {
+      "cancel": "Cancel"
+    },
+    "beta_dialog": {
+      "confirm": "Switch to Beta",
+      "description": "Development versions of Lotrex can be unstable and cause irreparable damage to your modding environment. We recommend using the Beta channel only if you understand the risks and are willing to report encountered issues. Downgrading from Beta to Stable is not recommended. Are you sure you want to switch to the Beta update channel?",
+      "title": "Switching to Beta update channel"
+    },
+    "channel": {
+      "beta": "Beta",
+      "description": "Choose Stable to receive automatic updates after community testing, Beta to receive the newest features, or disable automatic updates. Manual update checks are rate-limited.",
+      "disabled": "No automatic updates",
+      "label": "Update Channel",
+      "stable": "Stable"
+    },
+    "check_now": "Check now",
+    "development_mode": "Lotrex is running in development mode. Updates will be checked and downloaded but cannot be installed automatically.",
+    "disable_dialog": {
+      "confirm": "Turn off updates",
+      "description": "This will stop notifications about Lotrex updates. This is not recommended because important security and stability updates are released regularly. Are you sure you want to turn off updates?",
+      "title": "Turning off updates"
+    },
+    "disabled_warning": "Very old versions of Lotrex may eventually lose access to network features, so keep Lotrex up to date.",
+    "label": "Update",
+    "managed": {
+      "linux_development": "Automatic updates are unavailable for this Linux development build. Update the source checkout with your development tools.",
+      "third_party": "Lotrex was installed through a third-party service that manages its updates."
+    },
+    "preview_channel": "Lotrex is running in preview mode and using the hidden 'next' update channel."
+  },
   "actions": {
     "search": "Search"
   },
   "view_all": "View all",
   "back": "Back",
+  "cancel": "Cancel",
   "refresh": "Refresh",
   "settings": "Settings",
   "beta": "Beta",

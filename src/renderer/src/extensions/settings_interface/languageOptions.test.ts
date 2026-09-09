@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { buildLanguageOptions, type ILanguage } from "./languageOptions";
+import { buildLanguageOptions, type ILanguage, selectedLanguageOptionId } from "./languageOptions";
 
-// identity translation, so labels are asserted verbatim
-const t = (input: string) => input;
+const translations: Record<string, string> = {
+  "settings_interface::language::extension_by_author": "Extension by {{author}}",
+  "settings_interface::language::unknown_author": "unknown author",
+};
+const t = (key: string, options?: { replace: { author: string } }) =>
+  translations[key].replace("{{author}}", options?.replace.author ?? "");
 
 // At runtime language.ext entries are IAvailableExtension objects (they carry `author`),
 // though ILanguage types them as the narrower Partial<IExtensionDownloadInfo>. Mirror
@@ -18,6 +22,15 @@ describe("buildLanguageOptions", () => {
     expect(buildLanguageOptions(languages, t)).toEqual([
       { id: "en::local", key: "en", extName: undefined, label: "English" },
     ]);
+  });
+
+  it("makes the bundled Ukrainian locale selectable", () => {
+    const options = buildLanguageOptions([{ key: "uk", language: "Українська", ext: [] }], t);
+
+    expect(options).toEqual([
+      { id: "uk::local", key: "uk", extName: undefined, label: "Українська" },
+    ]);
+    expect(selectedLanguageOptionId(options, "uk")).toBe("uk::local");
   });
 
   it("includes the country in the label when present", () => {
@@ -72,5 +85,11 @@ describe("buildLanguageOptions", () => {
     expect(buildLanguageOptions(languages, t)[0].label).toBe(
       "Spanish (Extension by unknown author)",
     );
+  });
+
+  it("does not select a missing or invalid locale", () => {
+    const options = buildLanguageOptions([{ key: "en", language: "English", ext: [] }], t);
+
+    expect(selectedLanguageOptionId(options, "missing")).toBe("");
   });
 });

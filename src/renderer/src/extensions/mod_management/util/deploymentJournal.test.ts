@@ -611,4 +611,156 @@ describe("deployment journal", () => {
     });
     expect(recovered.fileOperations?.[0].recoveryState).toBe("rolled-back");
   });
+
+  it("records planned purge file operations and reconciles disk state", async () => {
+    const stagingPath = await temporaryDirectory();
+    const targetRoot = await temporaryDirectory();
+    const sourcePath = path.join(stagingPath, "mod", "texture.dds");
+    const targetPath = path.join(targetRoot, "texture.dds");
+    const backupPath = targetPath + ".vortex_backup";
+
+    await fs.mkdir(path.dirname(sourcePath), { recursive: true });
+    await fs.writeFile(sourcePath, "modded");
+    await fs.writeFile(backupPath, "vanilla");
+
+    let entry = await beginDeploymentOperation({
+      operation: "purge",
+      gameId: "skyrimse",
+      instanceId: "instance-1",
+      deploymentMethod: "hardlink_activator",
+      stagingPath,
+      targetPaths: [targetRoot],
+    });
+    expect(entry.operation).toBe("purge");
+    expect(entry.phase).toBe("prepared");
+
+    await advanceDeploymentOperation(entry, "applying");
+    await recordPlannedFileOperations(stagingPath, [
+      {
+        id: `remove:${targetPath}`,
+        action: "remove",
+        sourcePath,
+        targetPath,
+        backupPath,
+        replace: false,
+        restoreBackup: true,
+      },
+    ]);
+
+    entry = (await readDeploymentJournal(stagingPath))!;
+    expect(entry.fileOperations).toHaveLength(1);
+    expect(entry.fileOperations?.[0].id).toBe(`remove:${targetPath}`);
+
+    const reconciliation = await reconcileDeploymentOperation(entry);
+    expect(reconciliation.counts.applied).toBe(1);
+    expect(reconciliation.safe).toBe(true);
+
+    const plan = buildDeploymentRecoveryPlan(entry, reconciliation);
+    expect(plan.safe).toBe(true);
+    expect(plan.action).toBe("rollback");
+  });
+
+  it("rolls back an interrupted move deployment restoring vanilla backup and moving mod back to staging", async () => {
+    const stagingPath = await temporaryDirectory();
+    const targetRoot = await temporaryDirectory();
+    const sourcePath = path.join(stagingPath, "mod", "script.pex");
+    const targetPath = path.join(targetRoot, "script.pex");
+    const backupPath = targetPath + ".vortex_backup";
+    const lnkPath = sourcePath + ".vortex_lnk";
+
+    await fs.mkdir(path.dirname(sourcePath), { recursive: true });
+    await fs.writeFile(targetPath, "modded script");
+    await fs.writeFile(backupPath, "vanilla script");
+    await fs.writeFile(lnkPath, JSON.stringify({ target: targetPath }));
+
+    let entry = await beginDeploymentOperation({
+      operation: "deploy",
+      gameId: "skyrimse",
+      instanceId: "instance-1",
+      deploymentMethod: "move_activator",
+      stagingPath,
+      targetPaths: [targetRoot],
+    });
+    await advanceDeploymentOperation(entry, "applying");
+    await recordPlannedFileOperations(stagingPath, [
+      {
+        id: `deploy:${targetPath}`,
+        action: "deploy",
+        sourcePath,
+        targetPath,
+        backupPath,
+        replace: true,
+        restoreBackup: false,
+      },
+    ]);
+
+    entry = (await readDeploymentJournal(stagingPath))!;
+    const reconciliation = await reconcileDeploymentOperation(entry);
+    expect(reconciliation.counts.applied).toBe(1);
+    expect(reconciliation.safe).toBe(true);
+
+    const recovered = await rollbackApplyingDeployment(entry);
+    expect(recovered.phase).toBe("committed");
+    expect(recovered.recovery?.action).toBe("rollback");
+
+    // Target should now be the restored vanilla file
+    await expect(fs.readFile(targetPath, "utf8")).resolves.toBe("vanilla script");
+    // Mod file should be back in staging
+    await expect(fs.readFile(sourcePath, "utf8")).resolves.toBe("modded script");
+    // Backup and link files should be removed
+    await expect(fs.lstat(backupPath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.lstat(lnkPath)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("rolls back an interrupted purge restoring original deployment links and vanilla backups safely", async () => {
+    const stagingPath = await temporaryDirectory();
+    const targetRoot = await temporaryDirectory();
+    const sourcePath = path.join(stagingPath, "mod", "mesh.nif");
+    const targetPath = path.join(targetRoot, "mesh.nif");
+    const backupPath = targetPath + ".vortex_backup";
+
+    await fs.mkdir(path.dirname(sourcePath), { recursive: true });
+    await fs.writeFile(sourcePath, "mod mesh");
+    // Target was already unlinked during purge, but backup is still at backupPath
+    await fs.writeFile(backupPath, "vanilla mesh");
+
+    let entry = await beginDeploymentOperation({
+      operation: "purge",
+      gameId: "skyrimse",
+      instanceId: "instance-1",
+      deploymentMethod: "hardlink_activator",
+      stagingPath,
+      targetPaths: [targetRoot],
+    });
+    await advanceDeploymentOperation(entry, "applying");
+    await recordPlannedFileOperations(stagingPath, [
+      {
+        id: `remove:${targetPath}`,
+        action: "remove",
+        sourcePath,
+        targetPath,
+        backupPath,
+        replace: false,
+        restoreBackup: true,
+      },
+    ]);
+
+    entry = (await readDeploymentJournal(stagingPath))!;
+    const reconciliation = await reconcileDeploymentOperation(entry);
+    expect(reconciliation.safe).toBe(true);
+
+    const recovered = await completeDeploymentRecovery(entry, "rollback", reconciliation);
+    expect(recovered.phase).toBe("committed");
+    expect(recovered.recovery?.action).toBe("rollback");
+
+    // Deployed link should be recreated pointing to source
+    const [sourceStats, targetStats] = await Promise.all([
+      fs.lstat(sourcePath),
+      fs.lstat(targetPath),
+    ]);
+    expect(targetStats.ino).toBe(sourceStats.ino);
+
+    // Vanilla backup remains safely stored
+    await expect(fs.readFile(backupPath, "utf8")).resolves.toBe("vanilla mesh");
+  });
 });

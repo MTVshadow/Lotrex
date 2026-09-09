@@ -82,22 +82,6 @@ function getText(id: string, t: TFunction) {
           "If the mod was removed from the source it may make sense to select no source here to " +
           "quiet error messages.",
       );
-    case "downloadspath": {
-      return t(
-        "The downloads folder holds all mod archives you have downloaded with Vortex. It is shared across all " +
-          "games and includes a subfolder for each of them. e.g. if your downloads folder is set to\n" +
-          '"D:\\Vortex Downloads\\", archive files for Skyrim will be stored in: "D:\\Vortex Downloads\\skyrim\\".\n' +
-          "By default Vortex will select a user data directory that is guaranteed to have write access.\n" +
-          "When changing the Downloads Folder, the downloads for all your games will be moved to the new location " +
-          "automatically. Make sure the new location has plenty of available space and that you have permission " +
-          "to write files to it.\n" +
-          'You can use "variables" to save yourself some typing:\n' +
-          " - {USERDATA} is replaced with your user data directory.\n" +
-          "e.g. if your Windows account name is Mike," +
-          '\n "{USERDATA}\\Downloads\\" will be converted to:\n' +
-          '"C:\\Users\\Mike\\AppData\\Roaming\\Vortex\\Downloads\\"',
-      );
-    }
     case "modspath": {
       return t(
         "Vortex uses default paths to store mods you download and install.\n" +

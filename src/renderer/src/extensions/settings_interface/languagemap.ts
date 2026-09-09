@@ -532,10 +532,6 @@ const languageMap = {
     name: "Romanian, Moldavian, Moldovan",
     nativeName: "română",
   },
-  ru: {
-    name: "Russian",
-    nativeName: "русский язык",
-  },
   sa: {
     name: "Sanskrit (Saṁskṛta)",
     nativeName: "संस्कृतम्",
@@ -678,7 +674,7 @@ const languageMap = {
   },
   uk: {
     name: "Ukrainian",
-    nativeName: "українська",
+    nativeName: "Українська",
   },
   ur: {
     name: "Urdu",

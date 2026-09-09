@@ -29,20 +29,11 @@ class Settings extends ComponentEx<IProps, {}> {
     return (
       <form>
         <FormGroup controlId="cleanup-on-deploy">
-          <ControlLabel>{t("Clean up empty directories ")}</ControlLabel>
+          <ControlLabel>{t("mod_management:::settings::workarounds::cleanup::title")}</ControlLabel>
           <Toggle checked={cleanupOnDeploy} onToggle={this.toggle}>
-            {t("Clean up empty directories during deployment")}
+            {t("mod_management:::settings::workarounds::cleanup::toggle")}
           </Toggle>
-          <HelpBlock>
-            {t(
-              "By default Vortex will only remove empty directories during deployment " +
-                "if the game or related tools would otherwise not work correctly.\n" +
-                "Usually empty directories cause no harm and cleaning them up takes " +
-                "some extra time during deployment so " +
-                "we advise you only enable this option if you're experience problems we didn't " +
-                "anticipate. In that case please also inform us.",
-            )}
-          </HelpBlock>
+          <HelpBlock>{t("mod_management:::settings::workarounds::cleanup::description")}</HelpBlock>
         </FormGroup>
       </form>
     );

@@ -1,4 +1,5 @@
 export const DEPLOYMENT_FAULT_POINTS = [
+  "after-prepared",
   "after-backup",
   "after-unlink",
   "after-link",

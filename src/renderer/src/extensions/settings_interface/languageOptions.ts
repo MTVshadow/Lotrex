@@ -21,6 +21,15 @@ export interface ILanguageOption {
   label: string;
 }
 
+interface ILanguageOptionTranslationOptions {
+  replace: { author: string };
+}
+
+type LanguageOptionTranslator = (
+  key: string,
+  options?: ILanguageOptionTranslationOptions,
+) => string;
+
 export function languageName(language: ILanguage): string {
   return language.country === undefined
     ? language.language
@@ -36,7 +45,7 @@ export function languageName(language: ILanguage): string {
  */
 export function buildLanguageOptions(
   languages: ILanguage[],
-  t: (input: string) => string,
+  t: LanguageOptionTranslator,
 ): ILanguageOption[] {
   const optionFor = (
     language: ILanguage,
@@ -47,7 +56,11 @@ export function buildLanguageOptions(
     extName: ext.name,
     label:
       ext.modId !== undefined
-        ? `${languageName(language)} (${t("Extension")} by ${ext["author"] || "unknown author"})`
+        ? `${languageName(language)} (${t("settings_interface::language::extension_by_author", {
+            replace: {
+              author: ext["author"] || t("settings_interface::language::unknown_author"),
+            },
+          })})`
         : languageName(language),
   });
 
@@ -61,4 +74,11 @@ export function buildLanguageOptions(
     }
     return prev;
   }, []);
+}
+
+export function selectedLanguageOptionId(
+  options: ILanguageOption[],
+  currentLanguage: string,
+): string {
+  return options.find((option) => option.key === currentLanguage)?.id ?? "";
 }
