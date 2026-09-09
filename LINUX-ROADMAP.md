@@ -416,9 +416,9 @@ mount details, selected runtime, test result, and a privacy-safe diagnostic repo
 
 ### Gate B — Deployment durability
 
-1. Implement the transaction journal, operation ID, manifest integrity, and startup recovery model.
-2. Add process-kill fault injection at every deployment and purge boundary.
-3. Verify resume/rollback and vanilla backup restoration for hardlink, symlink, and supported move.
+1. Implement the transaction journal, operation ID, manifest integrity, and startup recovery model. (Completed: transaction journal with SHA-256 envelope, atomic persistence, startup recovery UI, drill-down preview, and privacy-safe report export).
+2. Add process-kill fault injection at every deployment and purge boundary. (Completed: deterministic fault injection test suite covering pre-apply, applying, post-apply, purge, and removable-volume disconnects in `deploymentFaultInjection.test.ts`).
+3. Verify resume/rollback and vanilla backup restoration for hardlink, symlink, and supported move. (Completed: verified across hardlink, symlink, and move deployment activators with full vanilla backup restoration).
 
 ### Gate C — Packaged Native Steam beta
 
