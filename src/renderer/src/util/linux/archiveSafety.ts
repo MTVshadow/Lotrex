@@ -25,10 +25,12 @@ export type PosixSpecialDeviceType = "fifo" | "character_device" | "block_device
  * Default threshold constants for archive decompression safety.
  * These can be overridden via options or environment variables:
  * - VORTEX_ARCHIVE_MAX_BYTES: maximum uncompressed bytes allowed
+ * - VORTEX_ARCHIVE_MAX_FILE_BYTES: maximum uncompressed bytes allowed for one entry
  * - VORTEX_ARCHIVE_MAX_RATIO: maximum compression ratio (uncompressed / compressed)
  * - VORTEX_ARCHIVE_MAX_FILES: maximum number of entries
  */
 export const DEFAULT_MAX_DECOMPRESSED_SIZE_BYTES = 50 * 1024 * 1024 * 1024; // 50 GiB
+export const DEFAULT_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024 * 1024; // 10 GiB
 export const DEFAULT_MAX_COMPRESSION_RATIO = 250; // 250:1 ratio
 export const DEFAULT_MIN_RATIO_THRESHOLD_BYTES = 50 * 1024 * 1024; // 50 MiB minimum before ratio kicks in
 export const DEFAULT_MAX_FILE_COUNT = 250_000;
@@ -36,6 +38,8 @@ export const DEFAULT_MAX_FILE_COUNT = 250_000;
 export interface IArchiveSafetyLimits {
   /** Maximum allowed uncompressed byte size across all entries (default: 50 GiB). */
   maxDecompressedSizeBytes?: number;
+  /** Maximum allowed uncompressed byte size for one archive entry (default: 10 GiB). */
+  maxFileSizeBytes?: number;
   /** Maximum compression ratio (uncompressed / compressed) allowed (default: 250). */
   maxCompressionRatio?: number;
   /** Minimum uncompressed threshold in bytes before compression ratio is evaluated (default: 50 MiB). */
@@ -57,6 +61,49 @@ export interface IArchiveEntryInfo {
   mode?: number;
   typeflag?: string;
   attributes?: string;
+}
+
+export interface IArchiveListing {
+  list: (
+    archivePath: string,
+    options: Record<string, unknown>,
+    onEntries: (entries: Array<{ attr?: string; name: string; size?: number }>) => void,
+  ) => PromiseLike<unknown>;
+}
+
+/**
+ * Inspect archive metadata before extraction starts so declared path, entry-count, and
+ * decompressed-size limits can reject an archive before it consumes destination resources.
+ * The post-extraction tree validation remains required because archive metadata can be malformed.
+ */
+export async function assertArchiveSafeToExtract(
+  listing: IArchiveListing,
+  archivePath: string,
+  destinationRoot: string,
+  options: ISafeExtractedTreeOptions & { password?: string } = {},
+): Promise<void> {
+  const platform = options.platform ?? process.platform;
+  if (platform !== "linux") return;
+
+  const archiveStats = await fs.statAsync(archivePath);
+  const tracker = new ArchiveSafetyTracker({
+    compressedSizeBytes: archiveStats.size,
+    destinationRoot,
+    limits: options.limits,
+    platform,
+  });
+  const listOptions: Record<string, unknown> = {};
+  if (options.password !== undefined) listOptions.p = options.password;
+
+  await listing.list(archivePath, listOptions, (entries) => {
+    entries.forEach((entry) =>
+      tracker.processEntry({
+        attributes: entry.attr,
+        path: entry.name,
+        uncompressedSize: entry.size,
+      }),
+    );
+  });
 }
 
 /**
@@ -182,6 +229,21 @@ export class ArchiveSafetyTracker {
   public processEntry(entry: IArchiveEntryInfo): void {
     this.mFileCount += 1;
     if (entry.uncompressedSize != null && entry.uncompressedSize > 0) {
+      const maxFileSize =
+        this.mLimits.maxFileSizeBytes ??
+        (process.env.VORTEX_ARCHIVE_MAX_FILE_BYTES
+          ? Number.parseInt(process.env.VORTEX_ARCHIVE_MAX_FILE_BYTES, 10)
+          : DEFAULT_MAX_FILE_SIZE_BYTES);
+      if (entry.uncompressedSize > maxFileSize) {
+        const err = new Error(
+          `Archive entry ${entry.path} (${entry.uncompressedSize} bytes) exceeds safe per-file limit (${maxFileSize} bytes)`,
+        );
+        err["code"] = "EARC_FILE_SIZE_EXCEEDED";
+        err["path"] = entry.path;
+        err["uncompressedBytes"] = entry.uncompressedSize;
+        err["limit"] = maxFileSize;
+        throw err;
+      }
       this.mUncompressedSize += entry.uncompressedSize;
     }
 

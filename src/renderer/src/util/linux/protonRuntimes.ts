@@ -197,8 +197,10 @@ export function validateCustomProtonPath(
   }
 
   let resolvedRuntime: string;
+  let resolvedProtonBin: string;
   try {
     resolvedRuntime = fs.realpathSync(normalized);
+    resolvedProtonBin = fs.realpathSync(protonBin);
   } catch {
     return { valid: false, error: `The selected Proton runtime path cannot be resolved safely.` };
   }
@@ -223,6 +225,23 @@ export function validateCustomProtonPath(
     };
   }
 
+  if (!isWithinPath(resolvedRuntime, resolvedProtonBin)) {
+    return {
+      valid: false,
+      error: `The Proton script must resolve inside the selected runtime directory: ${resolvedProtonBin}`,
+    };
+  }
+
+  const untrustedProtonRoot = allUntrustedRoots.find(
+    (root) => root.trim().length > 0 && isWithinPath(root, resolvedProtonBin),
+  );
+  if (untrustedProtonRoot !== undefined) {
+    return {
+      valid: false,
+      error: `The Proton script cannot resolve into unsafe temporary, download, or staging content: ${resolvedProtonBin}`,
+    };
+  }
+
   try {
     fs.accessSync(protonBin, fs.constants.X_OK);
   } catch {
@@ -238,7 +257,7 @@ export function validateCustomProtonPath(
     let protonStats: fs.Stats;
     try {
       runtimeStats = fs.statSync(resolvedRuntime);
-      protonStats = fs.statSync(fs.realpathSync(protonBin));
+      protonStats = fs.statSync(resolvedProtonBin);
     } catch {
       return {
         valid: false,

@@ -170,6 +170,31 @@ describe("protonRuntimes", () => {
     },
   );
 
+  it.runIf(process.platform !== "win32")(
+    "rejects a proton symlink that resolves outside the approved runtime",
+    () => {
+      const runtimeDir = path.join(tmpDir, "symlink-runtime");
+      const outsideDir = path.join(tmpDir, "download-content");
+      const outsideProton = path.join(outsideDir, "proton");
+      fs.mkdirSync(runtimeDir);
+      fs.mkdirSync(outsideDir);
+      fs.writeFileSync(outsideProton, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      fs.symlinkSync(outsideProton, path.join(runtimeDir, "proton"));
+
+      expect(
+        validateCustomProtonPath(runtimeDir, {
+          approvedPath: runtimeDir,
+          checkDefaultUntrustedRoots: false,
+          downloadPaths: [outsideDir],
+          requireApproval: true,
+        }),
+      ).toMatchObject({
+        valid: false,
+        error: expect.stringContaining("inside the selected runtime directory"),
+      });
+    },
+  );
+
   it("discovers installed runtimes in steamapps and compatibilitytools.d", () => {
     const steamRoot = path.join(tmpDir, "mock-steam");
     const commonDir = path.join(steamRoot, "steamapps", "common");

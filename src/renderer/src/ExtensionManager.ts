@@ -2471,10 +2471,10 @@ class ExtensionManager {
                 if (options.onSpawned !== undefined) {
                   options.onSpawned(child.pid);
                 }
-                if (options.onReady !== undefined) {
+                child.once("spawn", () => {
                   supervisor?.markReady();
-                  options.onReady();
-                }
+                  options.onReady?.();
+                });
 
                 if (options.detach) {
                   child.unref();

@@ -236,6 +236,10 @@ export class ProcessTreeSupervisor {
         this.mClearTimeout(this.mSlowStartTimer);
         this.mSlowStartTimer = undefined;
       }
+      if (this.mTimeoutTimer !== undefined) {
+        this.mClearTimeout(this.mTimeoutTimer);
+        this.mTimeoutTimer = undefined;
+      }
     }
   }
 

@@ -128,7 +128,7 @@ describe("managed process tree signaling and supervision", () => {
       expect(onEscalateToKill).not.toHaveBeenCalled();
     });
 
-    it("handles launch timeout distinguishing slow-start vs hung execution", () => {
+    it("stops the launch timeout after the process reports ready", () => {
       const kill = vi.fn();
       const onTimeout = vi.fn();
 
@@ -156,8 +156,9 @@ describe("managed process tree signaling and supervision", () => {
       expect(slowError.state).toBe("slow-start");
       expect(slowError.timeoutMS).toBe(10000);
       expect(kill).toHaveBeenCalledWith(-6001, "SIGTERM");
+      supervisorSlow.onProcessExit();
 
-      // Case B: Process marks ready before timeout occurs (Hung runtime timeout)
+      // Case B: Process marks ready before timeout; the launch timer must not kill gameplay.
       kill.mockClear();
       onTimeout.mockClear();
 
@@ -177,14 +178,10 @@ describe("managed process tree signaling and supervision", () => {
       expect(supervisorHung.isReady).toBe(true);
       expect(supervisorHung.state).toBe("ready");
 
-      // Advance to timeout
+      // Advance beyond the original launch timeout.
       vi.advanceTimersByTime(15000);
-      expect(onTimeout).toHaveBeenCalledOnce();
-      const hungError = onTimeout.mock.calls[0][0];
-      expect(hungError).toBeInstanceOf(ProcessTimeoutError);
-      expect(hungError.isSlowStart).toBe(false);
-      expect(hungError.state).toBe("hung");
-      expect(kill).toHaveBeenCalledWith(-6002, "SIGTERM");
+      expect(onTimeout).not.toHaveBeenCalled();
+      expect(kill).not.toHaveBeenCalled();
     });
 
     it("triggers onSlowStart callback when slow-start threshold expires without readiness", () => {

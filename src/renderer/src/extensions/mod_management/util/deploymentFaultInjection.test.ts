@@ -312,6 +312,7 @@ describe("Deployment durability and process-kill fault injection", () => {
       expect(isVolumeUnavailableError({ code: "ENXIO" })).toBe(true);
       expect(isVolumeUnavailableError({ code: "ESTALE" })).toBe(true);
       expect(isVolumeUnavailableError({ code: "EIO" })).toBe(true);
+      expect(isVolumeUnavailableError({ code: "EREMOTEIO" })).toBe(true);
       expect(isVolumeUnavailableError({ code: "EEXIST" })).toBe(false);
       expect(isVolumeUnavailableError({ code: "EPERM" })).toBe(false);
     });

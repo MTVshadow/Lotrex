@@ -17,6 +17,7 @@ vi.mock("../fs", async () => {
 
 import {
   ArchiveSafetyTracker,
+  assertArchiveSafeToExtract,
   assertArchiveDecompressionSafety,
   assertLinuxSafeExtractedTree,
   getPosixSpecialDeviceType,
@@ -136,7 +137,75 @@ describe("Archive adversarial corpus and decompression safety", () => {
     });
   });
 
+  describe("assertArchiveSafeToExtract", () => {
+    it("rejects oversized metadata before an extractor can write files", async () => {
+      const archiveDir = await createTempDir();
+      const destination = await createTempDir();
+      const archivePath = path.join(archiveDir, "bomb.zip");
+      await fs.writeFile(archivePath, Buffer.alloc(1024));
+      const list = vi.fn(async (_archivePath, _options, onEntries) => {
+        onEntries([{ attr: "A", name: "payload.bin", size: 20_000 }]);
+      });
+
+      await expect(
+        assertArchiveSafeToExtract({ list }, archivePath, destination, {
+          limits: { maxDecompressedSizeBytes: 10_000 },
+          platform: "linux",
+        }),
+      ).rejects.toMatchObject({ code: "EARC_SIZE_EXCEEDED" });
+      expect(list).toHaveBeenCalledOnce();
+    });
+
+    it("allows ordinary archive metadata and passes a supplied password", async () => {
+      const archiveDir = await createTempDir();
+      const destination = await createTempDir();
+      const archivePath = path.join(archiveDir, "mod.7z");
+      await fs.writeFile(archivePath, Buffer.alloc(1024));
+      const list = vi.fn(async (_archivePath, options, onEntries) => {
+        expect(options).toEqual({ p: "secret" });
+        onEntries([{ attr: "A", name: "meshes/model.nif", size: 2048 }]);
+      });
+
+      await expect(
+        assertArchiveSafeToExtract({ list }, archivePath, destination, {
+          password: "secret",
+          platform: "linux",
+        }),
+      ).resolves.toBeUndefined();
+    });
+  });
+
   describe("ArchiveSafetyTracker", () => {
+    it("rejects an entry exceeding the per-file limit", () => {
+      const tracker = new ArchiveSafetyTracker({
+        compressedSizeBytes: 1024,
+        limits: { maxDecompressedSizeBytes: 100_000, maxFileSizeBytes: 10_000 },
+        platform: "linux",
+      });
+
+      expect(() =>
+        tracker.processEntry({ path: "oversized.bin", uncompressedSize: 10_001 }),
+      ).toThrowError(
+        expect.objectContaining({
+          code: "EARC_FILE_SIZE_EXCEEDED",
+          limit: 10_000,
+          path: "oversized.bin",
+        }),
+      );
+    });
+
+    it("allows an entry exactly at the per-file limit", () => {
+      const tracker = new ArchiveSafetyTracker({
+        compressedSizeBytes: 1024,
+        limits: { maxDecompressedSizeBytes: 10_000, maxFileSizeBytes: 10_000 },
+        platform: "linux",
+      });
+
+      expect(() =>
+        tracker.processEntry({ path: "boundary.bin", uncompressedSize: 10_000 }),
+      ).not.toThrow();
+    });
+
     it("tracks valid entries and aggregates statistics", () => {
       const tracker = new ArchiveSafetyTracker({
         compressedSizeBytes: 10 * 1024 * 1024,
