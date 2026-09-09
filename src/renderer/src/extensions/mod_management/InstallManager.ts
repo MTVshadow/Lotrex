@@ -119,6 +119,7 @@ import {
 } from "../../util/errorHandling";
 import * as fs from "../../util/fs";
 import type { TFunction } from "../../util/i18n";
+import { assertLinuxExtractionSafety } from "../../util/linux/pathSafety";
 import { prettifyNodeErrorMessage } from "../../util/message";
 import {
   activeGameId,
@@ -7536,6 +7537,14 @@ class InstallManager {
     const ioConcurrency = Math.min(256, Math.max(8, cpuCount * 8));
 
     try {
+      // Preflight filesystem robustness checks on Linux:
+      // 1. Enforce 255-byte component and 4096-byte path limits
+      // 2. Reject root escapes, hostile redirects, and broken symlink structures before modifying disk
+      await assertLinuxExtractionSafety(
+        destinationPath,
+        jobs.map((job) => job.dst),
+      );
+
       // create parent directories
       await mapWithConcurrency(Array.from(dirs), (d) => fs.ensureDirAsync(d), dirConcurrency);
 

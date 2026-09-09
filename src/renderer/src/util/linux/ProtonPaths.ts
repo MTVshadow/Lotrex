@@ -4,6 +4,7 @@ import * as path from "node:path";
 import type { IDiscoveryResult } from "../../extensions/gamemode_management/types/IDiscoveryResult";
 import { resolveGameSteamAppId } from "../../extensions/gamemode_management/util/gameCapabilities";
 import type { IGame } from "../../types/IGame";
+import { assertLinuxPathLimits } from "./pathLimits";
 import { findLinuxSteamPath, getLinuxSteamPaths } from "./steamPaths";
 
 /**
@@ -453,6 +454,19 @@ export class ProtonPaths {
       protonPath,
     };
 
+    // Enforce Linux path limits on all resolved prefix directories
+    assertLinuxPathLimits(
+      [
+        result.prefixPath,
+        result.userProfilePath,
+        result.documentsPath,
+        result.myGamesPath,
+        result.appDataLocalPath,
+        result.appDataRoamingPath,
+        result.gamePath,
+      ].filter((p): p is string => typeof p === "string" && p.length > 0),
+    );
+
     // Кешуємо лише успішний результат
     this.cache.set(cacheKey, { fingerprint, result });
 
@@ -465,6 +479,89 @@ export class ProtonPaths {
     });
 
     return result;
+  }
+
+  /**
+   * Translates Windows or relative paths into absolute Linux paths within a resolved Proton prefix,
+   * enforcing Linux path limits (255-byte component / 4096-byte path limit).
+   *
+   * Supports:
+   * - Windows environment variables: %LOCALAPPDATA%, %APPDATA%, %USERPROFILE%, %DOCUMENTS%
+   * - Drive letters: C:\users\<user>\..., C:\Program Files\...
+   * - Relative subpaths within user profile
+   */
+  public static translateWindowsPath(
+    windowsPath: string,
+    proton: IProtonPaths,
+    platform: NodeJS.Platform = process.platform,
+  ): string {
+    if (!windowsPath) {
+      return proton.prefixPath;
+    }
+
+    const normalized = windowsPath.replace(/\\/g, "/").trim();
+    let translated: string;
+
+    const localAppDataMatch = /^%localappdata%(\/.*)?$/i.exec(normalized);
+    if (localAppDataMatch) {
+      const sub = (localAppDataMatch[1] ?? "").replace(/^\/+/, "");
+      translated = path.join(proton.appDataLocalPath, sub);
+    } else {
+      const appDataMatch = /^%appdata%(\/.*)?$/i.exec(normalized);
+      if (appDataMatch) {
+        const sub = (appDataMatch[1] ?? "").replace(/^\/+/, "");
+        translated = path.join(proton.appDataRoamingPath, sub);
+      } else {
+        const userProfileMatch = /^%userprofile%(\/.*)?$/i.exec(normalized);
+        if (userProfileMatch) {
+          const sub = (userProfileMatch[1] ?? "").replace(/^\/+/, "");
+          translated = path.join(proton.userProfilePath, sub);
+        } else {
+          const documentsMatch = /^%documents%(\/.*)?$/i.exec(normalized);
+          if (documentsMatch) {
+            const sub = (documentsMatch[1] ?? "").replace(/^\/+/, "");
+            translated = path.join(proton.documentsPath, sub);
+          } else {
+            const driveMatch = /^[a-zA-Z]:(\/.*)?$/.exec(normalized);
+            if (driveMatch) {
+              const driveSub = (driveMatch[1] ?? "").replace(/^\/+/, "");
+              const usersMatch = /^users\/([^/]+)(\/.*)?$/i.exec(driveSub);
+              if (usersMatch) {
+                const userSub = (usersMatch[2] ?? "").replace(/^\/+/, "");
+                const lowerSub = userSub.toLowerCase();
+                if (lowerSub.startsWith("appdata/local/")) {
+                  translated = path.join(
+                    proton.appDataLocalPath,
+                    userSub.slice("appdata/local/".length),
+                  );
+                } else if (lowerSub.startsWith("appdata/roaming/")) {
+                  translated = path.join(
+                    proton.appDataRoamingPath,
+                    userSub.slice("appdata/roaming/".length),
+                  );
+                } else if (lowerSub.startsWith("documents/my games/")) {
+                  translated = path.join(
+                    proton.myGamesPath,
+                    userSub.slice("documents/my games/".length),
+                  );
+                } else if (lowerSub.startsWith("documents/")) {
+                  translated = path.join(proton.documentsPath, userSub.slice("documents/".length));
+                } else {
+                  translated = path.join(proton.userProfilePath, userSub);
+                }
+              } else {
+                translated = path.join(proton.prefixPath, "drive_c", driveSub);
+              }
+            } else {
+              translated = path.join(proton.userProfilePath, normalized);
+            }
+          }
+        }
+      }
+    }
+
+    assertLinuxPathLimits([translated], platform);
+    return translated;
   }
 }
 
