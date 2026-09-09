@@ -16,13 +16,6 @@ export interface IProtonRuntimeOption {
   version?: string;
 }
 
-export interface ICustomProtonValidationOptions {
-  approvedPath?: string;
-  currentUid?: number;
-  requireApproval?: boolean;
-  untrustedRoots?: string[];
-}
-
 export interface IProtonRuntimeDiscoveryProgress {
   completed: number;
   directory: string;
@@ -137,10 +130,46 @@ function isWithinPath(parentPath: string, candidatePath: string): boolean {
 }
 
 /** Validate a user-provided Proton runtime directory. */
+export interface ICustomProtonValidationOptions {
+  approvedPath?: string;
+  currentUid?: number;
+  requireApproval?: boolean;
+  untrustedRoots?: string[];
+  stagingPaths?: string[];
+  downloadPaths?: string[];
+  checkDefaultUntrustedRoots?: boolean;
+}
+
+export interface ICustomProtonValidationResult {
+  valid: boolean;
+  error?: string;
+  warning?: string;
+}
+
+/**
+ * Returns default untrusted filesystem roots where executables must never be loaded from:
+ * - Temporary directories (/tmp, /var/tmp, /dev/shm, os.tmpdir())
+ * - User Downloads directory
+ * - User Cache directory (~/.cache)
+ */
+export function getDefaultUntrustedRuntimeRoots(): string[] {
+  const home = os.homedir();
+  const roots = [
+    os.tmpdir(),
+    "/tmp",
+    "/var/tmp",
+    "/dev/shm",
+    path.join(home, "Downloads"),
+    path.join(home, ".cache"),
+  ];
+  return Array.from(new Set(roots.map((r) => path.resolve(r))));
+}
+
+/** Validate a user-provided Proton runtime directory. */
 export function validateCustomProtonPath(
   customPath: string,
   options: ICustomProtonValidationOptions = {},
-): { valid: boolean; error?: string } {
+): ICustomProtonValidationResult {
   if (!customPath || customPath.trim().length === 0) {
     return { valid: false, error: "The Proton runtime path cannot be empty." };
   }
@@ -173,13 +202,24 @@ export function validateCustomProtonPath(
   } catch {
     return { valid: false, error: `The selected Proton runtime path cannot be resolved safely.` };
   }
-  const untrustedRoot = options.untrustedRoots?.find(
+
+  // Enforce trust boundaries: reject runtimes placed in Downloads, temp directories, or mod staging
+  const defaultRoots =
+    options.checkDefaultUntrustedRoots !== false ? getDefaultUntrustedRuntimeRoots() : [];
+  const allUntrustedRoots = [
+    ...defaultRoots,
+    ...(options.untrustedRoots ?? []),
+    ...(options.stagingPaths ?? []),
+    ...(options.downloadPaths ?? []),
+  ];
+
+  const untrustedRoot = allUntrustedRoots.find(
     (root) => root.trim().length > 0 && isWithinPath(root, resolvedRuntime),
   );
   if (untrustedRoot !== undefined) {
     return {
       valid: false,
-      error: `The custom Proton runtime cannot be loaded from managed game or staging content: ${resolvedRuntime}`,
+      error: `The custom Proton runtime cannot be loaded from unsafe temporary, download, or staging content: ${resolvedRuntime}`,
     };
   }
 
@@ -211,11 +251,38 @@ export function validateCustomProtonPath(
         error: "The custom Proton runtime and its script must be owned by the current user.",
       };
     }
-    if ((runtimeStats.mode & 0o022) !== 0 || (protonStats.mode & 0o022) !== 0) {
+
+    // World-writable check (0o002) - strict rejection
+    if ((runtimeStats.mode & 0o002) !== 0 || (protonStats.mode & 0o002) !== 0) {
+      return {
+        valid: false,
+        error: "The custom Proton runtime cannot be writable by other users.",
+      };
+    }
+
+    // Group-writable check (0o020)
+    if ((runtimeStats.mode & 0o020) !== 0 || (protonStats.mode & 0o020) !== 0) {
       return {
         valid: false,
         error: "The custom Proton runtime cannot be writable by group or other users.",
       };
+    }
+
+    // Check parent directories up to root: reject if any ancestor is world-writable without sticky bit (TOCTOU protection)
+    let currentParent = path.dirname(resolvedRuntime);
+    while (currentParent !== path.dirname(currentParent)) {
+      try {
+        const pStats = fs.statSync(currentParent);
+        if ((pStats.mode & 0o002) !== 0 && (pStats.mode & 0o1000) === 0) {
+          return {
+            valid: false,
+            error: `A parent directory of the custom Proton runtime is writable by other users without a sticky bit: ${currentParent}`,
+          };
+        }
+      } catch {
+        break;
+      }
+      currentParent = path.dirname(currentParent);
     }
   }
 
