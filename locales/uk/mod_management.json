@@ -1,5 +1,46 @@
 {
   "_comment": "Операції та елементи інтерфейсу керування модами — міграція триває",
+  "linux_setup": {
+    "assessment_dialog_title": "Оцінка конфігурації Linux",
+    "assessment_passed": "Перевірку конфігурації пройдено успішно.",
+    "assistant_title": "Помічник налаштування Linux",
+    "cancel": "Скасувати",
+    "check_configuration": "Перевірити конфігурацію",
+    "choose_custom_runtime": "Вибрати власне середовище",
+    "close": "Закрити",
+    "detected_configuration": "Виявлена конфігурація Linux",
+    "discovered_libraries": "Знайдені бібліотеки Steam",
+    "discovering_environment": "Пошук компонентів середовища Linux",
+    "discovery_failed": "Не вдалося виявити середовище Linux",
+    "discovery_libraries_label": "Бібліотеки Steam",
+    "discovery_runtimes_label": "Середовища Proton",
+    "hardlinks_symlinks_hint": "Жорсткі посилання найшвидші й вимагають розміщення каталогу підготовки та гри на одній файловій системі. Символьні посилання можуть перетинати файлові системи, але їх використання може обмежуватися цільовим розташуванням або пісочницею.",
+    "mark_setup_complete": "Позначити налаштування як завершене",
+    "none": "Немає",
+    "not_configured": "Не налаштовано",
+    "not_detected": "Не виявлено",
+    "open_health_check": "Відкрити перевірку працездатності",
+    "open_runtime_dir": "Відкрити каталог середовища",
+    "open_runtime_dir_failed": "Не вдалося відкрити каталог середовища Proton",
+    "proton_prefix": "Префікс Proton",
+    "proton_runtime": "Середовище Proton",
+    "recommended_deployment_method": "Рекомендований метод розгортання",
+    "recommended_staging_path": "Рекомендований каталог підготовки",
+    "retry": "Повторити",
+    "review_alert": "Перевірте цю конфігурацію перед першим розгортанням.",
+    "runtime_auto": "Автоматично",
+    "runtime_custom": "Власне",
+    "runtime_not_executable": "Не є виконуваним",
+    "runtime_steam_selected": "Вибране у Steam",
+    "staging_path": "Каталог підготовки (staging)",
+    "steam_installation": "Установлена версія Steam",
+    "steam_type": {
+      "flatpak": "Flatpak",
+      "native": "Native (системна)",
+      "not_detected": "Не виявлено",
+      "snap": "Snap"
+    }
+  },
   "settings": {
     "workarounds": {
       "cleanup": {

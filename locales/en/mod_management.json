@@ -1,5 +1,46 @@
 {
   "_comment": "Mod management operations and UI strings - migration in progress",
+  "linux_setup": {
+    "assessment_dialog_title": "Linux configuration assessment",
+    "assessment_passed": "Configuration checks passed.",
+    "assistant_title": "Linux setup assistant",
+    "cancel": "Cancel",
+    "check_configuration": "Check configuration",
+    "choose_custom_runtime": "Choose custom runtime",
+    "close": "Close",
+    "detected_configuration": "Detected Linux configuration",
+    "discovered_libraries": "Discovered Steam libraries",
+    "discovering_environment": "Discovering Linux environment",
+    "discovery_failed": "Linux environment discovery failed",
+    "discovery_libraries_label": "Steam libraries",
+    "discovery_runtimes_label": "Proton runtimes",
+    "hardlinks_symlinks_hint": "Hardlinks are fastest and require staging and the game on the same filesystem. Symlinks can cross filesystems but may be restricted by the destination or sandbox.",
+    "mark_setup_complete": "Mark setup complete",
+    "none": "None",
+    "not_configured": "Not configured",
+    "not_detected": "Not detected",
+    "open_health_check": "Open Health Check",
+    "open_runtime_dir": "Open runtime directory",
+    "open_runtime_dir_failed": "Failed to open Proton runtime directory",
+    "proton_prefix": "Proton prefix",
+    "proton_runtime": "Proton runtime",
+    "recommended_deployment_method": "Recommended deployment method",
+    "recommended_staging_path": "Recommended staging path",
+    "retry": "Retry",
+    "review_alert": "Review this configuration before your first deployment.",
+    "runtime_auto": "Automatic",
+    "runtime_custom": "Custom",
+    "runtime_not_executable": "Not executable",
+    "runtime_steam_selected": "Steam-selected",
+    "staging_path": "Staging path",
+    "steam_installation": "Steam installation",
+    "steam_type": {
+      "flatpak": "Flatpak",
+      "native": "Native",
+      "not_detected": "Not detected",
+      "snap": "Snap"
+    }
+  },
   "settings": {
     "workarounds": {
       "cleanup": {
