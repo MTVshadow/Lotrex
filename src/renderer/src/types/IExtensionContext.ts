@@ -459,6 +459,12 @@ export interface IRunOptions {
   processShutdownPolicy?: "managed-tree" | "tracked-child" | "detached" | "launcher-handoff";
   // Stable diagnostic layer used in logs and surfaced process errors.
   processLayer?: "proton-runtime" | "native-game" | "native-tool" | "launcher-handoff" | "helper";
+  // Optional threshold before a managed process is considered slow-starting.
+  slowStartThresholdMS?: number;
+  // Called when the process is taking longer than expected to reach readiness.
+  onSlowStart?: (elapsedMS: number) => void;
+  // Optional readiness callback to notify caller when the process is ready.
+  onReady?: () => void;
   // if true, a non-zero exit code will be treated as an error. default is false
   //   because too many windows applications don't report proper exit codes
   expectSuccess?: boolean;

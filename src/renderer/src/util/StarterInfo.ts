@@ -27,11 +27,15 @@ import {
 import { emitGameLaunched, recordLaunchExit } from "./gameLaunchAnalytics";
 import GameStoreHelper from "./GameStoreHelper";
 import getVortexPath from "./getVortexPath";
+import { classifyProcessExit } from "./linux/processDiagnostics";
 import {
   resolveProcessShutdownPolicy,
   shutdownPolicyUsesDetachedProcess,
 } from "./linux/processShutdownPolicy";
-import { parseManagedProcessTimeout } from "./linux/processTree";
+import {
+  parseManagedProcessSlowStartThreshold,
+  parseManagedProcessTimeout,
+} from "./linux/processTree";
 import { findLatestProton } from "./linux/proton";
 import { isWindowsExecutable } from "./linux/protonLaunch";
 import ProtonPaths from "./linux/ProtonPaths";
@@ -384,6 +388,13 @@ class StarterInfo implements IStarterInfo {
                 process.env.VORTEX_PROTON_LAUNCH_TIMEOUT_MS,
             )
           : undefined;
+        const slowStartThresholdMS = terminateProcessTree
+          ? parseManagedProcessSlowStartThreshold(
+              info.environment.VORTEX_PROTON_SLOW_START_MS ??
+                process.env.VORTEX_PROTON_SLOW_START_MS,
+              processTimeoutMS,
+            )
+          : undefined;
         await api.runExecutable(launch.executable, launch.parameters, {
           cwd: launch.workingDirectory,
           detach: shutdownPolicyUsesDetachedProcess(processShutdownPolicy),
@@ -392,6 +403,14 @@ class StarterInfo implements IStarterInfo {
           onSpawned: protonSpawned,
           processLayer: "proton-runtime",
           processTimeoutMS,
+          slowStartThresholdMS,
+          onSlowStart: (elapsedMS) => {
+            log("info", "Proton process slow-start detected", {
+              executable: info.exePath,
+              elapsedMS,
+              gameId: info.gameId,
+            });
+          },
           processShutdownPolicy,
           shell: false,
           suggestDeploy: true,
@@ -408,6 +427,43 @@ class StarterInfo implements IStarterInfo {
             },
             false,
           );
+          return;
+        }
+        if ((err as any)?.code === "EPROCESSTIMEOUT") {
+          const timeoutErr = err as any;
+          const diagnostic = classifyProcessExit({
+            executable: info.exePath,
+            exitCode: null,
+            isSlowStart: timeoutErr.isSlowStart,
+            processLayer: "proton-runtime",
+            timedOut: true,
+            timeoutMS: timeoutErr.timeoutMS,
+          });
+          onShowError(
+            diagnostic.isSlowStart
+              ? "Proton setup timed out (slow start)"
+              : "Proton process execution timed out",
+            {
+              executable: info.exePath,
+              message: diagnostic.remediation,
+              details: `Timeout: ${timeoutErr.timeoutMS}ms\nState: ${timeoutErr.state ?? (diagnostic.isSlowStart ? "slow-start" : "hung")}`,
+            },
+            false,
+          );
+          return;
+        }
+        if ((err as any)?.exitCode !== undefined) {
+          const diagnostic = classifyProcessExit({
+            executable: info.exePath,
+            exitCode: (err as any).exitCode,
+            processLayer: (err as any).processLayer ?? "proton-runtime",
+          });
+          onShowError("Failed to run tool through Proton", {
+            executable: info.exePath,
+            message: `${diagnostic.diagnosticLabel}: ${diagnostic.remediation}`,
+            "Exit Code": (err as any).exitCode,
+            stack: unknownToError(err).stack,
+          });
           return;
         }
         onShowError("Failed to run tool through Proton", {
@@ -516,6 +572,41 @@ class StarterInfo implements IStarterInfo {
             par["Download url"] = err.url;
           }
           onShowError("Failed to run tool", par, false);
+        } else if ((err as any)?.code === "EPROCESSTIMEOUT") {
+          const timeoutErr = err as any;
+          const diagnostic = classifyProcessExit({
+            executable: info.exePath,
+            exitCode: null,
+            isSlowStart: timeoutErr.isSlowStart,
+            processLayer: (err as any).processLayer ?? processLayer,
+            timedOut: true,
+            timeoutMS: timeoutErr.timeoutMS,
+          });
+          onShowError(
+            "Process timed out",
+            {
+              Executable: info.exePath,
+              message: diagnostic.remediation,
+              details: `Layer: ${diagnostic.processLayer}\nTimeout: ${timeoutErr.timeoutMS}ms`,
+            },
+            false,
+          );
+        } else if ((err as any)?.exitCode !== undefined) {
+          const diagnostic = classifyProcessExit({
+            executable: info.exePath,
+            exitCode: (err as any).exitCode,
+            processLayer: (err as any).processLayer ?? processLayer,
+          });
+          onShowError(
+            `Failed to run ${diagnostic.processLayer}`,
+            {
+              Executable: info.exePath,
+              message: `${diagnostic.diagnosticLabel}: ${diagnostic.remediation}`,
+              "Exit Code": (err as any).exitCode,
+              stack: err.stack,
+            },
+            false,
+          );
         } else {
           onShowError("Failed to run tool", {
             executable: info.exePath,

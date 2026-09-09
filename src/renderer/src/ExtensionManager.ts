@@ -104,7 +104,8 @@ import getVortexPath from "./util/getVortexPath";
 import type { i18n } from "./util/i18n";
 import { TString } from "./util/i18n";
 import lazyRequire from "./util/lazyRequire";
-import { signalManagedProcessTree } from "./util/linux/processTree";
+import { classifyProcessExit } from "./util/linux/processDiagnostics";
+import { ProcessTreeSupervisor } from "./util/linux/processTree";
 import { showError } from "./util/message";
 import { deregisterProtocolHandler, registerProtocolHandler } from "./util/protocolRegistration";
 import runElevatedCustomTool from "./util/runElevatedCustomTool";
@@ -2410,72 +2411,69 @@ class ExtensionManager {
                   options.shell ? args : args.map((arg) => arg.replace(/"/g, "")),
                   spawnOptions,
                 );
-                let forceKillTimer: NodeJS.Timeout | undefined;
-                let processTimeoutTimer: NodeJS.Timeout | undefined;
-                const signalTree = (signal: "SIGTERM" | "SIGKILL") => {
-                  if (managesProcessTree && child.pid !== undefined) {
-                    try {
-                      signalManagedProcessTree(child.pid, signal);
-                    } catch (err: unknown) {
-                      log("warn", "failed to signal managed process tree", {
-                        error: getErrorMessageOrDefault(err),
+                const supervisor =
+                  managesProcessTree && child.pid !== undefined
+                    ? new ProcessTreeSupervisor({
                         pid: child.pid,
-                        signal,
-                      });
-                    }
-                  }
-                };
-                const onVortexExit = () => signalTree("SIGTERM");
+                        processLayer,
+                        timeoutMS: options.processTimeoutMS,
+                        slowStartThresholdMS: options.slowStartThresholdMS,
+                        onSlowStart: (elapsedMS) => {
+                          log("warn", "managed process slow start detected", {
+                            pid: child.pid,
+                            processLayer,
+                            elapsedMS,
+                          });
+                          options.onSlowStart?.(elapsedMS);
+                        },
+                        onTimeout: (timeoutErr) => {
+                          log("warn", "managed process timed out", {
+                            pid: child.pid,
+                            processLayer,
+                            timeoutMS: options.processTimeoutMS,
+                            isSlowStart: timeoutErr.isSlowStart,
+                          });
+                          reject(timeoutErr);
+                        },
+                        onEscalateToKill: (escalatedPid) => {
+                          log("warn", "escalating process termination to SIGKILL", {
+                            pid: escalatedPid,
+                            processLayer,
+                          });
+                        },
+                      })
+                    : undefined;
+
                 const clearSupervision = () => {
-                  if (forceKillTimer !== undefined) {
-                    clearTimeout(forceKillTimer);
-                    forceKillTimer = undefined;
-                  }
-                  if (processTimeoutTimer !== undefined) {
-                    clearTimeout(processTimeoutTimer);
-                    processTimeoutTimer = undefined;
-                  }
-                  process.removeListener("exit", onVortexExit);
+                  supervisor?.onProcessExit();
                 };
-                const terminateTree = () => {
-                  signalTree("SIGTERM");
-                  forceKillTimer = setTimeout(() => signalTree("SIGKILL"), 5000);
-                  forceKillTimer.unref();
-                };
-                if (managesProcessTree && child.pid !== undefined) {
-                  process.once("exit", onVortexExit);
-                  onCancel(terminateTree);
-                  if (
-                    options.processTimeoutMS !== undefined &&
-                    Number.isSafeInteger(options.processTimeoutMS) &&
-                    options.processTimeoutMS > 0
-                  ) {
-                    processTimeoutTimer = setTimeout(() => {
-                      processTimeoutTimer = undefined;
-                      terminateTree();
-                      const err = new TimeoutError();
-                      err["code"] = "EPROCESSTIMEOUT";
-                      err["processLayer"] = processLayer;
-                      err["pid"] = child.pid;
-                      err["timeoutMS"] = options.processTimeoutMS;
-                      reject(err);
-                    }, options.processTimeoutMS);
-                    processTimeoutTimer.unref();
-                  }
+
+                if (supervisor !== undefined) {
+                  onCancel(() => supervisor.terminate("user-canceled"));
                 }
+
                 if (truthy(child["exitCode"])) {
                   clearSupervision();
                   // brilliant, apparently there is no way for me to get at the stdout/stderr when running
                   // through a shell if starting the application fails immediately
-                  const err = new Error(
-                    `Failed to start ${processLayer} (exit code ${child["exitCode"]})`,
-                  );
+                  const diagnostic = classifyProcessExit({
+                    executable,
+                    exitCode: child["exitCode"],
+                    processLayer,
+                  });
+                  const err = new Error(diagnostic.userFacingMessage);
                   err["exitCode"] = child["exitCode"];
                   err["processLayer"] = processLayer;
+                  err["category"] = diagnostic.category;
+                  err["remediation"] = diagnostic.remediation;
                   return reject(err);
                 }
                 if (options.onSpawned !== undefined) {
                   options.onSpawned(child.pid);
+                }
+                if (options.onReady !== undefined) {
+                  supervisor?.markReady();
+                  options.onReady();
                 }
 
                 if (options.detach) {
@@ -2494,17 +2492,25 @@ class ExtensionManager {
                     options.onExit?.(code);
                     const game = activeGameId(this.mApi.store.getState());
                     if (code === null) {
+                      const diagnostic = classifyProcessExit({
+                        executable,
+                        exitCode: null,
+                        processLayer,
+                        signal,
+                      });
                       log("warn", "child process terminated by signal", {
                         executable,
                         processLayer,
                         signal,
+                        category: diagnostic.category,
+                        diagnosticLabel: diagnostic.diagnosticLabel,
                       });
                       if (options.expectSuccess) {
-                        const err = new ProcessCanceled(
-                          `Process terminated by signal ${signal ?? "unknown"}`,
-                        );
+                        const err = new ProcessCanceled(diagnostic.userFacingMessage);
                         err["signal"] = signal;
                         err["processLayer"] = processLayer;
+                        err["category"] = diagnostic.category;
+                        err["remediation"] = diagnostic.remediation;
                         reject(err);
                         return;
                       }
@@ -2534,37 +2540,29 @@ class ExtensionManager {
                       // TODO: the child process returns an exit code of 53 for SSE and
                       // FO4, and an exit code of 1 for Skyrim. We don't know why but it
                       // doesn't seem to affect anything
+                      const diagnostic = classifyProcessExit({
+                        executable,
+                        exitCode: code,
+                        processLayer,
+                        outputSnippet: errOut,
+                      });
                       log("warn", "child process exited with non-zero code", {
                         executable,
                         exitCode: code,
-                        exitCodeHex: code.toString(16),
+                        exitCodeHex: diagnostic.exitCodeHex ?? code.toString(16),
                         processLayer,
+                        category: diagnostic.category,
+                        diagnosticLabel: diagnostic.diagnosticLabel,
                       });
                       if (errOut !== undefined) {
                         log("warn", "child output", errOut.trim());
                       }
                       if (options.expectSuccess) {
-                        let lastLine = "<No output>";
-
-                        if (errOut !== undefined) {
-                          const lines = errOut.trim().split("\n");
-                          lastLine =
-                            lines.length > ERROR_OUTPUT_CUTOFF
-                              ? lines[lines.length - 1]
-                              : lines.join("\n");
-                        }
-
-                        // Sanitize the error message to prevent crashpad issues
-                        const sanitizedExecutable = executable.replace(/[^\x20-\x7E]/g, "?");
-                        const sanitizedLastLine = lastLine
-                          .replace(/[^\x20-\x7E]/g, "?")
-                          .substring(0, 500);
-                        const exitCodeHex = code.toString(16);
-
-                        const errorMessage = `Failed to run ${processLayer} "${sanitizedExecutable}": "${sanitizedLastLine} (${exitCodeHex})"`;
-                        const err = new Error(errorMessage);
+                        const err = new Error(diagnostic.userFacingMessage);
                         err["exitCode"] = code;
                         err["processLayer"] = processLayer;
+                        err["category"] = diagnostic.category;
+                        err["remediation"] = diagnostic.remediation;
                         reject(err);
                         return;
                       }
