@@ -119,6 +119,7 @@ import {
 } from "../../util/errorHandling";
 import * as fs from "../../util/fs";
 import type { TFunction } from "../../util/i18n";
+import { assertLinuxSafeExtractedTree } from "../../util/linux/archiveSafety";
 import { assertLinuxExtractionSafety } from "../../util/linux/pathSafety";
 import { prettifyNodeErrorMessage } from "../../util/message";
 import {
@@ -1168,6 +1169,8 @@ class InstallManager {
         }
       })
       .then(async () => {
+        // Enforce POSIX device safety, decompression limits, and valid symlinks in extracted tree
+        await assertLinuxSafeExtractedTree(tempPath, { archivePath });
         await repairWindowsSeparators(tempPath);
         fileList = await buildFileList(tempPath);
         if (truthy(extractList) && extractList.length > 0) {
@@ -4036,6 +4039,8 @@ class InstallManager {
         }
       })
       .then(async () => {
+        // Enforce POSIX device safety, decompression limits, and valid symlinks in extracted tree
+        await assertLinuxSafeExtractedTree(tempPath, { archivePath });
         fileList = await buildFileList(tempPath);
         const hasFomodSegment = (file: string) => {
           const segments = file.toLowerCase().split(path.sep);

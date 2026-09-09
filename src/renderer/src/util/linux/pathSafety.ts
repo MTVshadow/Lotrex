@@ -112,6 +112,31 @@ export async function assertLinuxExtractionSafety(
     // 4. Target leaf inspection if already on disk
     try {
       const stats = await fs.lstatAsync(resolvedCandidate);
+
+      // Block special POSIX device files (FIFO / named pipe, socket, character/block device)
+      // to avoid infinite hangs on pipe reads or hardware device interactions
+      if (
+        stats.isFIFO() ||
+        stats.isSocket() ||
+        stats.isCharacterDevice() ||
+        stats.isBlockDevice()
+      ) {
+        const deviceType = stats.isFIFO()
+          ? "fifo"
+          : stats.isSocket()
+            ? "socket"
+            : stats.isCharacterDevice()
+              ? "character_device"
+              : "block_device";
+        const err = new Error(
+          `Refusing to access special POSIX device file at destination: ${resolvedCandidate} (${deviceType})`,
+        );
+        err["code"] = "EDEPLOYMENTSPECIALDEVICE";
+        err["path"] = resolvedCandidate;
+        err["deviceType"] = deviceType;
+        throw err;
+      }
+
       if (stats.isSymbolicLink()) {
         const linkTarget = await fs.readlinkAsync(resolvedCandidate);
         const resolvedTarget = path.resolve(path.dirname(resolvedCandidate), linkTarget);

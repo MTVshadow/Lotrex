@@ -174,6 +174,25 @@ describe("Linux managed path safety and extraction preflight", () => {
       });
     });
 
+    it("rejects special POSIX device (FIFO) at extraction destination", async () => {
+      const root = await temporaryDirectory();
+      const fifoPath = path.join(root, "named_pipe");
+      try {
+        const { execSync } = await import("node:child_process");
+        execSync(`mkfifo "${fifoPath}"`);
+      } catch {
+        return;
+      }
+
+      await expect(
+        assertLinuxExtractionSafety(root, [fifoPath], { platform: "linux" }),
+      ).rejects.toMatchObject({
+        code: "EDEPLOYMENTSPECIALDEVICE",
+        deviceType: "fifo",
+        path: fifoPath,
+      });
+    });
+
     it("is completely bypassed on non-Linux platforms", async () => {
       const root = await temporaryDirectory();
       const outside = path.join(root, "..", "outside.txt");
