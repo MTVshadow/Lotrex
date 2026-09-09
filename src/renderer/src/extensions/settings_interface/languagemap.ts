@@ -674,7 +674,7 @@ const languageMap = {
   },
   uk: {
     name: "Ukrainian",
-    nativeName: "українська",
+    nativeName: "Українська",
   },
   ur: {
     name: "Urdu",

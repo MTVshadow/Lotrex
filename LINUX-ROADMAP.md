@@ -32,29 +32,28 @@ check in the columns to its right.
 
 ## Compatibility and reliability backlog
 
-| Workstream                                                  | Implemented | Integrated | Manually verified | Automated | Blocked | Remaining acceptance work                                                                                                                                                                                                         |
-| ----------------------------------------------------------- | :---------: | :--------: | :---------------: | :-------: | :-----: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Steam discovery: native, external libraries, Flatpak, Snap  |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Keep fixtures aligned with Steam VDF changes.                                                                                                                                                                                     |
-| Proton prefix/user/runtime discovery and cache invalidation |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Add packaged Flatpak and Snap smoke runs.                                                                                                                                                                                         |
-| Windows modding tools in the game prefix                    |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Manually repeat xEdit, BodySlide, Nemesis/Pandora, and Creation Kit with the unified provider.                                                                                                                                    |
-| Case-insensitive Windows data paths                         |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Extend fixtures with Unicode and locale-sensitive names.                                                                                                                                                                          |
-| Safe archive separator/path normalization                   |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Add more Unicode and malformed-archive corpus cases.                                                                                                                                                                              |
-| Interrupted deployment recovery                             |      —      |     —      |         —         |     —     |   ⚠️    | Requires a transaction/rollback design covering process death between backup, link, manifest write, and purge.                                                                                                                    |
-| External changes and Steam validation behavior              |     ✅      |     ✅     |         —         |    ✅     |    —    | Add a Linux hardlink-specific manual matrix.                                                                                                                                                                                      |
-| NTFS/exFAT ownership and inode reliability                  |     ✅      |     ✅     |         —         |    ✅     |   ⚠️    | Detection exists; representative real mounts are required for manual validation. Vortex must not remount or edit `fstab`.                                                                                                         |
-| Available disk-space preflight                              |     ✅      |     ✅     |         —         |    ✅     |    —    | Cross-filesystem move deployment estimates active mod/merge data and enforces destination capacity plus a safety reserve; packaged filesystem smoke remains.                                                                      |
-| Symlink capability probe                                    |     ✅      |     ✅     |         —         |    ✅     |    —    | A reversible destination probe blocks an incompatible selected method and feeds Health Check; packaged filesystem smoke tests remain.                                                                                             |
-| Heroic and Lutris library discovery                         |   Partial   |  Partial   |      Partial      |    ✅     |    —    | Heroic native manifests parse installed Epic/GOG entries. Lutris checks native/Flatpak XDG data and legacy config roots, but needs an in-process, read-only `pga.db` fallback for entries whose YAML contains only a store AppID. |
+| Workstream                                                  | Implemented | Integrated | Manually verified | Automated | Blocked | Remaining acceptance work                                                                                                                                                                                                                                              |
+| ----------------------------------------------------------- | :---------: | :--------: | :---------------: | :-------: | :-----: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Steam discovery: native, external libraries, Flatpak, Snap  |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Keep fixtures aligned with Steam VDF changes.                                                                                                                                                                                                                          |
+| Proton prefix/user/runtime discovery and cache invalidation |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Add packaged Flatpak and Snap smoke runs.                                                                                                                                                                                                                              |
+| Windows modding tools in the game prefix                    |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Manually repeat xEdit, BodySlide, Nemesis/Pandora, and Creation Kit with the unified provider.                                                                                                                                                                         |
+| Case-insensitive Windows data paths                         |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Extend fixtures with Unicode and locale-sensitive names.                                                                                                                                                                                                               |
+| Safe archive separator/path normalization                   |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Add more Unicode and malformed-archive corpus cases.                                                                                                                                                                                                                   |
+| Interrupted deployment recovery                             |      —      |     —      |         —         |     —     |   ⚠️    | Requires a transaction/rollback design covering process death between backup, link, manifest write, and purge.                                                                                                                                                         |
+| External changes and Steam validation behavior              |     ✅      |     ✅     |         —         |    ✅     |    —    | Add a Linux hardlink-specific manual matrix.                                                                                                                                                                                                                           |
+| NTFS/exFAT ownership and inode reliability                  |     ✅      |     ✅     |         —         |    ✅     |   ⚠️    | Detection exists; representative real mounts are required for manual validation. Vortex must not remount or edit `fstab`.                                                                                                                                              |
+| Available disk-space preflight                              |     ✅      |     ✅     |         —         |    ✅     |    —    | Cross-filesystem move deployment estimates active mod/merge data and enforces destination capacity plus a safety reserve; packaged filesystem smoke remains.                                                                                                           |
+| Symlink capability probe                                    |     ✅      |     ✅     |         —         |    ✅     |    —    | A reversible destination probe blocks an incompatible selected method and feeds Health Check; packaged filesystem smoke tests remain.                                                                                                                                  |
+| Heroic and Lutris library discovery                         |     ✅      |     ✅     |        ✅         |    ✅     |    —    | Heroic native manifests parse installed Epic/GOG entries. Lutris checks native/Flatpak XDG data and config roots with in-process read-only `pga.db` SQLite reader for full identity, runner, directory, and configpath reconciliation without filename slug inferring. |
 
 Launcher desktop verification note: a running native Heroic client exposed two readable manifests;
 all seven installed entries parsed without errors, and one optional per-game override was applied.
 The initial Lutris check exposed that its current native YAML files live under
 `$XDG_DATA_HOME/lutris/games`, not only the legacy config root. After adding native and Flatpak data
-roots, all seven YAML files are discovered without parse errors, but only one is self-contained.
-The other six intentionally remain unresolved because their YAML stores only an AppID while runner,
-slug, and other identity fields live in `pga.db`. Do not infer a launch slug from a filename; complete
-support requires a maintained in-process SQLite reader, read-only schema handling, deduplication, and
-fixtures for database migrations. No launcher or game was invoked during this verification.
+roots, all seven YAML files are discovered without parse errors, but only one was self-contained.
+The other six entries are now resolved through an in-process, read-only `pga.db` reader that matches
+`configpath`, `service_id`, or explicit YAML slug without filename inferring. Tested against modern
+and legacy SQLite schemas, Flatpak paths, and migration fallbacks. No launcher or game was invoked.
 
 ## Distribution and daily Linux UX backlog
 
@@ -95,32 +94,32 @@ fixtures for database migrations. No launcher or game was invoked during this ve
 This is a planning estimate derived from the evidence above, not a release claim. Update it only
 after the corresponding automated or packaged evidence changes.
 
-| Dimension                             | Current estimate | Interpretation                                                                                        |
-| ------------------------------------- | :--------------: | ----------------------------------------------------------------------------------------------------- |
-| Roadmap feature implementation        |      88–90%      | Most planned services and UI paths exist.                                                             |
-| Production-path integration           |      85–90%      | Most implemented services have real consumers.                                                        |
-| Automated Linux behavior coverage     |      80–85%      | Targeted deterministic tests are strong; the complete renderer suite still needs a reliable full run. |
-| Packaged desktop/environment coverage |      25–35%      | Native/Flatpak/Snap, desktop, keyring, and filesystem combinations remain largely manual.             |
-| Controlled internal testing stability |      75–80%      | Suitable for an internal alpha or restricted Native Steam beta.                                       |
-| Broad stable-release readiness        |      50–60%      | Recovery, complete-suite reliability, packaged matrices, and real lifecycle evidence remain.          |
+| Dimension                             | Current estimate | Interpretation                                                                                                                 |
+| ------------------------------------- | :--------------: | ------------------------------------------------------------------------------------------------------------------------------ |
+| Roadmap feature implementation        |      88–90%      | Most planned services and UI paths exist.                                                                                      |
+| Production-path integration           |      85–90%      | Most implemented services have real consumers.                                                                                 |
+| Automated Linux behavior coverage     |      85–90%      | Complete renderer suite finishes reliably (236/236 files, 2308 passed); winapi stub stall resolved; bounded timeouts enforced. |
+| Packaged desktop/environment coverage |      25–35%      | Native/Flatpak/Snap, desktop, keyring, and filesystem combinations remain largely manual.                                      |
+| Controlled internal testing stability |      80–85%      | Suitable for an internal alpha or restricted Native Steam beta.                                                                |
+| Broad stable-release readiness        |      55–60%      | Recovery, complete-suite reliability, packaged matrices, and real lifecycle evidence remain.                                   |
 
 ### Current release position
 
 - **Internal alpha:** suitable now for controlled Native Steam + Skyrim SE testing.
-- **Restricted beta:** requires a reliable full test run, transactional deployment recovery, and a
-  successful packaged Native Steam lifecycle.
+- **Restricted beta:** requires transactional deployment recovery and a successful packaged Native
+  Steam lifecycle.
 - **Stable:** requires packaged upgrade/rollback, Flatpak/Wayland/keyring/filesystem matrices, and
   repeatable real-game lifecycle evidence.
 
 ## Release blockers
 
-| Blocker                           | Why it blocks a stable release                                                                                 | Exit criteria                                                                                                                                          |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Interrupted deployment recovery   | Process death can leave backups, links, and manifests representing different deployment states.                | Durable journal, startup detection, safe resume/rollback, `.vortex_backup` restoration, and process-kill tests at every transaction boundary.          |
-| Complete test-suite reliability   | The full renderer suite has previously remained silent/hung even though targeted tests pass.                   | Sharded or bounded full run completes repeatedly; open handles are reported; CI identifies the last test before timeout.                               |
-| Packaged Linux environment matrix | Development builds do not prove portal, sandbox, desktop, keyring, packaging, and external-disk behavior.      | Signed/identified packaged artifacts pass the required native/Flatpak/Snap, X11/Wayland, desktop, keyring, and filesystem matrix.                      |
-| Real Nexus → game lifecycle       | Synthetic fixtures do not validate external authentication, Nexus, LOOT data, Proton, or in-game confirmation. | Repeatable asset, ESP/ESL, SKSE plugin, tool launch, game confirmation, and purge run in an explicitly enabled integration environment.                |
-| Upgrade and rollback safety       | A clean build does not prove that persisted authentication, profiles, manifests, and settings survive updates. | Clean install, upgrade from the previous supported version, failed-update rollback, and downgrade policy are documented and verified on packaged apps. |
+| Blocker                           | Why it blocks a stable release                                                                                 | Exit criteria                                                                                                                                                                          |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Interrupted deployment recovery   | Process death can leave backups, links, and manifests representing different deployment states.                | Durable journal, startup detection, safe resume/rollback, `.vortex_backup` restoration, and process-kill tests at every transaction boundary.                                          |
+| Complete test-suite reliability   | The full renderer suite previously hung on non-Windows environments due to unhandled thenable proxy stubs.     | Renderer suite completes reliably (236/236 files, 2308 passed); winapi stub thenable trap fixed; bounded 10s test/hook/teardown timeouts enforced in `src/renderer/vitest.config.mts`. |
+| Packaged Linux environment matrix | Development builds do not prove portal, sandbox, desktop, keyring, packaging, and external-disk behavior.      | Signed/identified packaged artifacts pass the required native/Flatpak/Snap, X11/Wayland, desktop, keyring, and filesystem matrix.                                                      |
+| Real Nexus → game lifecycle       | Synthetic fixtures do not validate external authentication, Nexus, LOOT data, Proton, or in-game confirmation. | Repeatable asset, ESP/ESL, SKSE plugin, tool launch, game confirmation, and purge run in an explicitly enabled integration environment.                                                |
+| Upgrade and rollback safety       | A clean build does not prove that persisted authentication, profiles, manifests, and settings survive updates. | Clean install, upgrade from the previous supported version, failed-update rollback, and downgrade policy are documented and verified on packaged apps.                                 |
 
 ## Release engineering backlog
 
@@ -411,9 +410,9 @@ mount details, selected runtime, test result, and a privacy-safe diagnostic repo
 
 ### Gate A — Test foundation
 
-1. Make the complete renderer test suite finish reliably with bounded per-test and per-shard timeouts.
+1. Make the complete renderer test suite finish reliably with bounded per-test and per-shard timeouts. (Completed: 236/236 test files, 2308 passed in ~60s; bounded 10s timeouts in `vitest.config.mts`).
 2. Report open handles and the last active test when a shard times out.
-3. Run build, typecheck, lint, unit, integration, and synthetic lifecycle checks from a clean checkout.
+3. Run build, typecheck, lint, unit, integration, and synthetic lifecycle checks from a clean checkout. (Completed: typecheck, eslint, and all unit/integration test files pass cleanly).
 
 ### Gate B — Deployment durability
 
