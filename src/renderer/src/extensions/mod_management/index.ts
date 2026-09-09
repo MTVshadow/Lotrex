@@ -1062,6 +1062,7 @@ function genUpdateModDeployment(installManager: InstallManager) {
                         deployProgress,
                       ),
                     {
+                      onPrepared: () => runDeploymentFaultPoint("after-prepared"),
                       onCommitted: () => runDeploymentFaultPoint("after-commit"),
                       onManifestWritten: () => runDeploymentFaultPoint("after-manifest-write"),
                     },

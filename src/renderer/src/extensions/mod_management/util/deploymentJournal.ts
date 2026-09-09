@@ -107,6 +107,7 @@ export interface IDeploymentOperationInput {
 export interface IDeploymentOperationHooks {
   onCommitted?: () => void;
   onManifestWritten?: () => void;
+  onPrepared?: () => void;
 }
 
 interface IDeploymentJournalEnvelope {
@@ -335,6 +336,7 @@ export async function executeDeploymentOperation(
   hooks: IDeploymentOperationHooks = {},
 ): Promise<IDeploymentJournalEntry> {
   let entry = await beginDeploymentOperation(input);
+  hooks.onPrepared?.();
   entry = await advanceDeploymentOperation(entry, "applying");
   await applyAndWriteManifest();
   entry = await advanceDeploymentOperation(entry, "manifest-written");
@@ -452,7 +454,17 @@ async function targetMatchesSource(
     return source !== undefined && source.dev === target.dev && source.ino === target.ino;
   }
   if (deploymentMethod.includes("move")) {
-    return source === undefined;
+    if (source !== undefined) {
+      return false;
+    }
+    const lnkPath = operation.sourcePath + ".vortex_lnk";
+    try {
+      const lnkData = await fs.readFileAsync(lnkPath);
+      const parsed = JSON.parse(lnkData.toString("utf8"));
+      return path.resolve(parsed.target) === path.resolve(operation.targetPath);
+    } catch {
+      return false;
+    }
   }
   return false;
 }
@@ -529,13 +541,20 @@ async function reconcileFileOperation(
         reason: "The deployed target is gone and its backup occupies the target path.",
       };
     }
+    if (target === undefined && backup === undefined) {
+      if (source !== undefined || entry.deploymentMethod.includes("move")) {
+        return { operation, state: "applied", reason: "The deployed target was removed." };
+      }
+      return {
+        operation,
+        state: "unsafe",
+        reason: "Neither the target nor its expected backup can be verified.",
+      };
+    }
     return {
       operation,
-      state: target === undefined && backup === undefined ? "unsafe" : "ambiguous",
-      reason:
-        target === undefined && backup === undefined
-          ? "Neither the target nor its expected backup can be verified."
-          : "Target and backup state requires explicit recovery selection.",
+      state: "ambiguous",
+      reason: "Target and backup state requires explicit recovery selection.",
     };
   } catch (err: unknown) {
     return {
@@ -606,7 +625,13 @@ async function rollbackFileOperation(
 
   if (operation.action === "deploy") {
     if (reconciliation.state === "applied") {
-      await fs.unlinkAsync(operation.targetPath);
+      if (entry.deploymentMethod.includes("move")) {
+        await fs.ensureDirAsync(path.dirname(operation.sourcePath));
+        await fs.renameAsync(operation.targetPath, operation.sourcePath);
+        await fs.unlinkAsync(operation.sourcePath + ".vortex_lnk").catch(() => undefined);
+      } else {
+        await fs.unlinkAsync(operation.targetPath);
+      }
     } else if (reconciliation.state === "ambiguous" && operation.recoveryState !== "rolling-back") {
       throw new Error(`Ambiguous recovery state for ${operation.targetPath}`);
     }
@@ -619,15 +644,24 @@ async function rollbackFileOperation(
       }
       await fs.renameAsync(operation.backupPath, operation.targetPath);
     }
-  } else if (reconciliation.state === "applied") {
-    await fs.ensureDirAsync(path.dirname(operation.targetPath));
-    if (entry.deploymentMethod.includes("hardlink")) {
-      await fs.linkAsync(operation.sourcePath, operation.targetPath);
-    } else {
-      await fs.symlinkAsync(operation.sourcePath, operation.targetPath);
+  } else {
+    if (reconciliation.state === "rolled-back") {
+      await fs.renameAsync(operation.targetPath, operation.backupPath);
     }
-  } else if (reconciliation.state === "ambiguous") {
-    throw new Error(`Ambiguous recovery state for ${operation.targetPath}`);
+    if (reconciliation.state === "applied" || reconciliation.state === "rolled-back") {
+      await fs.ensureDirAsync(path.dirname(operation.targetPath));
+      if (entry.deploymentMethod.includes("hardlink")) {
+        await fs.linkAsync(operation.sourcePath, operation.targetPath);
+      } else if (entry.deploymentMethod.includes("move")) {
+        const linkInfo = JSON.stringify({ target: operation.targetPath });
+        await writeFileAtomic(operation.sourcePath + ".vortex_lnk", linkInfo);
+        await fs.renameAsync(operation.sourcePath, operation.targetPath);
+      } else {
+        await fs.symlinkAsync(operation.sourcePath, operation.targetPath);
+      }
+    } else if (reconciliation.state === "ambiguous") {
+      throw new Error(`Ambiguous recovery state for ${operation.targetPath}`);
+    }
   }
 
   current = await updateFileRecoveryState(current, operation.id, "rolled-back");
@@ -640,8 +674,10 @@ export async function rollbackApplyingDeployment(
   await validateDeploymentPathIdentities(entry);
   if (
     entry.phase !== "applying" ||
-    entry.operation !== "deploy" ||
-    (!entry.deploymentMethod.includes("hardlink") && !entry.deploymentMethod.includes("symlink")) ||
+    (entry.operation !== "deploy" && entry.operation !== "purge") ||
+    (!entry.deploymentMethod.includes("hardlink") &&
+      !entry.deploymentMethod.includes("symlink") &&
+      !entry.deploymentMethod.includes("move")) ||
     (entry.fileOperations?.length ?? 0) === 0
   ) {
     throw new Error("This applying operation does not support automatic rollback");
@@ -702,10 +738,12 @@ export function buildDeploymentRecoveryPlan(
   }
   if (
     entry.phase === "applying" &&
-    entry.operation === "deploy" &&
+    (entry.operation === "deploy" || entry.operation === "purge") &&
     reconciliation?.safe === true &&
     reconciliation.files.length > 0 &&
-    (entry.deploymentMethod.includes("hardlink") || entry.deploymentMethod.includes("symlink"))
+    (entry.deploymentMethod.includes("hardlink") ||
+      entry.deploymentMethod.includes("symlink") ||
+      entry.deploymentMethod.includes("move"))
   ) {
     return {
       operationId: entry.operationId,
@@ -730,11 +768,16 @@ export function buildDeploymentRecoveryPlan(
 export async function completeDeploymentRecovery(
   entry: IDeploymentJournalEntry,
   action: DeploymentRecoveryAction,
+  reconciliation?: IDeploymentReconciliation,
 ): Promise<IDeploymentJournalEntry> {
   await validateDeploymentPathIdentities(entry);
-  const plan = buildDeploymentRecoveryPlan(entry);
+  const plan = buildDeploymentRecoveryPlan(entry, reconciliation);
   if (!plan.safe || plan.action !== action) {
     throw new Error(`Recovery action ${action} is not safe for phase ${entry.phase}`);
+  }
+
+  if (entry.phase === "applying" && action === "rollback") {
+    return rollbackApplyingDeployment(entry);
   }
 
   const current = await readDeploymentJournal(entry.stagingPath);

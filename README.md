@@ -45,17 +45,17 @@ Detailed implementation evidence, deferred checks, and future work are tracked i
 
 ## Current status
 
-| Area                       | Current state                                                                |
-| -------------------------- | ---------------------------------------------------------------------------- |
-| Source development         | Active                                                                       |
-| Stable end-user release    | Not available                                                                |
-| Packaged Linux builds      | Not yet published                                                            |
-| Steam and Proton discovery | Implemented; additional packaged smoke testing remains                       |
-| Heroic discovery           | Partial                                                                      |
-| Lutris discovery           | Partial; some installations require the planned read-only database provider  |
-| Linux deployment safety    | Substantial implementation; real-filesystem and interruption matrices remain |
-| Ukrainian localization     | Planned; language selector and complete translation are not implemented yet  |
-| Broad distribution support | Not claimed                                                                  |
+| Area                       | Current state                                                                    |
+| -------------------------- | -------------------------------------------------------------------------------- |
+| Source development         | Active                                                                           |
+| Stable end-user release    | Not available                                                                    |
+| Packaged Linux builds      | Not yet published                                                                |
+| Steam and Proton discovery | Implemented; additional packaged smoke testing remains                           |
+| Heroic discovery           | Partial                                                                          |
+| Lutris discovery           | Partial; some installations require the planned read-only database provider      |
+| Linux deployment safety    | Substantial implementation; real-filesystem and interruption matrices remain     |
+| Ukrainian localization     | Bundled for core namespaces (100% coverage); ongoing legacy migration and review |
+| Broad distribution support | Not claimed                                                                      |
 
 Ubuntu and Arch-based environments are the initial development targets, but neither should be
 interpreted as fully supported until the release gates and packaged smoke matrix in the roadmap are
