@@ -8,6 +8,9 @@ import type {
   IGameStoreLaunchContext,
 } from "../../types/IGameStoreEntry";
 
+export * from "./lutrisDatabase";
+import type { ILutrisDatabaseGame } from "./lutrisDatabase";
+
 export function lutrisConfigDirectories(
   homePath: string,
   xdgConfigHome?: string,
@@ -30,18 +33,30 @@ export function parseLutrisGameConfig(
   content: string,
   fileName: string,
   homePath: string,
+  dbGame?: ILutrisDatabaseGame,
 ): IGameStoreEntry | undefined {
   const config = asRecord(loadYaml(content));
   const game = asRecord(config.game);
   const runnerOptions = asRecord(config.wine);
+  // Authoritative slug: from matching pga.db entry first, then explicit YAML slug,
+  // falling back to filename only if no database game was provided.
   const slug =
-    firstString(config.game_slug, config.slug) ?? path.basename(fileName, path.extname(fileName));
-  const runner = firstString(config.runner) ?? "unknown";
-  const prefixPath = expandHome(firstString(game.prefix), homePath);
+    dbGame?.slug ??
+    firstString(config.game_slug, config.slug) ??
+    (dbGame ? undefined : path.basename(fileName, path.extname(fileName)));
+  const runner = firstString(config.runner, dbGame?.runner) ?? "unknown";
+  const prefixPath =
+    expandHome(firstString(game.prefix), homePath) ??
+    (runner === "wine" || runner === "proton"
+      ? expandHome(dbGame?.directory, homePath)
+      : undefined);
   const workingDirectory = expandHome(firstString(game.working_dir), homePath);
-  const executable = expandHome(firstString(game.exe), homePath);
+  const executable =
+    expandHome(firstString(game.exe), homePath) ?? expandHome(dbGame?.executable, homePath);
   const executablePath = resolveExecutable(executable, prefixPath, workingDirectory);
-  const gamePath = resolveGamePath(executablePath, prefixPath, workingDirectory);
+  const gamePath =
+    resolveGamePath(executablePath, prefixPath, workingDirectory) ??
+    expandHome(dbGame?.directory, homePath);
   if (!slug || !gamePath) return undefined;
 
   return {
@@ -56,7 +71,7 @@ export function parseLutrisGameConfig(
       runtimePath: expandHome(firstString(runnerOptions.runner), homePath),
       runtimeType: runtimeType(runner),
     }) as IGameStoreLaunchContext,
-    name: firstString(config.name) ?? humanizeSlug(slug),
+    name: firstString(config.name, dbGame?.name) ?? humanizeSlug(slug),
   };
 }
 
