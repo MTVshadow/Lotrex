@@ -56,6 +56,77 @@ export interface IUnifiedLaunchResult {
   diagnostics: string[];
 }
 
+/**
+ * Validates that an executable path or launcher URI does not use unsafe protocols,
+ * shell metacharacters, or command injection sequences.
+ *
+ * Educational note:
+ * On Linux, game launchers and mod configurations may attempt to invoke external protocols or URIs.
+ * If protocols like `file:`, `javascript:`, or `data:` are accepted, or if launcher URIs contain
+ * shell metacharacters (such as `;`, `&`, `|`, `` ` ``, `$()`), they can lead to arbitrary code execution
+ * or local file inclusion. We strictly whitelist allowed launcher schemes (`steam:`, `heroic:`, `lutris:`)
+ * and enforce strict identifier grammar, while ensuring Windows drive paths (e.g. `C:\...`) remain valid.
+ */
+export function validateExecutableOrUri(executablePath: string): void {
+  if (typeof executablePath !== "string" || executablePath.trim().length === 0) {
+    throw new Error("Executable path or launcher URI must be a non-empty string");
+  }
+
+  // Reject null bytes and newline injection
+  if (/[\0\r\n]/.test(executablePath)) {
+    throw new Error(`Executable path contains invalid control characters: ${executablePath}`);
+  }
+
+  // Check if string starts with a URI protocol scheme (excluding Windows drive letters like C:\)
+  const uriSchemeMatch = executablePath.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);
+  if (uriSchemeMatch && !/^[a-zA-Z]:[/\\]/.test(executablePath)) {
+    const scheme = uriSchemeMatch[1].toLowerCase();
+
+    if (scheme === "steam") {
+      // Validate Steam URI structure and reject shell metacharacters
+      const steamPattern =
+        /^steam:\/\/(?:run|rungameid|launch|app)\/[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.~%/-]*)?$/;
+      if (!steamPattern.test(executablePath) || executablePath.includes("..")) {
+        throw new Error(`Refusing to launch unsafe Steam URI: ${executablePath}`);
+      }
+      return;
+    }
+
+    if (scheme === "heroic") {
+      // Validate Heroic URI structure and reject shell metacharacters
+      const heroicPattern = /^heroic:\/\/launch(?:\?[a-zA-Z0-9_.~%&=-]*|\/[a-zA-Z0-9_.-]+)?$/;
+      if (!heroicPattern.test(executablePath) || executablePath.includes("..")) {
+        throw new Error(`Refusing to launch unsafe Heroic URI: ${executablePath}`);
+      }
+      return;
+    }
+
+    if (scheme === "lutris") {
+      // Validate Lutris URI structure and reject shell metacharacters
+      const lutrisPattern = /^lutris:(?:rungame\/|rungameid\/)?[a-zA-Z0-9_.-]+$/;
+      if (!lutrisPattern.test(executablePath) || executablePath.includes("..")) {
+        throw new Error(`Refusing to launch unsafe Lutris URI: ${executablePath}`);
+      }
+      return;
+    }
+
+    // All other URI schemes (e.g. file:, javascript:, data:, http:, etc.) are rejected
+    throw new Error(`Refusing to launch unsafe protocol: ${scheme}`);
+  }
+}
+
+/**
+ * Validates that command line arguments do not contain null bytes or control character injections.
+ * Parameters are strictly passed as an isolated string array to child_process.spawn to avoid shell concatenation.
+ */
+export function validateCommandLineArguments(commandLine: string[]): void {
+  for (const arg of commandLine) {
+    if (typeof arg !== "string" || /[\0\r\n]/.test(arg)) {
+      throw new Error(`Command line argument contains invalid control characters: ${arg}`);
+    }
+  }
+}
+
 /** Build one launch plan for native binaries, launcher URIs, and Windows binaries on Linux. */
 export function resolveUnifiedLaunch(request: IUnifiedLaunchRequest): IUnifiedLaunchResult {
   const {
@@ -70,6 +141,9 @@ export function resolveUnifiedLaunch(request: IUnifiedLaunchRequest): IUnifiedLa
     gameMetadata,
     enableProtonLogs = false,
   } = request;
+
+  validateExecutableOrUri(executablePath);
+  validateCommandLineArguments(commandLine);
 
   const cwd = workingDirectory || path.dirname(executablePath || ".");
   const diagnostics: string[] = [];
