@@ -26,6 +26,7 @@
     "start": "pnpm nx run @vortex/main:start",
     "build": "pnpm nx run-many -t build lint typecheck && pnpm run assets",
     "assets": "node ./scripts/dependency-report.mjs",
+    "sbom": "pnpm nx run @vortex/main:sbom",
     "package": "pnpm cross-env NODE_ENV=production pnpm run build && pnpm cross-env NODE_ENV=production pnpm nx run @vortex/main:package",
     "package:nosign": "pnpm cross-env NODE_ENV=production pnpm run build && pnpm cross-env NODE_ENV=production pnpm nx run @vortex/main:package:nosign",
     "typecheck": "pnpm nx run-many -t typecheck",
