@@ -21,6 +21,11 @@
     "publisherName": ["Black Tree Gaming Limited", "Black Tree Gaming Ltd"],
     "signExts": [".dll"],
     "signingHashAlgorithms": ["sha256"],
+    "extraResources": [
+      "./temp/VC_redist.x64.exe",
+      "./temp/windowsdesktop-runtime-win-x64.exe",
+      "./nsis/**/*"
+    ],
     "rfc3161TimeStampServer": "http://timestamp.comodoca.com/rfc3161",
     "timeStampServer": "http://timestamp.comodoca.com"
   },
@@ -46,9 +51,6 @@
     "mimeTypes": ["x-scheme-handler/nxm"]
   },
   "extraResources": [
-    "./temp/VC_redist.x64.exe",
-    "./temp/windowsdesktop-runtime-win-x64.exe",
-    "./nsis/**/*",
     {
       "from": "../../../locales",
       "to": "locales"
