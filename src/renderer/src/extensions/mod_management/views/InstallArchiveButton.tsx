@@ -33,7 +33,7 @@ class InstallButton extends ComponentEx<IProps, {}> {
       <ToolbarIcon
         id="install-from-archive"
         icon="select-install"
-        text={t("Install From File")}
+        text={t("install_from_file")}
         onClick={this.startInstallFile}
       />
     );

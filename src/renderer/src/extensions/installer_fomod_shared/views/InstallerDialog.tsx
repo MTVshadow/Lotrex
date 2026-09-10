@@ -124,7 +124,7 @@ class Group extends React.PureComponent<IGroupProps, IGroupState> {
     return (
       <FormGroup disabled={disabled} validationState={validationState}>
         <ControlLabel>
-          {group?.name ?? `<${t("Missing group name")}>`}{" "}
+          {group?.name ?? `<${t("installer::missing_group_name")}>`}{" "}
           {validationMessage ? `(${validationMessage})` : null}
         </ControlLabel>
         {this.renderNoneOption()}
@@ -142,12 +142,13 @@ class Group extends React.PureComponent<IGroupProps, IGroupState> {
     switch (type) {
       case "SelectAtLeastOne":
         return (selected: number[]) =>
-          selected.length === 0 ? t("Select at least one") : undefined;
+          selected.length === 0 ? t("installer::select_at_least_one") : undefined;
       case "SelectAtMostOne":
-        return (selected: number[]) => (selected.length > 1 ? t("Select at most one") : undefined);
+        return (selected: number[]) =>
+          selected.length > 1 ? t("installer::select_at_most_one") : undefined;
       case "SelectExactlyOne":
         return (selected: number[]) =>
-          selected.length !== 1 ? t("Select exactly one") : undefined;
+          selected.length !== 1 ? t("installer::select_exactly_one") : undefined;
       default:
         return () => undefined;
     }
@@ -172,7 +173,7 @@ class Group extends React.PureComponent<IGroupProps, IGroupState> {
         checked={isSelected}
         onChange={this.select}
       >
-        {t("None")}
+        {t("installer::none")}
       </Radio>
     );
   };
@@ -188,7 +189,7 @@ class Group extends React.PureComponent<IGroupProps, IGroupState> {
     const content = (
       <a className="fake-link" data-value={plugin.id} onMouseOver={this.showDescription}>
         {plugin.name}
-        {plugin.preset ? ` (${t("Preset")})` : ""}
+        {plugin.preset ? ` (${t("installer::preset")})` : ""}
       </a>
     );
     switch (group.type) {
@@ -384,7 +385,7 @@ class InstallerDialog extends PureComponentEx<IProps, IDialogState> {
     }
 
     // Use default values if installerInfo is missing
-    const moduleName = installerInfo?.moduleName || "FOMOD Installer";
+    const moduleName = installerInfo?.moduleName || t!("installer::title_fomod");
     const hasImage = installerInfo?.image?.path;
     const idx = installerState.currentStep;
     const steps = installerState.installSteps;
@@ -409,7 +410,7 @@ class InstallerDialog extends PureComponentEx<IProps, IDialogState> {
           <IconButton
             id="fomod-cancel"
             className="close-button"
-            tooltip={t!("Cancel")}
+            tooltip={t!("installer::cancel")}
             icon="close"
             onClick={this.cancel}
           />
@@ -440,7 +441,7 @@ class InstallerDialog extends PureComponentEx<IProps, IDialogState> {
             <div>
               {lastVisible !== undefined ? (
                 <Button onClick={this.prev} disabled={waiting}>
-                  {waiting ? <Spinner /> : lastVisible.name || t!("Previous")}
+                  {waiting ? <Spinner /> : lastVisible.name || t!("installer::previous")}
                 </Button>
               ) : null}
             </div>
@@ -450,11 +451,11 @@ class InstallerDialog extends PureComponentEx<IProps, IDialogState> {
             <div>
               {nextVisible !== undefined ? (
                 <Button disabled={nextDisabled || waiting} onClick={this.next}>
-                  {waiting ? <Spinner /> : nextVisible.name || t!("Next")}
+                  {waiting ? <Spinner /> : nextVisible.name || t!("installer::next")}
                 </Button>
               ) : (
                 <Button disabled={nextDisabled || waiting} onClick={this.next}>
-                  {t!("Finish")}
+                  {t!("installer::finish")}
                 </Button>
               )}
             </div>

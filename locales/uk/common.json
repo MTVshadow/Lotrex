@@ -256,6 +256,21 @@
       "staging": "Тестування"
     }
   },
+  "installer": {
+    "cancel": "Скасувати",
+    "close": "Закрити",
+    "finish": "Завершити",
+    "missing_group_name": "Назва групи відсутня",
+    "next": "Далі",
+    "none": "Немає",
+    "preset": "Шаблон",
+    "previous": "Назад",
+    "select_at_least_one": "Виберіть хоча б один",
+    "select_at_most_one": "Виберіть не більше одного",
+    "select_exactly_one": "Виберіть рівно один",
+    "title_fomod": "Інсталятор FOMOD"
+  },
+  "install_from_file": "Встановити з файлу",
   "actions": {
     "search": "Пошук"
   },

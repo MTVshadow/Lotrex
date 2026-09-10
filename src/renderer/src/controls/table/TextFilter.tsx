@@ -26,6 +26,11 @@ export class TextFilterComponent extends React.Component<IFilterProps, {}> {
   };
 }
 
+function normalizeFilterText(text: string): string {
+  // Нормалізація Unicode (NFC) та різновидів апострофів для точного пошуку українських назв
+  return (text ?? "").normalize("NFC").replace(/[\u2018\u2019\u02BC\u0060]/g, "'");
+}
+
 class TextFilter implements ITableFilter {
   public component = TextFilterComponent;
   public raw = false;
@@ -44,13 +49,13 @@ class TextFilter implements ITableFilter {
     if (typeof value !== "string") {
       return false;
     }
+    const normValue = normalizeFilterText(value);
+    const normFilter = normalizeFilterText(filter);
+
     if (this.mCaseInsensitive) {
-      if (value === undefined || filter === undefined) {
-        return false;
-      }
-      return value.toLowerCase().indexOf(filter.toLowerCase()) !== -1;
+      return normValue.toLocaleLowerCase().indexOf(normFilter.toLocaleLowerCase()) !== -1;
     } else {
-      return value.indexOf(filter) !== -1;
+      return normValue.indexOf(normFilter) !== -1;
     }
   }
 }

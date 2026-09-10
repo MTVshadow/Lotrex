@@ -196,6 +196,21 @@
       "staging": "Staging"
     }
   },
+  "installer": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "finish": "Finish",
+    "missing_group_name": "Missing group name",
+    "next": "Next",
+    "none": "None",
+    "preset": "Preset",
+    "previous": "Previous",
+    "select_at_least_one": "Select at least one",
+    "select_at_most_one": "Select at most one",
+    "select_exactly_one": "Select exactly one",
+    "title_fomod": "FOMOD Installer"
+  },
+  "install_from_file": "Install From File",
   "actions": {
     "search": "Search"
   },

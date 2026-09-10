@@ -406,7 +406,10 @@ export function isReservedDirectory(dirPath: string, normalize?: Normalize): boo
 }
 
 export function ciEqual(lhs: string, rhs: string, locale?: string): boolean {
-  return (lhs ?? "").localeCompare(rhs ?? "", locale, { sensitivity: "accent" }) === 0;
+  // Нормалізація Unicode (NFC) та апострофів для коректного порівняння українського та багатомовного тексту
+  const normLhs = (lhs ?? "").normalize("NFC").replace(/[\u2018\u2019\u02BC\u0060]/g, "'");
+  const normRhs = (rhs ?? "").normalize("NFC").replace(/[\u2018\u2019\u02BC\u0060]/g, "'");
+  return normLhs.localeCompare(normRhs, locale, { sensitivity: "accent" }) === 0;
 }
 
 const sanitizeRE = /[ .#()]/g;
