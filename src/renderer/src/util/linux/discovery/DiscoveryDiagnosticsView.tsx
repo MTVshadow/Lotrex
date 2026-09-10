@@ -7,6 +7,7 @@ import {
   ControlLabel,
   FormControl,
   FormGroup,
+  Label,
   Table,
 } from "react-bootstrap";
 
@@ -281,7 +282,7 @@ export const DiscoveryDiagnosticsView: React.FC<IDiscoveryDiagnosticsViewProps> 
                         <code>{res.canonicalPath}</code>
                       </td>
                       <td>
-                        <Badge bsStyle={confColor}>{res.confidence}</Badge>
+                        <Label bsStyle={confColor}>{res.confidence}</Label>
                       </td>
                       <td>
                         <span style={{ fontSize: "12px" }}>
@@ -406,9 +407,9 @@ export const DiscoveryDiagnosticsView: React.FC<IDiscoveryDiagnosticsViewProps> 
                       <Badge>{root.scope}</Badge>
                     </td>
                     <td>
-                      <Badge bsStyle={root.validated ? "success" : "danger"}>
+                      <Label bsStyle={root.validated ? "success" : "danger"}>
                         {root.validated ? "Valid" : "Invalid"}
-                      </Badge>
+                      </Label>
                     </td>
                     <td>
                       <Button

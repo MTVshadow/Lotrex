@@ -111,9 +111,11 @@ export function discoverSteamResources(sources: IBoundedSourceDescriptor[]): IDi
               const name = String(appState?.name || `Steam App ${appId}`);
               const installdir = String(appState?.installdir || "");
 
-              const gamePath = installdir
-                ? path.join(steamAppsDir, "common", installdir)
-                : path.join(steamAppsDir, "common", name);
+              const gamePath = path.isAbsolute(installdir)
+                ? installdir
+                : installdir
+                  ? path.join(steamAppsDir, "common", installdir)
+                  : path.join(steamAppsDir, "common", name);
 
               results.push({
                 id: `steam:game:${appId}`,

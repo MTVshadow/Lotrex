@@ -8,6 +8,7 @@ export * from "./discoveryDiagnostics";
 export * from "./DiscoveryDiagnosticsView";
 export * from "./packagingAndSandbox";
 export * from "./progressAndLimits";
+export * from "./providerConformance";
 export * from "./providers/heroicProvider";
 export * from "./providers/lutrisProvider";
 export * from "./providers/steamProvider";
