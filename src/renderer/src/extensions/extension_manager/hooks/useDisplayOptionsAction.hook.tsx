@@ -25,7 +25,8 @@ export const useDisplayOptionsAction = ({
     canReset: showBundled,
     children: (
       <PopoverPanelGroup>
-        <PopoverPanelGroupItem label={t("Show bundled extensions")}>
+        {/* Семантичний ключ показу вбудованих розширень для панелі налаштувань відображення */}
+        <PopoverPanelGroupItem label={t("extension_manager:::page::show_bundled")}>
           <Switch checked={showBundled} onChange={onToggleBundled} />
         </PopoverPanelGroupItem>
       </PopoverPanelGroup>

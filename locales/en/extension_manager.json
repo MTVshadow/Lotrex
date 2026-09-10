@@ -1,3 +1,81 @@
 {
-  "_comment": "Extension manager strings - to be populated during migration"
+  "_comment": "Extension manager strings",
+  "Extensions": "Extensions",
+  "page": {
+    "title": "Extensions",
+    "subtitle": "Manage extensions that add features and game support to Vortex.",
+    "update_extensions": "Update extensions",
+    "browse_extensions": "Browse extensions",
+    "show_bundled": "Show bundled extensions",
+    "select_file_hint": "Select extension file",
+    "restart_title": "Restart Vortex",
+    "restart_required": "You need to restart Vortex to apply changes.",
+    "install_failed": "Failed to install extension",
+    "actions": {
+      "remove": "Remove"
+    }
+  },
+  "table": {
+    "status": {
+      "name": "Status",
+      "description": "Is the extension enabled",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "failed": "Failed"
+    },
+    "name": {
+      "name": "Name",
+      "description": "Extension Name"
+    },
+    "endorsed": {
+      "name": "Endorsed",
+      "description": "Endorsement state on Nexus"
+    },
+    "author": {
+      "name": "Author",
+      "description": "Extension Author"
+    },
+    "description": {
+      "name": "Description",
+      "description": "Extension Description"
+    },
+    "version": {
+      "name": "Version",
+      "description": "Extension Version"
+    },
+    "errors": {
+      "name": "Load Errors",
+      "description": "Errors when loading this extension",
+      "not_compatible": "Not compatible with this version of Vortex",
+      "unsupported_api": "Unsupported API",
+      "failed_to_load": "Failed to load: {{message}}",
+      "depends_on_version": "Depends on '{{dependencyId}}' version '{{version}}'",
+      "depends_on": "Depends on '{{dependencyId}}'",
+      "unknown_error": "Unknown error '{{id}}'"
+    }
+  },
+  "browse": {
+    "title": "Browse Extensions",
+    "search_label": "Search",
+    "search_placeholder": "Search",
+    "sort_by": "Sort by",
+    "sort_name": "Name",
+    "sort_recent": "Last update",
+    "last_updated": "Last updated: {{time}}",
+    "refresh": "Refresh",
+    "close": "Close",
+    "installed": "Installed",
+    "install": "Install",
+    "open_in_browser": "Open in Browser",
+    "by_author": "by {{author}}"
+  },
+  "notifications": {
+    "updated_restart": "Extensions updated, please restart to apply them",
+    "installed_restart": "Extensions installed, please restart to use them",
+    "install_canceled": "Extensions have to be installed from the extensions page.",
+    "fetch_failed": "Failed to fetch available extensions",
+    "dependencies_disabled": "Some extensions were disabled because they have missing or incompatible dependencies.",
+    "fix": "Fix",
+    "missing_deps_installed": "Missing dependencies were installed - please restart Vortex"
+  }
 }

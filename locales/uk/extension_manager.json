@@ -1,3 +1,81 @@
 {
-  "_comment": "Рядки менеджера розширень — буде додано під час міграції"
+  "_comment": "Extension manager strings",
+  "Extensions": "Розширення",
+  "page": {
+    "title": "Розширення",
+    "subtitle": "Керування розширеннями, які додають можливості та підтримку ігор до Lotrex.",
+    "update_extensions": "Оновити розширення",
+    "browse_extensions": "Огляд розширень",
+    "show_bundled": "Показувати вбудовані розширення",
+    "select_file_hint": "Виберіть файл розширення",
+    "restart_title": "Перезапустити Lotrex",
+    "restart_required": "Необхідно перезапустити Lotrex, щоб застосувати зміни.",
+    "install_failed": "Не вдалося встановити розширення",
+    "actions": {
+      "remove": "Видалити"
+    }
+  },
+  "table": {
+    "status": {
+      "name": "Стан",
+      "description": "Чи увімкнено розширення",
+      "enabled": "Увімкнено",
+      "disabled": "Вимкнено",
+      "failed": "Помилка"
+    },
+    "name": {
+      "name": "Назва",
+      "description": "Назва розширення"
+    },
+    "endorsed": {
+      "name": "Схвалено",
+      "description": "Стан схвалення на Nexus"
+    },
+    "author": {
+      "name": "Автор",
+      "description": "Автор розширення"
+    },
+    "description": {
+      "name": "Опис",
+      "description": "Опис розширення"
+    },
+    "version": {
+      "name": "Версія",
+      "description": "Версія розширення"
+    },
+    "errors": {
+      "name": "Помилки завантаження",
+      "description": "Помилки під час завантаження цього розширення",
+      "not_compatible": "Несумісно з цією версією Lotrex",
+      "unsupported_api": "Непідтримуваний API",
+      "failed_to_load": "Не вдалося завантажити: {{message}}",
+      "depends_on_version": "Залежить від '{{dependencyId}}' версії '{{version}}'",
+      "depends_on": "Залежить від '{{dependencyId}}'",
+      "unknown_error": "Невідома помилка '{{id}}'"
+    }
+  },
+  "browse": {
+    "title": "Огляд розширень",
+    "search_label": "Пошук",
+    "search_placeholder": "Пошук",
+    "sort_by": "Сортувати за",
+    "sort_name": "Назва",
+    "sort_recent": "Останнє оновлення",
+    "last_updated": "Останнє оновлення: {{time}}",
+    "refresh": "Оновити",
+    "close": "Закрити",
+    "installed": "Встановлено",
+    "install": "Встановити",
+    "open_in_browser": "Відкрити у браузері",
+    "by_author": "від {{author}}"
+  },
+  "notifications": {
+    "updated_restart": "Розширення оновлено, будь ласка, перезапустіть для їх застосування",
+    "installed_restart": "Розширення встановлено, будь ласка, перезапустіть для їх використання",
+    "install_canceled": "Розширення необхідно встановлювати зі сторінки розширень.",
+    "fetch_failed": "Не вдалося отримати доступні розширення",
+    "dependencies_disabled": "Деякі розширення було вимкнено через відсутні або несумісні залежності.",
+    "fix": "Виправити",
+    "missing_deps_installed": "Відсутні залежності встановлено — будь ласка, перезапустіть Lotrex"
+  }
 }

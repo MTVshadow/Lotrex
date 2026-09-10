@@ -111,7 +111,8 @@ class BrowseExtensions extends ComponentEx<IProps, IBrowseExtensionsState> {
     return (
       <Modal id="browse-extensions-dialog" show={visible} onHide={nop} ref={this.mModalRef}>
         <ModalHeader>
-          <h3>{t("Browse Extensions")}</h3>
+          {/* Семантичний заголовок модального вікна огляду розширень */}
+          <h3>{t("extension_manager:::browse::title")}</h3>
         </ModalHeader>
         <Modal.Body>
           <FlexLayout type="row">
@@ -120,8 +121,8 @@ class BrowseExtensions extends ComponentEx<IProps, IBrowseExtensionsState> {
                 <FlexLayout.Fixed>
                   <FormInput
                     id="browse-extensions-search"
-                    label={t("Search")}
-                    placeholder={t("Search")}
+                    label={t("extension_manager:::browse::search_label")}
+                    placeholder={t("extension_manager:::browse::search_placeholder")}
                     value={searchTerm}
                     onChange={this.changeSearch}
                     debounceTimer={200}
@@ -129,14 +130,14 @@ class BrowseExtensions extends ComponentEx<IProps, IBrowseExtensionsState> {
                 </FlexLayout.Fixed>
                 <FlexLayout.Fixed>
                   <FlexLayout type="row" className="extension-sort-container">
-                    <FlexLayout.Fixed>{t("Sort by")}</FlexLayout.Fixed>
+                    <FlexLayout.Fixed>{t("extension_manager:::browse::sort_by")}</FlexLayout.Fixed>
                     <FlexLayout.Flex>
                       <FormControl componentClass="select" onChange={this.changeSort} value={sort}>
                         <option key={"name"} value={"name"}>
-                          {t("Name")}
+                          {t("extension_manager:::browse::sort_name")}
                         </option>
                         <option key="recent" value="recent">
-                          {t("Last update")}
+                          {t("extension_manager:::browse::sort_recent")}
                         </option>
                       </FormControl>
                     </FlexLayout.Flex>
@@ -152,12 +153,12 @@ class BrowseExtensions extends ComponentEx<IProps, IBrowseExtensionsState> {
                 </FlexLayout.Flex>
                 <FlexLayout.Fixed>
                   <div className="extension-list-time">
-                    {t("Last updated: {{time}}", {
+                    {t("extension_manager:::browse::last_updated", {
                       replace: { time: updatedAt.toLocaleString(language) },
                     })}
                     <IconButton
                       icon="refresh"
-                      tooltip={t("Refresh")}
+                      tooltip={t("extension_manager:::browse::refresh")}
                       onClick={onRefreshExtensions}
                     />
                   </div>
@@ -170,7 +171,7 @@ class BrowseExtensions extends ComponentEx<IProps, IBrowseExtensionsState> {
           </FlexLayout>
         </Modal.Body>
         <Modal.Footer>
-          <Button onClick={onHide}>{t("Close")}</Button>
+          <Button onClick={onHide}>{t("extension_manager:::browse::close")}</Button>
         </Modal.Footer>
       </Modal>
     );
@@ -216,10 +217,10 @@ class BrowseExtensions extends ComponentEx<IProps, IBrowseExtensionsState> {
     return installing.indexOf(ext.name) !== -1 ? (
       <Spinner />
     ) : this.isInstalled(ext) ? (
-      <div>{t("Installed")}</div>
+      <div>{t("extension_manager:::browse::installed")}</div>
     ) : (
       <a className="extension-subscribe" data-modid={ext.modId} onClick={this.install}>
-        {t("Install")}
+        {t("extension_manager:::browse::install")}
       </a>
     );
   }
@@ -264,7 +265,7 @@ class BrowseExtensions extends ComponentEx<IProps, IBrowseExtensionsState> {
     const openInBrowser = (
       <a className="extension-browse" data-modid={ext.modId} onClick={this.openPage}>
         <Icon name="open-in-browser" />
-        {t("Open in Browser")}
+        {t("extension_manager:::browse::open_in_browser")}
       </a>
     );
 
@@ -284,7 +285,9 @@ class BrowseExtensions extends ComponentEx<IProps, IBrowseExtensionsState> {
                 <div className="description-title">
                   <span className="description-name">{ext.name}</span>
                   <span className="description-author">
-                    {t("by")} {ext.author}
+                    {t("extension_manager:::browse::by_author", {
+                      replace: { author: ext.author },
+                    })}
                   </span>
                 </div>
                 {details?.summary !== undefined ? (
@@ -322,7 +325,10 @@ class BrowseExtensions extends ComponentEx<IProps, IBrowseExtensionsState> {
           await this.props.updateExtensions();
         }
       } catch (err) {
-        this.context.api.showErrorNotification("Failed to install extension", err);
+        this.context.api.showErrorNotification(
+          this.props.t("extension_manager:::page::install_failed"),
+          err,
+        );
       } finally {
         this.nextState.installing = this.state.installing.filter((name) => name !== ext.name);
       }
@@ -378,4 +384,6 @@ function mapStateToProps(state: IState): IConnectedProps {
   };
 }
 
-export default translate(["common"])(connect(mapStateToProps)(BrowseExtensions));
+export default translate(["extension_manager", "common"])(
+  connect(mapStateToProps)(BrowseExtensions),
+);

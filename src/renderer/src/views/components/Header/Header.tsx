@@ -31,14 +31,15 @@ export const Header: FC<React.PropsWithChildren<unknown>> = () => {
   const gameProfiles = useSelector(gameProfilesSelector);
 
   const title = useMemo(() => {
+    // Семантичний заголовок активної секції у верхній панелі
     if (selection.type === "home") {
-      return t("Home");
+      return t("navigation::header::home");
     }
     if (selection.type === "downloads") {
-      return t("Downloads");
+      return t("navigation::header::downloads");
     }
     const game = knownGames.find((g) => g.id === selection.gameId);
-    return game?.name ?? t("Home");
+    return game?.name ?? t("navigation::header::home");
   }, [selection, knownGames, t]);
 
   const handleToggleMenu = useCallback(() => {
@@ -52,16 +53,20 @@ export const Header: FC<React.PropsWithChildren<unknown>> = () => {
     return gameProfiles.length > 1 ? activeProfile.name : undefined;
   }, [selection, activeProfile, gameProfiles]);
 
+  const menuToggleLabel = menuIsCollapsed
+    ? t("navigation::header::open_menu")
+    : t("navigation::header::collapse_menu");
+
   return (
     <div
       className="flex h-11 items-center justify-between pl-4.5"
       style={{ WebkitAppRegion: "drag" }}
     >
       <div className="flex min-w-0 flex-1 items-center gap-x-1">
-        <Tooltip content={menuIsCollapsed ? t("Open menu") : t("Collapse menu")} placement="right">
+        <Tooltip content={menuToggleLabel} placement="right">
           <Button
             appearance="weak"
-            aria-label={menuIsCollapsed ? t("Open menu") : t("Collapse menu")}
+            aria-label={menuToggleLabel}
             brand="neutral"
             leftIconPath={menuIsCollapsed ? nxmPanelOpen : nxmPanelClose}
             style={{ WebkitAppRegion: "no-drag" }}

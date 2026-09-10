@@ -127,7 +127,6 @@
     },
     "language": {
       "extension_by_author": "Розширення від {{author}}",
-      "first_use_restart_hint": "Після першого вибору мови може знадобитися перезапустити Lotrex.",
       "label": "Мова",
       "unknown_author": "невідомого автора"
     },
@@ -195,6 +194,34 @@
       "third_party": "Lotrex установлено через сторонню службу, яка керує його оновленнями."
     },
     "preview_channel": "Lotrex працює в режимі попереднього перегляду та використовує прихований канал оновлень 'next'."
+  },
+  "navigation": {
+    "groups": {
+      "about": "Про програму",
+      "general": "Загальні",
+      "mods": "Моди"
+    },
+    "header": {
+      "collapse_menu": "Згорнути меню",
+      "downloads": "Завантаження",
+      "home": "Головна",
+      "open_menu": "Відкрити меню"
+    },
+    "sidebar": {
+      "minimize": "Згорнути",
+      "restore": "Відновити"
+    },
+    "spine": {
+      "downloads": "Завантаження",
+      "games": "Ігри",
+      "home": "Головна"
+    }
+  },
+  "toolbar": {
+    "version": {
+      "dev": "Розробка",
+      "staging": "Тестування"
+    }
   },
   "actions": {
     "search": "Пошук"

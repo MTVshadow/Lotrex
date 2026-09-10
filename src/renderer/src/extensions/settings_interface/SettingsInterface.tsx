@@ -198,10 +198,6 @@ class SettingsInterfaceImpl extends ComponentEx<IProps, {}> {
               value={selectedLanguageId}
               onChange={this.selectLanguage}
             />
-
-            <Typography appearance="subdued" typographyType="body-sm">
-              {t("settings_interface::language::first_use_restart_hint")}
-            </Typography>
           </div>
         </FormGroup>
 

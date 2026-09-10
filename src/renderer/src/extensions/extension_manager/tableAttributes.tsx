@@ -6,7 +6,6 @@ import TableTextFilter from "../../controls/table/TextFilter";
 import type { IExtensionWithState } from "../../types/extensions";
 import type { IExtensionLoadFailure } from "../../types/IState";
 import type { ITableAttribute } from "../../types/ITableAttribute";
-import { getSafe } from "../../util/storeHelper";
 import { SITE_ID } from "../gamemode_management/constants";
 import type { EndorseMod } from "../nexus_integration/attributes";
 import EndorseModButton from "../nexus_integration/views/EndorseModButton";
@@ -18,28 +17,29 @@ interface IAttributesContext {
 }
 
 function renderLoadFailure(t: TFunction, fail: IExtensionLoadFailure) {
+  // Семантична локалізація діагностики помилок завантаження розширень
   if (fail.id === "unsupported-version") {
-    return t("Not compatible with this version of Vortex");
+    return t("extension_manager:::table::errors::not_compatible");
   }
 
   if (fail.id === "unsupported-api") {
-    return t("Unsupported API");
+    return t("extension_manager:::table::errors::unsupported_api");
   }
 
   if (fail.id === "exception") {
-    return t("Failed to load: {{message}}", { replace: fail.args });
+    return t("extension_manager:::table::errors::failed_to_load", { replace: fail.args });
   }
 
   if (fail.id === "dependency") {
     if (fail.args.version) {
-      return t("Depends on '{{dependencyId}}' version '{{version}}'", { replace: fail.args });
+      return t("extension_manager:::table::errors::depends_on_version", { replace: fail.args });
     }
 
-    return t("Depends on '{{dependencyId}}'");
+    return t("extension_manager:::table::errors::depends_on", { replace: fail.args });
   }
 
   const id = fail.id satisfies never;
-  return t("Unknown error '{{id}}'", { replace: { id } });
+  return t("extension_manager:::table::errors::unknown_error", { replace: { id } });
 }
 
 function createEndorsedIcon(ext: IExtensionWithState, onEndorse: EndorseMod, t: TFunction) {
@@ -57,21 +57,26 @@ function createEndorsedIcon(ext: IExtensionWithState, onEndorse: EndorseMod, t: 
 
 function getTableAttributes(
   context: IAttributesContext,
+  t?: TFunction,
 ): Array<ITableAttribute<IExtensionWithState>> {
+  // Резолвер семантичних ключів з fallback для підтримки динамічного перезавантаження без перезапуску
+  const tr = (key: string, fallbackText: string) => (t ? t(key) : fallbackText);
+
   return [
     {
       id: "enabled",
-      name: "Status",
-      description: "Is the extension enabled",
+      name: tr("extension_manager:::table::status::name", "Status"),
+      description: tr("extension_manager:::table::status::description", "Is the extension enabled"),
       icon: "check-o",
-      calc: (extension) => {
+      calc: (extension, tFunc) => {
+        const trans = tFunc ?? t;
         switch (extension.enabled) {
           case true:
-            return "Enabled";
+            return trans ? trans("extension_manager:::table::status::enabled") : "Enabled";
           case false:
-            return "Disabled";
+            return trans ? trans("extension_manager:::table::status::disabled") : "Disabled";
           case "failed":
-            return "Failed";
+            return trans ? trans("extension_manager:::table::status::failed") : "Failed";
         }
       },
       placement: "table",
@@ -79,9 +84,19 @@ function getTableAttributes(
       edit: {
         inline: true,
         choices: () => [
-          { key: "enabled", text: "Enabled" },
-          { key: "disabled", text: "Disabled" },
-          { key: "failed", text: "Failed", visible: false },
+          {
+            key: "enabled",
+            text: tr("extension_manager:::table::status::enabled", "Enabled"),
+          },
+          {
+            key: "disabled",
+            text: tr("extension_manager:::table::status::disabled", "Disabled"),
+          },
+          {
+            key: "failed",
+            text: tr("extension_manager:::table::status::failed", "Failed"),
+            visible: false,
+          },
         ],
         onChangeValue: (extension: IExtensionWithState, value: string) =>
           value === undefined
@@ -93,8 +108,8 @@ function getTableAttributes(
     },
     {
       id: "name",
-      name: "Name",
-      description: "Extension Name",
+      name: tr("extension_manager:::table::name::name", "Name"),
+      description: tr("extension_manager:::table::name::description", "Extension Name"),
       icon: "quotes",
       calc: (extension) => extension.name,
       placement: "table",
@@ -105,8 +120,11 @@ function getTableAttributes(
     },
     {
       id: "endorsed",
-      name: "Endorsed",
-      description: "Endorsement state on Nexus",
+      name: tr("extension_manager:::table::endorsed::name", "Endorsed"),
+      description: tr(
+        "extension_manager:::table::endorsed::description",
+        "Endorsement state on Nexus",
+      ),
       icon: "star",
       calc: (extension) => extension.endorsed,
       customRenderer: (extension: IExtensionWithState, detail: boolean, t: TFunction) =>
@@ -119,8 +137,8 @@ function getTableAttributes(
     },
     {
       id: "author",
-      name: "Author",
-      description: "Extension Author",
+      name: tr("extension_manager:::table::author::name", "Author"),
+      description: tr("extension_manager:::table::author::description", "Extension Author"),
       icon: "a-edit",
       calc: (extension) => extension.author,
       placement: "table",
@@ -131,8 +149,11 @@ function getTableAttributes(
     },
     {
       id: "description",
-      name: "Description",
-      description: "Extension Description",
+      name: tr("extension_manager:::table::description::name", "Description"),
+      description: tr(
+        "extension_manager:::table::description::description",
+        "Extension Description",
+      ),
       placement: "detail",
       customRenderer: (extension: IExtensionWithState) => (
         <textarea className="textarea-details" value={extension.description} readOnly={true} />
@@ -142,8 +163,8 @@ function getTableAttributes(
     },
     {
       id: "version",
-      name: "Version",
-      description: "Extension Version",
+      name: tr("extension_manager:::table::version::name", "Version"),
+      description: tr("extension_manager:::table::version::description", "Extension Version"),
       icon: "cake",
       placement: "table",
       calc: (extension) => extension.version,
@@ -153,16 +174,21 @@ function getTableAttributes(
     },
     {
       id: "errors",
-      name: "Load Errors",
-      description: "Errors when loading this extension",
+      name: tr("extension_manager:::table::errors::name", "Load Errors"),
+      description: tr(
+        "extension_manager:::table::errors::description",
+        "Errors when loading this extension",
+      ),
       icon: "bug",
       placement: "detail",
-      calc: (extension, t) =>
-        extension.loadFailures.map((fail) => renderLoadFailure(t, fail)).join("\n"),
-      customRenderer: (extension: IExtensionWithState, detailCell: boolean, t: TFunction) => (
+      calc: (extension, tFunc) =>
+        extension.loadFailures.map((fail) => renderLoadFailure(tFunc ?? t, fail)).join("\n"),
+      customRenderer: (extension: IExtensionWithState, detailCell: boolean, tFunc: TFunction) => (
         <textarea
           className="textarea-details"
-          value={extension.loadFailures.map((fail) => renderLoadFailure(t, fail)).join("\n")}
+          value={extension.loadFailures
+            .map((fail) => renderLoadFailure(tFunc ?? t, fail))
+            .join("\n")}
           readOnly={true}
         />
       ),

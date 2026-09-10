@@ -57,7 +57,7 @@ export const Toolbar: FC<React.PropsWithChildren<unknown>> = () => {
             <div className="toolbar-version-container toolbar-version-staging">
               <Icon name="conflict" />
 
-              <div className="toolbar-version-text">Staging</div>
+              <div className="toolbar-version-text">{t("toolbar::version::staging")}</div>
             </div>
           ) : null}
 
@@ -65,7 +65,7 @@ export const Toolbar: FC<React.PropsWithChildren<unknown>> = () => {
             <div className="toolbar-version-container toolbar-version-dev">
               <Icon name="mods" />
 
-              <div className="toolbar-version-text">Development</div>
+              <div className="toolbar-version-text">{t("toolbar::version::dev")}</div>
             </div>
           ) : null}
 

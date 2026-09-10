@@ -1,5 +1,6 @@
 import { mdiHome, mdiPlus } from "@mdi/js";
 import React, { type FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 
 import { TooltipDelayGroup } from "@/ui/components/tooltip/TooltipDelayGroup";
@@ -16,6 +17,7 @@ import { useSpineContext } from "./SpineContext";
 import { formatGameDisplayName, getGameImageUrls } from "./utils";
 
 export const Spine: FC<React.PropsWithChildren<unknown>> = () => {
+  const { t } = useTranslation();
   const { selection, selectHome, selectGame, selectGlobalPage } = useSpineContext();
 
   const [canScrollUp, setCanScrollUp] = useState(false);
@@ -71,7 +73,7 @@ export const Spine: FC<React.PropsWithChildren<unknown>> = () => {
         className="border-2"
         iconPath={mdiHome}
         isActive={selection.type === "home"}
-        title="Home"
+        title={t("navigation::spine::home")}
         onClick={selectHome}
       />
 
@@ -104,7 +106,7 @@ export const Spine: FC<React.PropsWithChildren<unknown>> = () => {
             <SpineButton
               className="border-2 border-dotted hover:border-solid"
               iconPath={mdiPlus}
-              title="Games"
+              title={t("navigation::spine::games")}
               onClick={() => handleGlobalPageClick("Games")}
             />
           </div>

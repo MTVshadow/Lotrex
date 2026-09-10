@@ -70,7 +70,6 @@
     },
     "language": {
       "extension_by_author": "Extension by {{author}}",
-      "first_use_restart_hint": "When you select a language for the first time you may have to restart Lotrex.",
       "label": "Language",
       "unknown_author": "unknown author"
     },
@@ -135,6 +134,34 @@
       "third_party": "Lotrex was installed through a third-party service that manages its updates."
     },
     "preview_channel": "Lotrex is running in preview mode and using the hidden 'next' update channel."
+  },
+  "navigation": {
+    "groups": {
+      "about": "About",
+      "general": "General",
+      "mods": "Mods"
+    },
+    "header": {
+      "collapse_menu": "Collapse menu",
+      "downloads": "Downloads",
+      "home": "Home",
+      "open_menu": "Open menu"
+    },
+    "sidebar": {
+      "minimize": "Minimize",
+      "restore": "Restore"
+    },
+    "spine": {
+      "downloads": "Downloads",
+      "games": "Games",
+      "home": "Home"
+    }
+  },
+  "toolbar": {
+    "version": {
+      "dev": "Development",
+      "staging": "Staging"
+    }
   },
   "actions": {
     "search": "Search"

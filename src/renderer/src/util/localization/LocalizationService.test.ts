@@ -145,4 +145,100 @@ describe("LocalizationService", () => {
     expect(service.translate("untranslated")).toBe("untranslated");
     expect(service.missingTranslations).toEqual({ common: {} });
   });
+
+  it("verifies restart-free atomic bidirectional switching (en -> uk -> en) with live translator updates", async () => {
+    // Верифікація атомарного безперезавантажувального перемикання:
+    // перевіряємо, що перемикач оновлює внутрішній стан сервісу та функції трансляції наживо без перезапуску застосунку
+    let activeLanguage = "en";
+    const dynamicTranslator: LocalizationTranslator = (key) => `${activeLanguage}:${key}`;
+    const runtime = {} as ILocalizationRuntime;
+    const changeLanguage = vi.fn(async (nextLang: string) => {
+      activeLanguage = nextLang;
+      return dynamicTranslator;
+    });
+    const adapter: ILocalizationAdapter = {
+      runtime,
+      get language() {
+        return activeLanguage;
+      },
+      initialize: vi.fn(async () => ({ runtime, translator: dynamicTranslator })),
+      changeLanguage,
+      reset: vi.fn(),
+    };
+
+    const service = new LocalizationService(adapter);
+    await service.initialize("en", () => []);
+
+    expect(service.currentLanguage).toBe("en");
+    expect(service.translate("message")).toBe("en:message");
+
+    // Перемикання en -> uk наживо
+    const ukTranslator = await service.changeLanguage("uk");
+    expect(service.currentLanguage).toBe("uk");
+    expect(service.translate("message")).toBe("uk:message");
+    expect(ukTranslator("message")).toBe("uk:message");
+    expect(changeLanguage).toHaveBeenLastCalledWith("uk");
+
+    // Зворотне перемикання uk -> en наживо
+    const enTranslator = await service.changeLanguage("en");
+    expect(service.currentLanguage).toBe("en");
+    expect(service.translate("message")).toBe("en:message");
+    expect(enTranslator("message")).toBe("en:message");
+    expect(changeLanguage).toHaveBeenLastCalledWith("en");
+    expect(changeLanguage).toHaveBeenCalledTimes(2);
+  });
+
+  it("serializes rapid sequential locale switches (en -> uk -> en -> uk) without race conditions", async () => {
+    // Тестування серіалізації черги mSwitchQueue під час швидких послідовних запитів перемикання мови
+    let activeLanguage = "en";
+    const runtime = {} as ILocalizationRuntime;
+    const changeLanguage = vi.fn(async (nextLang: string) => {
+      activeLanguage = nextLang;
+      const langForThisCall = nextLang;
+      // Імітуємо асинхронне навантаження
+      await new Promise((res) => setTimeout(res, 5));
+      return ((key: string) => `${langForThisCall}:${key}`) as LocalizationTranslator;
+    });
+    const adapter: ILocalizationAdapter = {
+      runtime,
+      get language() {
+        return activeLanguage;
+      },
+      initialize: vi.fn(async () => ({
+        runtime,
+        translator: (key: string) => `en:${key}`,
+      })),
+      changeLanguage,
+      reset: vi.fn(),
+    };
+
+    const service = new LocalizationService(adapter);
+    await service.initialize("en", () => []);
+
+    // Створюємо каскад швидких запитів
+    const p1 = service.changeLanguage("uk");
+    const p2 = service.changeLanguage("en");
+    const p3 = service.changeLanguage("uk");
+
+    const [r1, r2, r3] = await Promise.all([p1, p2, p3]);
+
+    expect(r1("item")).toBe("uk:item");
+    expect(r2("item")).toBe("en:item");
+    expect(r3("item")).toBe("uk:item");
+    expect(service.currentLanguage).toBe("uk");
+    expect(service.translate("item")).toBe("uk:item");
+    expect(changeLanguage).toHaveBeenCalledTimes(3);
+  });
+
+  it("recovers cleanly from invalid locale input by normalizing to allowed fallback", async () => {
+    // Перевірка нормалізації невалідного коду мови до дефолтної ("en") без аварійного завершення
+    const { adapter, changeLanguage } = createAdapter();
+    const service = new LocalizationService(adapter);
+    await service.initialize("en", () => []);
+
+    await service.changeLanguage("invalid_lang_code");
+
+    expect(service.currentLanguage).toBe("en");
+    expect(changeLanguage).toHaveBeenCalledWith("en");
+  });
 });

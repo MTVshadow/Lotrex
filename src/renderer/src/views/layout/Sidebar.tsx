@@ -37,15 +37,16 @@ export const Sidebar: FC<React.PropsWithChildren<ISidebarProps>> = (props) => {
   const secondaryPage = useSelector(secondaryPageSelector);
   const profile = useSelector(activeProfileSelector);
 
+  // Формуємо групи навігації з семантичними ключами для реактивного перекладу без перезавантаження
   const pageGroups = useMemo(() => {
     const game = profile !== undefined ? getGame(profile.gameId) : undefined;
-    const gameName = game?.shortName || game?.name || "Mods";
+    const gameName = game?.shortName || game?.name || "navigation::groups::mods";
 
     return [
       { title: undefined, key: "dashboard" },
-      { title: "General", key: "global" },
+      { title: "navigation::groups::general", key: "global" },
       { title: gameName, key: "per-game" },
-      { title: "About", key: "support" },
+      { title: "navigation::groups::about", key: "support" },
     ];
   }, [profile]);
 
@@ -76,7 +77,9 @@ export const Sidebar: FC<React.PropsWithChildren<ISidebarProps>> = (props) => {
       <Button
         className="btn-menu-minimize"
         id="btn-minimize-menu"
-        tooltip={menuIsCollapsed ? t("Restore") : t("Minimize")}
+        tooltip={
+          menuIsCollapsed ? t("navigation::sidebar::restore") : t("navigation::sidebar::minimize")
+        }
         onClick={onToggleMenu}
       >
         <Icon name={menuIsCollapsed ? "pane-right" : "pane-left"} />

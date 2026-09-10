@@ -72,7 +72,7 @@ export const ExtensionManager = ({
   updateExtensions,
   onRefresh,
 }: IExtensionManagerProps) => {
-  const { t } = useTranslation(["common"]);
+  const { t } = useTranslation(["extension_manager", "common"]);
   const { api } = useMainContext();
   const dispatch = useDispatch();
 
@@ -115,42 +115,52 @@ export const ExtensionManager = ({
     [dispatch],
   );
 
+  // Отримуємо локалізовані атрибути таблиці з прив'язкою до актуального t для безперезавантажувальної зміни мови
   const staticColumns = useMemo(
     () =>
-      getTableAttributes({
-        onSetExtensionEnabled: setEnabled,
-        onToggleExtensionEnabled: (extName: string) => {
-          const current = extensionsRef.current;
-          const extId = Object.keys(current).find((iter) => current[iter].name === extName);
-          setEnabled(extName, !(current[extId]?.enabled ?? true));
-        },
-        onEndorseMod: (_gameId: string, modIdStr: string, endorseState: EndorsedStatus) => {
-          const current = extensionsRef.current;
-          const modId = parseInt(modIdStr, 10);
-          const extId = Object.keys(current).find((iter) => current[iter].modId === modId);
+      getTableAttributes(
+        {
+          onSetExtensionEnabled: setEnabled,
+          onToggleExtensionEnabled: (extName: string) => {
+            const current = extensionsRef.current;
+            const extId = Object.keys(current).find((iter) => current[iter].name === extName);
+            setEnabled(extName, !(current[extId]?.enabled ?? true));
+          },
+          onEndorseMod: (_gameId: string, modIdStr: string, endorseState: EndorsedStatus) => {
+            const current = extensionsRef.current;
+            const modId = parseInt(modIdStr, 10);
+            const extId = Object.keys(current).find((iter) => current[iter].modId === modId);
 
-          if (extId === undefined) {
-            return;
-          }
+            if (extId === undefined) {
+              return;
+            }
 
-          api
-            .emitAndAwait("endorse-nexus-mod", SITE_ID, modId, current[extId].version, endorseState)
-            .then((endorsed: EndorsedStatus[]) => {
-              dispatch(setExtensionEndorsed(extId, endorsed[0]));
-            })
-            .catch(() => {
-              dispatch(setExtensionEndorsed(extId, "Undecided"));
-            });
+            api
+              .emitAndAwait(
+                "endorse-nexus-mod",
+                SITE_ID,
+                modId,
+                current[extId].version,
+                endorseState,
+              )
+              .then((endorsed: EndorsedStatus[]) => {
+                dispatch(setExtensionEndorsed(extId, endorsed[0]));
+              })
+              .catch(() => {
+                dispatch(setExtensionEndorsed(extId, "Undecided"));
+              });
+          },
         },
-      }),
-    [api, dispatch, setEnabled],
+        t,
+      ),
+    [api, dispatch, setEnabled, t],
   );
 
   const actions = useMemo<ITableRowAction[]>(
     () => [
       {
         icon: "delete",
-        title: "Remove",
+        title: t("extension_manager:::page::actions::remove"),
         action: (extIds: string[]) => {
           extIds.forEach((extId) => dispatch(removeExtension(extId)));
         },
@@ -158,7 +168,7 @@ export const ExtensionManager = ({
         singleRowAction: true,
       },
     ],
-    [dispatch],
+    [dispatch, t],
   );
 
   const bundled = useMemo(
@@ -204,7 +214,9 @@ export const ExtensionManager = ({
         installExtension(api, extPath, { analytics: { source: "manual" } })
           .then(() => true)
           .catch((err) => {
-            api.showErrorNotification("Failed to install extension", err, { allowReport: false });
+            api.showErrorNotification(t("extension_manager:::page::install_failed"), err, {
+              allowReport: false,
+            });
 
             return false;
           });
@@ -240,7 +252,7 @@ export const ExtensionManager = ({
         }
       })();
     },
-    [api, downloadPath, downloads, updateExtensions],
+    [api, downloadPath, downloads, t, updateExtensions],
   );
 
   const restartNeeded =
@@ -255,12 +267,12 @@ export const ExtensionManager = ({
 
   const toolbarActions: IToolbarAction[] = [
     {
-      label: t("Update extensions"),
+      label: t("extension_manager:::page::update_extensions"),
       iconPath: mdiRefresh,
       onClick: onRefresh,
     },
     {
-      label: t("Browse extensions"),
+      label: t("extension_manager:::page::browse_extensions"),
       iconPath: mdiPlus,
       onClick: () => dispatch(setDialogVisible("browse-extensions")),
     },
@@ -272,8 +284,8 @@ export const ExtensionManager = ({
       <PageHeader
         isFullWidth
         pictogramName="puzzle-piece"
-        subtitle={t("Manage extensions that add features and game support to Vortex.")}
-        title={t("Extensions")}
+        subtitle={t("extension_manager:::page::subtitle")}
+        title={t("extension_manager:::page::title")}
       >
         <Toolbar>
           <ToolbarGroup actions={toolbarActions} />
@@ -285,13 +297,13 @@ export const ExtensionManager = ({
           <Alert
             action={
               <Button brand="neutral" size="sm" onClick={() => relaunch()}>
-                {t("Restart Vortex")}
+                {t("extension_manager:::page::restart_title")}
               </Button>
             }
             className="shrink-0"
             severity="warning"
           >
-            {t("You need to restart Vortex to apply changes.")}
+            {t("extension_manager:::page::restart_required")}
           </Alert>
         </PageContent>
       )}
@@ -311,7 +323,7 @@ export const ExtensionManager = ({
       <PageContent isFullWidth className="p-6">
         <Dropzone
           accept={["files"]}
-          dialogHint={t("Select extension file")}
+          dialogHint={t("extension_manager:::page::select_file_hint")}
           drop={dropExtension}
           icon="folder-download"
           style={{ margin: 0, width: "100%" }}

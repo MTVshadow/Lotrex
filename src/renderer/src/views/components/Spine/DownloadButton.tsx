@@ -1,5 +1,6 @@
 import { mdiDownload } from "@mdi/js";
 import React, { type FC } from "react";
+import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 
 import type { DownloadState } from "@/extensions/download_management/types/IDownload";
@@ -120,6 +121,7 @@ const ProgressRing: FC<
 };
 
 export const DownloadButton: FC<React.PropsWithChildren<unknown>> = () => {
+  const { t } = useTranslation();
   const { selection, selectDownloads } = useSpineContext();
 
   const isActive = selection.type === "downloads";
@@ -128,11 +130,12 @@ export const DownloadButton: FC<React.PropsWithChildren<unknown>> = () => {
 
   // TODO: Add mechanism to toggle between speed and time display
   const isTime = false;
+  const downloadsLabel = t("navigation::spine::downloads");
 
   return (
-    <Tooltip content="Downloads" placement="right">
+    <Tooltip content={downloadsLabel} placement="right">
       <button
-        aria-label="Downloads"
+        aria-label={downloadsLabel}
         className={joinClasses(
           [
             "group/download relative flex size-12 shrink-0 flex-col items-center justify-center gap-y-0.5 rounded-full transition-colors",

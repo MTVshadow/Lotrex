@@ -81,10 +81,10 @@ async function checkForUpdates(api: IExtensionApi): Promise<void> {
     api.sendNotification({
       id: "extension-updates",
       type: "success",
-      message: "Extensions updated, please restart to apply them",
+      message: api.translate("extension_manager:::notifications::updated_restart"),
       actions: [
         {
-          title: "Restart now",
+          title: api.translate("common:::settings_application::restart::action"),
           action: () => {
             relaunch();
           },
@@ -111,9 +111,13 @@ async function updateAvailableExtensions(
   } catch (err) {
     const allowReport = !(err instanceof DataInvalid);
 
-    api.showErrorNotification("Failed to fetch available extensions", err, {
-      allowReport,
-    });
+    api.showErrorNotification(
+      api.translate("extension_manager:::notifications::fetch_failed"),
+      err,
+      {
+        allowReport,
+      },
+    );
   }
 }
 
@@ -195,12 +199,10 @@ function checkMissingDependencies(
 
   api.sendNotification({
     type: "warning",
-    message:
-      "Some of the installed extensions couldn't be loaded because " +
-      "they have missing or incompatible dependencies.",
+    message: api.translate("extension_manager:::notifications::dependencies_disabled"),
     actions: [
       {
-        title: "Fix",
+        title: api.translate("extension_manager:::notifications::fix"),
         action: (dismiss) => {
           void (async () => {
             // Build the promises here rather than once outside: Set.values().map() is a
@@ -211,9 +213,13 @@ function checkMissingDependencies(
             const results = await Promise.all(
               dependencyIds.map((dependencyId) =>
                 installDependency(api, dependencyId).catch((err) => {
-                  api.showErrorNotification("Failed to install extension", err, {
-                    message: dependencyId,
-                  });
+                  api.showErrorNotification(
+                    api.translate("extension_manager:::page::install_failed"),
+                    err,
+                    {
+                      message: dependencyId,
+                    },
+                  );
 
                   return false;
                 }),
@@ -222,10 +228,10 @@ function checkMissingDependencies(
             if (results.some((success) => success)) {
               api.sendNotification({
                 type: "success",
-                message: "Missing dependencies were installed - please restart Vortex",
+                message: api.translate("extension_manager:::notifications::missing_deps_installed"),
                 actions: [
                   {
-                    title: "Restart now",
+                    title: api.translate("common:::settings_application::restart::action"),
                     action: () => {
                       relaunch();
                     },
@@ -248,10 +254,10 @@ function signalRestartNeeded(api: IExtensionApi, gameName?: string): void {
     api.sendNotification({
       id: "extension-updates",
       type: "success",
-      message: "Extensions installed, please restart to use them",
+      message: api.translate("extension_manager:::notifications::installed_restart"),
       actions: [
         {
-          title: "Restart now",
+          title: api.translate("common:::settings_application::restart::action"),
           action: () => relaunch(relaunchArgs),
         },
       ],
@@ -307,7 +313,9 @@ function init(context: IExtensionContext) {
       }),
     () => {
       return Promise.reject(
-        new ProcessCanceled("Extensions have to be installed from the extensions page."),
+        new ProcessCanceled(
+          context.api.translate("extension_manager:::notifications::install_canceled"),
+        ),
       );
     },
   );
