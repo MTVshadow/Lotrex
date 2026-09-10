@@ -86,4 +86,14 @@ describe("linuxMounts", () => {
     expect(ntfsIssue).toBeDefined();
     expect(ntfsIssue?.severity).toBe("warning");
   });
+
+  it("detects exFAT/FAT filesystem as incompatible for hardlink deployment", () => {
+    const mounts = parseMounts(SAMPLE_MOUNTS);
+    const issues = assessDirectoryFileSystem("/mnt/external/SkyrimMods", "staging", mounts);
+
+    const exfatIssue = issues.find((i) => i.code === "cross-device-hardlink");
+    expect(exfatIssue).toBeDefined();
+    expect(exfatIssue?.severity).toBe("error");
+    expect(exfatIssue?.message).toContain("exFAT/FAT");
+  });
 });

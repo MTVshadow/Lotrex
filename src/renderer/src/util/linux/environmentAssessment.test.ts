@@ -253,4 +253,57 @@ describe("environmentAssessment", () => {
       ]),
     );
   });
+
+  it("reports snap-permission-missing when Snap Steam targets secondary/removable storage", () => {
+    const result = assessLinuxEnvironment({
+      gamePath: "/media/user/Games/Skyrim",
+      platform: "linux",
+      steamPath: "/home/user/snap/steam/common/.steam",
+    });
+
+    expect(result.blocking).toBe(true);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "snap-permission-missing",
+          command: "snap connect 'steam':removable-media",
+          purpose: "game",
+        }),
+      ]),
+    );
+  });
+
+  it("blocks hardlink deployment when mounts show an exFAT staging drive", () => {
+    const root = temporaryDirectory();
+    const gamePath = path.join(root, "game");
+    const stagingPath = path.join(root, "staging");
+    fs.mkdirSync(gamePath);
+    fs.mkdirSync(stagingPath);
+
+    const result = assessLinuxEnvironment({
+      deploymentMethodId: "hardlink_activator",
+      deploymentPaths: [gamePath],
+      gamePath,
+      mounts: [
+        {
+          device: "/dev/sdb1",
+          fsType: "exfat",
+          mountPoint: root,
+          options: ["rw"],
+        },
+      ],
+      platform: "linux",
+      stagingPath,
+    });
+
+    expect(result.blocking).toBe(true);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "cross-device-hardlink",
+          severity: "error",
+        }),
+      ]),
+    );
+  });
 });

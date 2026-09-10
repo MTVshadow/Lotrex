@@ -7,8 +7,12 @@ import {
   type FileSystemIssueCode,
   type IMountEntry,
 } from "./linuxMounts";
+import { assessSnapDirectoryAccess } from "./snapSupport";
 
-export type LinuxEnvironmentIssueCode = FileSystemIssueCode | "flatpak-permission-missing";
+export type LinuxEnvironmentIssueCode =
+  | FileSystemIssueCode
+  | "flatpak-permission-missing"
+  | "snap-permission-missing";
 
 export type LinuxEnvironmentPathPurpose = "deployment" | "game" | "prefix" | "staging";
 
@@ -100,6 +104,27 @@ function addFlatpakIssue(
   }
 }
 
+function addSnapIssue(
+  issues: ILinuxEnvironmentIssue[],
+  targetPath: string,
+  purpose: LinuxEnvironmentPathPurpose,
+  steamPath?: string,
+): void {
+  const issue = assessSnapDirectoryAccess(targetPath, steamPath);
+  if (issue !== undefined) {
+    issues.push({
+      appId: issue.appId,
+      code: issue.code,
+      command: issue.command,
+      message: issue.message,
+      path: issue.targetPath,
+      purpose,
+      remediation: `${issue.snapAdvice}\n${issue.command}`,
+      severity: issue.severity,
+    });
+  }
+}
+
 export function assessLinuxEnvironment(
   input: ILinuxEnvironmentAssessmentInput,
 ): ILinuxEnvironmentAssessmentResult {
@@ -117,18 +142,22 @@ export function assessLinuxEnvironment(
   if (input.gamePath) {
     addDirectoryIssues(issues, input.gamePath, "game", input.mounts, blockNetworkDeployment);
     addFlatpakIssue(issues, input.gamePath, "game", input.steamPath);
+    addSnapIssue(issues, input.gamePath, "game", input.steamPath);
   }
   if (input.stagingPath) {
     addDirectoryIssues(issues, input.stagingPath, "staging", input.mounts, blockNetworkDeployment);
     addFlatpakIssue(issues, input.stagingPath, "staging", input.steamPath);
+    addSnapIssue(issues, input.stagingPath, "staging", input.steamPath);
   }
   if (input.prefixPath) {
     addDirectoryIssues(issues, input.prefixPath, "prefix", input.mounts);
+    addSnapIssue(issues, input.prefixPath, "prefix", input.steamPath);
   }
 
   for (const deploymentPath of deploymentPaths) {
     addDirectoryIssues(issues, deploymentPath, "deployment", input.mounts, blockNetworkDeployment);
     addFlatpakIssue(issues, deploymentPath, "deployment", input.steamPath);
+    addSnapIssue(issues, deploymentPath, "deployment", input.steamPath);
 
     const requiredBytes = input.requiredBytesByDeploymentPath?.[deploymentPath];
     if (requiredBytes !== undefined) {
@@ -139,7 +168,7 @@ export function assessLinuxEnvironment(
     }
 
     if (input.deploymentMethodId === "hardlink_activator" && input.stagingPath) {
-      const issue = checkHardlinkCompatibility(input.stagingPath, deploymentPath);
+      const issue = checkHardlinkCompatibility(input.stagingPath, deploymentPath, input.mounts);
       if (issue !== undefined) {
         issues.push({ ...issue, purpose: "deployment" });
       }

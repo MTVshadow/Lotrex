@@ -67,4 +67,19 @@ describe("translateFilesystemError", () => {
     expect(result.code).toBe("ENOSPC");
     expect(result.title).toContain("disk space");
   });
+
+  it("translates ENOTSUP / EOPNOTSUPP error for non-supported filesystem operations", () => {
+    const error = Object.assign(new Error("ENOTSUP: operation not supported"), {
+      code: "ENOTSUP",
+    });
+    const result = translateFilesystemError(error, {
+      activeMethod: "hardlink",
+      destPath: "/mnt/external/Skyrim/Data",
+    });
+
+    expect(result.code).toBe("ENOTSUP");
+    expect(result.openSettingsAction).toBe(true);
+    expect(result.fallbackMethod).toBe("symlink");
+    expect(result.remediation).toContain("POSIX");
+  });
 });

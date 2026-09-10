@@ -196,6 +196,24 @@ export function assessDirectoryFileSystem(
       });
     }
 
+    if (
+      (purpose === "game" || purpose === "staging") &&
+      (mount.fsType.toLowerCase() === "exfat" ||
+        mount.fsType.toLowerCase() === "vfat" ||
+        mount.fsType.toLowerCase() === "msdos")
+    ) {
+      issues.push({
+        code: "cross-device-hardlink",
+        severity: "error",
+        message: `The directory is on an exFAT/FAT filesystem (${mount.fsType}) which does not support POSIX links or permissions: ${mount.mountPoint}`,
+        path: targetPath,
+        mountPoint: mount.mountPoint,
+        fsType: mount.fsType,
+        remediation:
+          "Move the directory to a native Linux filesystem such as ext4 or btrfs; FAT/exFAT cannot support mod deployment links.",
+      });
+    }
+
     if (NETWORK_FS_TYPES.has(mount.fsType.toLowerCase())) {
       issues.push({
         code: "network-filesystem",
@@ -239,6 +257,7 @@ export function assessDirectoryFileSystem(
 export function checkHardlinkCompatibility(
   stagingPath: string,
   gamePath: string,
+  mounts?: IMountEntry[],
 ): IFileSystemIssue | undefined {
   try {
     let existingStaging = stagingPath;
@@ -264,6 +283,22 @@ export function checkHardlinkCompatibility(
         remediation:
           "Move staging to the same filesystem as the game, or select Symlink Deployment.",
       };
+    }
+
+    if (mounts && mounts.length > 0) {
+      const stagingMount = findMountForPath(stagingPath, mounts);
+      const gameMount = findMountForPath(gamePath, mounts);
+      const fsType = stagingMount?.fsType?.toLowerCase() || gameMount?.fsType?.toLowerCase();
+      if (fsType && (fsType === "exfat" || fsType === "vfat" || fsType === "msdos")) {
+        return {
+          code: "cross-device-hardlink",
+          severity: "error",
+          message: `The filesystem (${fsType}) does not support POSIX hardlinks: ${stagingMount?.mountPoint ?? gameMount?.mountPoint}`,
+          path: stagingPath,
+          remediation:
+            "Move staging to a native Linux filesystem such as ext4 or btrfs, or select Symlink Deployment.",
+        };
+      }
     }
   } catch {
     // Do not block before both paths (or their nearest parents) can be inspected.

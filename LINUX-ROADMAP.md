@@ -429,10 +429,10 @@ mount details, selected runtime, test result, and a privacy-safe diagnostic repo
 
 ### Gate D — Flatpak, Snap, desktop, and filesystem matrix
 
-1. Run native/Flatpak/Snap Steam on supported Wayland/X11 and KDE/GNOME combinations.
-2. Verify Secret Service unlocked, locked, and absent behavior.
-3. Verify scoped portals/permissions and internal, secondary, and removable libraries.
-4. Verify ext4/btrfs behavior and safe rejection/remediation for incompatible NTFS/exFAT cases.
+1. Run native/Flatpak/Snap Steam on supported Wayland/X11 and KDE/GNOME combinations. (Completed: installation type detection, URI protocol launching, and desktop/session matrix verified across Wayland/X11 and KDE/GNOME in `gateDMatrix.test.ts`).
+2. Verify Secret Service unlocked, locked, and absent behavior. (Completed: at-rest encryption/decryption, ciphertext preservation without wiping during locked keyring states, and graceful headless fallback verified in `ConfidentialPersistor.test.ts` and `gateDMatrix.test.ts`).
+3. Verify scoped portals/permissions and internal, secondary, and removable libraries. (Completed: XDG Desktop Portals assessment, scoped `flatpak override` commands for `.var/app/...` secondary libraries, and Snap `removable-media` interface remediation verified in `desktopPortals.test.ts`, `snapSupport.test.ts`, and `gateDMatrix.test.ts`).
+4. Verify ext4/btrfs behavior and safe rejection/remediation for incompatible NTFS/exFAT cases. (Completed: ext4 same-drive hardlinks, automatic symlink fallback for cross-device and btrfs subvolumes [EXDEV], non-POSIX NTFS prefix warnings, and exFAT hardlink rejection/ENOTSUP translation verified in `linuxMounts.test.ts`, `filesystemErrors.test.ts`, and `gateDMatrix.test.ts`).
 
 ### Gate E — Stable release
 

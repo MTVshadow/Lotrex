@@ -115,6 +115,23 @@ export function translateFilesystemError(
         openSettingsAction: false,
       };
 
+    case "ENOTSUP":
+    case "EOPNOTSUPP":
+      return {
+        title: "Filesystem operation not supported",
+        problemName: `Operation not supported (${code})`,
+        code,
+        sourcePath,
+        destPath,
+        activeMethod,
+        fallbackMethod: activeMethod === "hardlink" ? "symlink" : undefined,
+        message:
+          "The underlying filesystem does not support this operation (such as hardlinks on FAT/exFAT).",
+        remediation:
+          "Move the game and staging directory to a POSIX Linux filesystem (such as ext4 or btrfs) or choose Symlink deployment.",
+        openSettingsAction: true,
+      };
+
     default:
       return {
         title: "Filesystem error",

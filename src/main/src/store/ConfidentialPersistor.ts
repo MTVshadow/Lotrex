@@ -34,10 +34,17 @@ export default class ConfidentialPersistor implements IPersistor {
           )
       : undefined;
     this.bulkSetItem = wrapped.bulkSetItem
-      ? (items) =>
-          wrapped.bulkSetItem?.(
-            items.map((item) => ({ ...item, value: this.encode(item.value) })),
-          ) ?? Promise.resolve()
+      ? (items) => {
+          try {
+            return (
+              wrapped.bulkSetItem?.(
+                items.map((item) => ({ ...item, value: this.encode(item.value) })),
+              ) ?? Promise.resolve()
+            );
+          } catch (error) {
+            return Promise.reject(error);
+          }
+        }
       : undefined;
     this.bulkRemoveItem = wrapped.bulkRemoveItem?.bind(wrapped);
   }
@@ -51,7 +58,11 @@ export default class ConfidentialPersistor implements IPersistor {
   }
 
   public setItem(key: PersistorKey, value: string): PromiseLike<void> {
-    return this.wrapped.setItem(key, this.encode(value));
+    try {
+      return this.wrapped.setItem(key, this.encode(value));
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   public removeItem(key: PersistorKey): PromiseLike<void> {
