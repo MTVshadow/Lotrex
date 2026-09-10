@@ -24,7 +24,10 @@ import {
   isFatalDeploymentFilesystemError,
   translateFilesystemError,
 } from "../../util/linux/filesystemErrors";
-import { assertLinuxPathHasNoSymlinkAncestors } from "../../util/linux/pathSafety";
+import {
+  assertLinuxDestinationSafety,
+  assertLinuxPathHasNoSymlinkAncestors,
+} from "../../util/linux/pathSafety";
 import { activeGameId } from "../../util/selectors";
 import { truthy } from "../../util/util";
 import type {
@@ -892,7 +895,8 @@ abstract class LinkingActivator implements IDeploymentMethod {
       this.mContext.previousDeployment[key].relPath,
     );
     try {
-      await assertLinuxPathHasNoSymlinkAncestors(dataPath, outputPath);
+      // Validate parent directory identity and root containment before unlinking
+      const parentIdentity = await assertLinuxDestinationSafety(dataPath, outputPath);
       let targetExists = true;
       try {
         await this.statLink(outputPath);
@@ -913,10 +917,14 @@ abstract class LinkingActivator implements IDeploymentMethod {
       }
 
       if (targetExists) {
+        // Validate parent directory identity immediately before unlink mutation (TOCTOU protection)
+        await assertLinuxDestinationSafety(dataPath, outputPath, parentIdentity);
         await this.unlinkFile(outputPath, sourcePath);
       }
       runDeploymentFaultPoint("after-unlink");
       if (restoreBackup) {
+        // Validate parent directory identity immediately before restoring vanilla backup
+        await assertLinuxDestinationSafety(dataPath, outputPath, parentIdentity);
         await fs.renameAsync(outputPath + BACKUP_TAG, outputPath).catch(() => undefined);
       }
       delete this.mContext.previousDeployment[key];
@@ -956,7 +964,9 @@ abstract class LinkingActivator implements IDeploymentMethod {
     const resolvedDir = await this.resolveExistingCase(path.dirname(rawOutputPath));
     const fullOutputPath = path.join(resolvedDir, path.basename(rawOutputPath));
 
-    await assertLinuxPathHasNoSymlinkAncestors(dataPath, fullOutputPath);
+    // Ensure directory exists so its parent identity (device, inode) can be verified
+    await this.ensureDir(resolvedDir, dirTags);
+    const parentIdentity = await assertLinuxDestinationSafety(dataPath, fullOutputPath);
 
     const backupProm: Promise<void> = replace
       ? Promise.resolve()
@@ -977,7 +987,8 @@ abstract class LinkingActivator implements IDeploymentMethod {
 
     await backupProm;
     runDeploymentFaultPoint("after-backup");
-    await assertLinuxPathHasNoSymlinkAncestors(dataPath, fullOutputPath);
+    // Validate parent identity and allowed-root containment immediately before link mutation (TOCTOU protection)
+    await assertLinuxDestinationSafety(dataPath, fullOutputPath, parentIdentity);
     await this.linkFile(fullOutputPath, fullPath, dirTags);
     runDeploymentFaultPoint("after-link");
     this.mContext.previousDeployment[key] = this.mContext.newDeployment[key];

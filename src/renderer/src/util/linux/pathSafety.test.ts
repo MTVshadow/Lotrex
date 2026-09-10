@@ -14,6 +14,7 @@ vi.mock("../fs", async () => {
 });
 
 import {
+  assertLinuxDestinationSafety,
   assertLinuxExtractionSafety,
   assertLinuxPathHasNoSymlinkAncestors,
   isWithinRoot,
@@ -199,6 +200,116 @@ describe("Linux managed path safety and extraction preflight", () => {
 
       await expect(
         assertLinuxExtractionSafety(root, [outside], { platform: "win32" }),
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe("assertLinuxDestinationSafety (TOCTOU destination race protection)", () => {
+    it("allows valid destination in managed root and returns parent identity", async () => {
+      const root = await temporaryDirectory();
+      const parent = path.join(root, "Data", "textures");
+      await fs.mkdir(parent, { recursive: true });
+      const target = path.join(parent, "diffuse.dds");
+
+      const identity = await assertLinuxDestinationSafety(root, target, undefined, "linux");
+      expect(identity).toBeDefined();
+      expect(identity?.dev).toBeTypeOf("number");
+      expect(identity?.ino).toBeTypeOf("number");
+
+      // Verify passing the expected identity succeeds when parent hasn't changed
+      const verified = await assertLinuxDestinationSafety(root, target, identity, "linux");
+      expect(verified).toEqual(identity);
+    });
+
+    it("rejects target escaping managed root", async () => {
+      const root = await temporaryDirectory();
+      const outside = path.join(root, "..", "outside.txt");
+
+      await expect(
+        assertLinuxDestinationSafety(root, outside, undefined, "linux"),
+      ).rejects.toMatchObject({
+        code: "EDEPLOYMENTOUTSIDEROOT",
+      });
+    });
+
+    it("detects TOCTOU parent directory swapping race and rejects mutation", async () => {
+      const root = await temporaryDirectory();
+      const parentA = path.join(root, "parentA");
+      const parentB = path.join(root, "parentB");
+      await fs.mkdir(parentA, { recursive: true });
+      await fs.mkdir(parentB, { recursive: true });
+
+      const target = path.join(parentA, "mod.esp");
+      const initialIdentity = await assertLinuxDestinationSafety(root, target, undefined, "linux");
+      expect(initialIdentity).toBeDefined();
+
+      // Simulate an attacker swapping parentA with parentB (or replacing with another inode)
+      const fakeIdentity = { dev: initialIdentity!.dev, ino: initialIdentity!.ino + 999999 };
+
+      await expect(
+        assertLinuxDestinationSafety(root, target, fakeIdentity, "linux"),
+      ).rejects.toMatchObject({
+        code: "EDEPLOYMENTPARENTCHANGED",
+      });
+    });
+
+    it("rejects when parent directory is replaced with a symlink", async () => {
+      const root = await temporaryDirectory();
+      const outside = await temporaryDirectory();
+      const symlinkParent = path.join(root, "sym_parent");
+      await fs.symlink(outside, symlinkParent);
+      const target = path.join(symlinkParent, "payload.dll");
+
+      await expect(
+        assertLinuxDestinationSafety(root, target, undefined, "linux"),
+      ).rejects.toMatchObject({
+        code: "EDEPLOYMENTSYMLINK",
+      });
+    });
+
+    it("rejects when parent directory disappeared while expected identity was supplied", async () => {
+      const root = await temporaryDirectory();
+      const parent = path.join(root, "temporary_parent");
+      await fs.mkdir(parent);
+      const target = path.join(parent, "file.txt");
+      const initialIdentity = await assertLinuxDestinationSafety(root, target, undefined, "linux");
+
+      await fs.rm(parent, { recursive: true });
+
+      await expect(
+        assertLinuxDestinationSafety(root, target, initialIdentity, "linux"),
+      ).rejects.toMatchObject({
+        code: "EDEPLOYMENTPARENTCHANGED",
+      });
+    });
+
+    it("rejects special POSIX device (FIFO) at destination", async () => {
+      const root = await temporaryDirectory();
+      const parent = path.join(root, "sub");
+      await fs.mkdir(parent);
+      const fifoPath = path.join(parent, "device_node");
+
+      try {
+        const { execSync } = await import("node:child_process");
+        execSync(`mkfifo "${fifoPath}"`);
+      } catch {
+        return;
+      }
+
+      await expect(
+        assertLinuxDestinationSafety(root, fifoPath, undefined, "linux"),
+      ).rejects.toMatchObject({
+        code: "EDEPLOYMENTSPECIALDEVICE",
+        deviceType: "fifo",
+      });
+    });
+
+    it("is completely bypassed on non-Linux platforms", async () => {
+      const root = await temporaryDirectory();
+      const outside = path.join(root, "..", "outside.txt");
+
+      await expect(
+        assertLinuxDestinationSafety(root, outside, undefined, "win32"),
       ).resolves.toBeUndefined();
     });
   });
