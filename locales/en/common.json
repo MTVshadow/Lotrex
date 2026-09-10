@@ -142,10 +142,29 @@
       "mods": "Mods"
     },
     "header": {
+      "about": "About",
+      "account": "Account",
       "collapse_menu": "Collapse menu",
       "downloads": "Downloads",
+      "go_premium": "Go premium",
+      "help": "Help",
+      "help_centre": "Help centre",
       "home": "Home",
-      "open_menu": "Open menu"
+      "login": "Log in",
+      "logout": "Logout",
+      "notifications": "Notifications",
+      "open_menu": "Open menu",
+      "premium": "Premium",
+      "refresh_user": "Refresh user info",
+      "view_logs": "View logs",
+      "view_profile": "View profile on web"
+    },
+    "menu": {
+      "all_downloads": "All downloads"
+    },
+    "profile": {
+      "none": "None",
+      "switching": "Switching to Profile: {{name}}"
     },
     "sidebar": {
       "minimize": "Minimize",
@@ -154,7 +173,21 @@
     "spine": {
       "downloads": "Downloads",
       "games": "Games",
-      "home": "Home"
+      "home": "Home",
+      "status_paused": "paused",
+      "unit_mbps": "mb/s",
+      "unit_mins": "mins"
+    },
+    "tools": {
+      "not_configured": "{{name}} (Not configured)",
+      "play": "Play",
+      "running": "Running..."
+    },
+    "window": {
+      "close": "Close",
+      "maximize": "Maximize",
+      "minimize": "Minimize",
+      "restore": "Restore"
     }
   },
   "toolbar": {

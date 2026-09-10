@@ -1,6 +1,7 @@
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { mdiBell, mdiBellOutline } from "@mdi/js";
 import React, { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 
 import { useExtensionContext } from "@/ExtensionProvider";
@@ -52,6 +53,7 @@ Trigger.displayName = "NotificationsTrigger";
 const NotificationsContent: React.FC<React.PropsWithChildren<{ popoverOpen: boolean }>> = ({
   popoverOpen,
 }) => {
+  const { t } = useTranslation();
   const extensions = useExtensionContext();
   const api = extensions.getApi();
 
@@ -105,7 +107,7 @@ const NotificationsContent: React.FC<React.PropsWithChildren<{ popoverOpen: bool
   return (
     <>
       <PopoverButton
-        aria-label="Notifications"
+        aria-label={t("navigation::header::notifications")}
         as={Trigger}
         disabled={visibleCount === 0}
         itemCount={visibleCount}

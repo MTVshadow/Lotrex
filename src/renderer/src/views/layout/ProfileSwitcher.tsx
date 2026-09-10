@@ -46,8 +46,8 @@ export const ProfileSwitcher: FC<React.PropsWithChildren<unknown>> = () => {
     <div key="wait">
       <div className="center-content" style={{ flexDirection: "column" }}>
         <h4>
-          {t("Switching to Profile: {{name}}", {
-            replace: { name: profile?.name ?? t("None") },
+          {t("navigation::profile::switching", {
+            replace: { name: profile?.name ?? t("navigation::profile::none") },
           })}
         </h4>
 

@@ -2,6 +2,7 @@ import { pathToFileURL } from "url";
 
 import { mdiCircleOutline, mdiLoading, mdiPlay } from "@mdi/js";
 import React, { type ButtonHTMLAttributes, type FC, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 
 import { useWindowContext } from "../../../contexts";
 import { Icon } from "../../../ui/components/icon/Icon";
@@ -25,6 +26,7 @@ export const ToolButton: FC<React.PropsWithChildren<ToolButtonProps>> = ({
   isRunning = false,
   ...props
 }) => {
+  const { t } = useTranslation();
   const { menuIsCollapsed } = useWindowContext();
 
   const imageSrc = useMemo(() => {
@@ -41,7 +43,11 @@ export const ToolButton: FC<React.PropsWithChildren<ToolButtonProps>> = ({
 
   return (
     <Tooltip
-      content={isValid ? starter.name : `${starter.name} (Not configured)`}
+      content={
+        isValid
+          ? starter.name
+          : t("navigation::tools::not_configured", { replace: { name: starter.name } })
+      }
       placement={menuIsCollapsed ? "right" : "top"}
     >
       <button

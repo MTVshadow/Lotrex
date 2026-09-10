@@ -45,7 +45,7 @@ const PlayButton: FC<React.PropsWithChildren<PlayButtonProps>> = ({
     return undefined;
   }, [primaryStarter, isCollapsed]);
 
-  const label = isPrimaryRunning ? t("Running...") : t("Play");
+  const label = isPrimaryRunning ? t("navigation::tools::running") : t("navigation::tools::play");
 
   return (
     <div className="relative w-full">

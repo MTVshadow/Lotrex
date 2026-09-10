@@ -202,10 +202,29 @@
       "mods": "Моди"
     },
     "header": {
+      "about": "Про програму",
+      "account": "Обліковий запис",
       "collapse_menu": "Згорнути меню",
       "downloads": "Завантаження",
+      "go_premium": "Отримати Premium",
+      "help": "Довідка",
+      "help_centre": "Центр довідки",
       "home": "Головна",
-      "open_menu": "Відкрити меню"
+      "login": "Увійти",
+      "logout": "Вийти",
+      "notifications": "Сповіщення",
+      "open_menu": "Відкрити меню",
+      "premium": "Premium",
+      "refresh_user": "Оновити дані користувача",
+      "view_logs": "Переглянути журнали",
+      "view_profile": "Переглянути профіль на сайті"
+    },
+    "menu": {
+      "all_downloads": "Усі завантаження"
+    },
+    "profile": {
+      "none": "Немає",
+      "switching": "Перемикання на профіль: {{name}}"
     },
     "sidebar": {
       "minimize": "Згорнути",
@@ -214,7 +233,21 @@
     "spine": {
       "downloads": "Завантаження",
       "games": "Ігри",
-      "home": "Головна"
+      "home": "Головна",
+      "status_paused": "пауза",
+      "unit_mbps": "мб/с",
+      "unit_mins": "хв"
+    },
+    "tools": {
+      "not_configured": "{{name}} (Не налаштовано)",
+      "play": "Грати",
+      "running": "Запуск..."
+    },
+    "window": {
+      "close": "Закрити",
+      "maximize": "Розгорнути",
+      "minimize": "Згорнути",
+      "restore": "Відновити"
     }
   },
   "toolbar": {

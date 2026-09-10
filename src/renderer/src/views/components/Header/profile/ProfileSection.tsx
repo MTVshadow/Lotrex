@@ -44,13 +44,13 @@ export const ProfileSection: FC<React.PropsWithChildren<unknown>> = () => {
     return <HelpMenu />;
   }
 
-  const label = userInfo.name ?? t("Account");
+  const label = userInfo.name ?? t("navigation::header::account");
 
   const sections: IMenuAction[][] = [
     [
       {
         iconPath: mdiAccountCircle,
-        label: t("View profile on web"),
+        label: t("navigation::header::view_profile"),
         onClick: () => {
           opn(`${NEXUS_BASE_URL}/users/${userInfo.userId}`).catch(() => {});
         },
@@ -59,7 +59,7 @@ export const ProfileSection: FC<React.PropsWithChildren<unknown>> = () => {
     [
       {
         iconPath: mdiRefresh,
-        label: t("Refresh user info"),
+        label: t("navigation::header::refresh_user"),
         onClick: () => scheduleMembershipRefresh(api),
       },
       helpAction,
@@ -67,7 +67,7 @@ export const ProfileSection: FC<React.PropsWithChildren<unknown>> = () => {
     [
       {
         iconPath: mdiLogout,
-        label: t("Logout"),
+        label: t("navigation::header::logout"),
         onClick: () => {
           dispatch(setUserAPIKey(undefined));
           dispatch(clearOAuthCredentials(null));

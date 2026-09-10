@@ -1,5 +1,6 @@
 import { mdiWindowClose, mdiWindowMaximize, mdiWindowMinimize, mdiWindowRestore } from "@mdi/js";
 import React, { type ButtonHTMLAttributes, type FC } from "react";
+import { useTranslation } from "react-i18next";
 
 import { close, minimize, toggleMaximize, useIsMaximized } from "@/hooks";
 import { Icon } from "@/ui/components/icon/Icon";
@@ -34,28 +35,30 @@ const WindowControlButton: FC<React.PropsWithChildren<WindowControlButtonProps>>
 );
 
 export const WindowControls: FC<React.PropsWithChildren<unknown>> = () => {
+  const { t } = useTranslation();
   const isMaximized = useIsMaximized();
 
+  // Семантичні підказки елементів керування вікном для реактивного перемикання мови
   return (
     <TooltipDelayGroup as="div" className="flex">
       <WindowControlButton
         className="hover:bg-surface-mid"
         iconPath={mdiWindowMinimize}
-        title="Minimize"
+        title={t("navigation::window::minimize")}
         onClick={minimize}
       />
 
       <WindowControlButton
         className="hover:bg-surface-mid"
         iconPath={isMaximized ? mdiWindowRestore : mdiWindowMaximize}
-        title={isMaximized ? "Restore" : "Maximize"}
+        title={isMaximized ? t("navigation::window::restore") : t("navigation::window::maximize")}
         onClick={toggleMaximize}
       />
 
       <WindowControlButton
         className="w-9 hover:bg-danger-subdued"
         iconPath={mdiWindowClose}
-        title="Close"
+        title={t("navigation::window::close")}
         onClick={close}
       />
     </TooltipDelayGroup>

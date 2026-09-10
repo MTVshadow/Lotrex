@@ -19,7 +19,7 @@ import { useHelpMenuSections } from "./useHelpMenu.hook";
 export const HelpMenu: FC<React.PropsWithChildren<unknown>> = () => {
   const { t } = useTranslation();
   const sections = useHelpMenuSections();
-  const label = t("Help");
+  const label = t("navigation::header::help");
 
   return (
     <Popover>

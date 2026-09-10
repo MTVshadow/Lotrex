@@ -53,12 +53,12 @@ export const useHelpMenuSections = (): IMenuAction[][] => {
     [
       {
         iconPath: mdiHelpCircleOutline,
-        label: t("Help centre"),
+        label: t("navigation::header::help_centre"),
         onClick: () => api.events.emit("open-knowledge-base"),
       },
       {
         iconPath: mdiFileDocumentOutline,
-        label: t("View logs"),
+        label: t("navigation::header::view_logs"),
         onClick: () => dispatch(setDialogVisible("diagnostics-files-dialog")),
       },
       ...globalIconActions
@@ -66,7 +66,7 @@ export const useHelpMenuSections = (): IMenuAction[][] => {
         .map((action) => asMenuAction(action, builtInActionIcons[action.icon])),
       {
         iconPath: mdiInformationOutline,
-        label: t("About"),
+        label: t("navigation::header::about"),
         onClick: () => api.events.emit("show-main-page", "About"),
       },
     ],
@@ -82,7 +82,7 @@ export const useHelpMenuSections = (): IMenuAction[][] => {
 export const useHelpAction = (): IMenuAction => {
   const { t } = useTranslation();
   const sections = useHelpMenuSections();
-  const label = t("Help");
+  const label = t("navigation::header::help");
 
   return {
     iconPath: mdiHelpCircleOutline,

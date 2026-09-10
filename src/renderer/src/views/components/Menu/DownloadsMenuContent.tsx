@@ -121,7 +121,7 @@ export const DownloadsMenuContent: FC<React.PropsWithChildren<unknown>> = () => 
         isActive={downloadGameFilter === null}
         onClick={() => setDownloadGameFilter(null)}
       >
-        {t("All downloads")}
+        {t("navigation::menu::all_downloads")}
       </MenuButton>
 
       {managedGameIds.length > 1 &&

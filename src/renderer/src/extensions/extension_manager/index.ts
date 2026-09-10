@@ -134,9 +134,10 @@ async function installDependency(api: IExtensionApi, dependencyId: string): Prom
       return true;
     } else {
       api.showErrorNotification(
-        "Failed to install extension",
-        'The extension "{{ name }}" is already installed but failed to load, ' +
-          'please review the load error on the "Extensions" tab.',
+        api.translate("extension_manager:::page::install_failed"),
+        api.translate("extension_manager:::notifications::failed_already_installed", {
+          replace: { name: dependencyId },
+        }),
         {
           message: dependencyId,
           allowReport: false,
@@ -160,11 +161,10 @@ async function installDependency(api: IExtensionApi, dependencyId: string): Prom
     signalRestartNeeded(api, gameName);
   } else {
     api.showErrorNotification(
-      "Failed to install extension",
-      'The extension "{{ name }}" wasn\'t found in the repository. ' +
-        "This might mean that the extension isn't available at all or " +
-        "has been excluded for compatibility reasons. " +
-        "Please check the installation instructions for this extension.",
+      api.translate("extension_manager:::page::install_failed"),
+      api.translate("extension_manager:::notifications::failed_not_found", {
+        replace: { name: dependencyId },
+      }),
       {
         message: dependencyId,
         allowReport: false,

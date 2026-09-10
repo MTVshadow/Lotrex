@@ -38,7 +38,7 @@ export const PremiumIndicator: FC<React.PropsWithChildren<unknown>> = () => {
   if (!loggedIn) {
     return (
       <Button brand="primary" onClick={handleLogin}>
-        {t("Log in")}
+        {t("navigation::header::login")}
       </Button>
     );
   }
@@ -46,7 +46,7 @@ export const PremiumIndicator: FC<React.PropsWithChildren<unknown>> = () => {
   if (premium) {
     return (
       <Typography appearance="moderate" data-testid="premium-indicator" typographyType="title-sm">
-        {t("Premium")}
+        {t("navigation::header::premium")}
       </Typography>
     );
   }
@@ -54,7 +54,7 @@ export const PremiumIndicator: FC<React.PropsWithChildren<unknown>> = () => {
   if (showAd) {
     return (
       <Button brand="premium" leftIconPath={mdiDiamondStone} onClick={handleGoPremium}>
-        {t("Go premium")}
+        {t("navigation::header::go_premium")}
       </Button>
     );
   }

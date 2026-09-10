@@ -76,6 +76,8 @@
     "fetch_failed": "Failed to fetch available extensions",
     "dependencies_disabled": "Some extensions were disabled because they have missing or incompatible dependencies.",
     "fix": "Fix",
-    "missing_deps_installed": "Missing dependencies were installed - please restart Vortex"
+    "missing_deps_installed": "Missing dependencies were installed - please restart Vortex",
+    "failed_already_installed": "The extension \"{{ name }}\" is already installed but failed to load, please review the load error on the \"Extensions\" tab.",
+    "failed_not_found": "The extension \"{{ name }}\" wasn't found in the repository. This might mean that the extension isn't available at all or has been excluded for compatibility reasons. Please check the installation instructions for this extension."
   }
 }

@@ -164,7 +164,11 @@ export const DownloadButton: FC<React.PropsWithChildren<unknown>> = () => {
             )}
 
             <span className="text-[0.375rem] leading-none tracking-[1px] uppercase">
-              {isPaused ? "paused" : isTime ? "mins" : "mb/s"}
+              {isPaused
+                ? t("navigation::spine::status_paused")
+                : isTime
+                  ? t("navigation::spine::unit_mins")
+                  : t("navigation::spine::unit_mbps")}
             </span>
 
             <ProgressRing isActive={isActive} isPaused={isPaused} progress={progress} />
