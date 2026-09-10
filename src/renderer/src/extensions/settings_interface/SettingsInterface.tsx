@@ -24,6 +24,7 @@ import { Picker } from "../../ui/components/picker/Picker";
 import { Typography } from "../../ui/components/typography/Typography";
 import { relaunch } from "../../util/commandLine";
 import getVortexPath from "../../util/getVortexPath";
+import { TranslationFeedbackDialog } from "../../util/localization/TranslationFeedbackDialog";
 import { log } from "../../util/log";
 import { getPreloadApi } from "../../util/preloadAccess";
 import { truthy } from "../../util/util";
@@ -58,6 +59,10 @@ import {
   selectedLanguageOptionId,
 } from "./languageOptions";
 import getText from "./texts";
+
+export interface IComponentState {
+  showFeedbackDialog?: boolean;
+}
 
 export interface IBaseProps {
   startup: IParameters;
@@ -113,7 +118,7 @@ type IProps = IBaseProps &
     onReloadLanguages: () => void;
   };
 
-class SettingsInterfaceImpl extends ComponentEx<IProps, {}> {
+class SettingsInterfaceImpl extends ComponentEx<IProps, IComponentState> {
   private mInitialTitlebar: boolean;
   // The flat option model built each render from `languages`; selectLanguage looks the
   // chosen id up here rather than reading it back off the DOM.
@@ -123,6 +128,9 @@ class SettingsInterfaceImpl extends ComponentEx<IProps, {}> {
     super(props);
 
     this.mInitialTitlebar = props.customTitlebar;
+    this.state = {
+      showFeedbackDialog: false,
+    };
   }
 
   public componentDidMount() {
@@ -198,6 +206,19 @@ class SettingsInterfaceImpl extends ComponentEx<IProps, {}> {
               value={selectedLanguageId}
               onChange={this.selectLanguage}
             />
+
+            {currentLanguage === "uk" ? (
+              <button
+                type="button"
+                className="btn btn-link btn-xs"
+                style={{ padding: 0, textDecoration: "underline", color: "#60a5fa" }}
+                onClick={() => this.toggleFeedbackDialog(true)}
+              >
+                {t("settings_interface::language::report_issue", {
+                  defaultValue: "Повідомити про проблему перекладу",
+                })}
+              </button>
+            ) : null}
           </div>
         </FormGroup>
 
@@ -343,9 +364,23 @@ class SettingsInterfaceImpl extends ComponentEx<IProps, {}> {
         </FormGroup>
 
         {restartNotification}
+
+        <TranslationFeedbackDialog
+          show={this.state.showFeedbackDialog ?? false}
+          onHide={() => this.toggleFeedbackDialog(false)}
+          locale={currentLanguage}
+          namespace="settings_interface"
+          translationKey="language"
+          englishSource="Language"
+          currentTranslation="Мова"
+        />
       </form>
     );
   }
+
+  private toggleFeedbackDialog = (show: boolean) => {
+    this.setState({ showFeedbackDialog: show });
+  };
 
   private toggleAcceleration = () => {
     this.props.changeStartup("disableGPU", this.props.startup.disableGPU !== true);

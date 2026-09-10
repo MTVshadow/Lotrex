@@ -46,9 +46,11 @@ export class LocalizationService {
         translationExts,
       });
       this.mActualT = result.translator;
+      this.syncDocumentLanguage(normalizedLanguage);
       return result;
     } catch (error) {
       this.mActualT = fallbackTFunc;
+      this.syncDocumentLanguage(normalizedLanguage);
       return { runtime: this.mAdapter.runtime, translator: fallbackTFunc, error };
     }
   }
@@ -84,6 +86,7 @@ export class LocalizationService {
       this.mDebugging = false;
       this.mMissingKeys = { common: {} };
       this.mTranslationExts = () => [];
+      this.syncDocumentLanguage(DEFAULT_LOCALE);
     });
     this.mSwitchQueue = operation.then(
       () => undefined,
@@ -116,6 +119,7 @@ export class LocalizationService {
       const tFunc = await this.mAdapter.changeLanguage(language);
       this.mActualT = tFunc;
       this.mCurrentLanguage = language;
+      this.syncDocumentLanguage(language);
       callback?.(undefined);
       return tFunc;
     } catch (error) {
@@ -125,11 +129,27 @@ export class LocalizationService {
           : new Error("Localization adapter failed to change language", { cause: error });
       try {
         await this.mAdapter.changeLanguage(previousLanguage);
+        this.syncDocumentLanguage(previousLanguage);
       } catch {
         // Keep the last committed service state even if the adapter cannot reload it.
       }
       callback?.(switchError);
       throw error;
+    }
+  }
+
+  /**
+   * Synchronizes the HTML document lang attribute with the active application locale.
+   *
+   * Educational comment:
+   * Setting <html lang="..."> is a WCAG 2.1 Level A requirement (Criterion 3.1.1).
+   * It allows Linux screen readers (e.g. Orca / speech-dispatcher) and assistive technologies
+   * to load the correct phonetic dictionary and pronunciation engine for Ukrainian text.
+   */
+  private syncDocumentLanguage(language: string): void {
+    if (typeof document !== "undefined" && document.documentElement) {
+      document.documentElement.lang = language;
+      document.documentElement.dir = "ltr";
     }
   }
 }

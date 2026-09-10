@@ -128,6 +128,7 @@
     "language": {
       "extension_by_author": "Розширення від {{author}}",
       "label": "Мова",
+      "report_issue": "Повідомити про проблему перекладу",
       "unknown_author": "невідомого автора"
     },
     "notifications": {

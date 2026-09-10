@@ -71,6 +71,7 @@
     "language": {
       "extension_by_author": "Extension by {{author}}",
       "label": "Language",
+      "report_issue": "Report a translation issue",
       "unknown_author": "unknown author"
     },
     "notifications": {
