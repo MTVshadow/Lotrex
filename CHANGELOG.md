@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Native Ukrainian (`uk`) localization with 100% structural coverage (556/556 keys) across core navigation, mod management, FOMOD installers, health checks, collections, extensions, and downloads.
+- Restart-free atomic language switcher (`en -> uk -> en`) in Settings Interface with live translator updates and deterministic rollback.
+- Full Slavic plural forms (`_0`, `_1`, `_2`), NFC Unicode normalization, typographic apostrophe support, and Ukrainian Cyrillic alphabetical collation.
+- Built-in community translation feedback mechanism (`TranslationFeedbackDialog`) with live placeholder validation and GitHub issue pre-filling.
+- Automated UI & accessibility QA verification (WCAG 2.1 Level A `document.documentElement.lang="uk"` synchronization, 100%–200% DPI scaling simulation).
+
 ## [2.6.0] - 2026-08-24
 
 _Stable 2.6 release. See the beta entries below for the full list of changes since 2.5._
