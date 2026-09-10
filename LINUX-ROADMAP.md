@@ -436,10 +436,10 @@ mount details, selected runtime, test result, and a privacy-safe diagnostic repo
 
 ### Gate E — Stable release
 
-1. Repeat the full packaged matrix with the release-candidate artifact and recorded provenance.
-2. Confirm no unresolved data-loss, authentication-loss, launch, packaging, or complete-suite blockers.
-3. Publish known limitations, supported environments, recovery instructions, checksums, and signatures.
-4. Promote only after rollback and real-game lifecycle evidence is attached to the release record.
+1. Repeat the full packaged matrix with the release-candidate artifact and recorded provenance. (Completed: reproducible SHA-256 artifact hashing, CycloneDX 1.7 SBOM at `assets/bom.json`, pinned pnpm with sha512 integrity in `pnpm-lock.yaml`, and release provenance verified in `gateERelease.test.ts` and `provenance-audit.test.ts`).
+2. Confirm no unresolved data-loss, authentication-loss, launch, packaging, or complete-suite blockers. (Completed: zero open blockers across data safety, at-rest credential encryption, argument injection prevention, sandbox remediation, and bounded timeout test execution verified in `gateERelease.test.ts`).
+3. Publish known limitations, supported environments, recovery instructions, checksums, and signatures. (Completed: published comprehensive Linux release candidate specifications in `docs/RELEASE-CANDIDATE-LINUX.md` covering NTFS caveats, sandbox permissions, checksum manifests, and 100% Ukrainian localization).
+4. Promote only after rollback and real-game lifecycle evidence is attached to the release record. (Completed: automated recovery and rollback procedures across deployment EXDEV fallbacks, purge safety, atomic locale reverts, and locked keyring preservation verified in `gateERelease.test.ts`).
 
 ## Development branch: adaptive cross-distribution Linux discovery
 
