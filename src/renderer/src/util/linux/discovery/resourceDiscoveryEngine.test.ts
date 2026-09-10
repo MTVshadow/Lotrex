@@ -185,4 +185,42 @@ describe("Unified Linux Resource Discovery — Phase 1 & 2 Engine Verification",
     expect(game?.confidence).toBe("confirmed");
     expect(game?.evidence[0].sourceType).toBe("database");
   });
+
+  it("integrates sandbox assessment, candidate validation, and symlink deduplication (Phases 3-5)", async () => {
+    const steamRoot = path.join(mockEnv.XDG_DATA_HOME!, "Steam");
+    const runtimeDir = path.join(steamRoot, "compatibilitytools.d", "GE-Proton8-25");
+    await fs.mkdir(runtimeDir, { recursive: true });
+
+    // Створюємо валідний виконуваний скрипт proton з shebang
+    await fs.writeFile(path.join(runtimeDir, "proton"), "#!/usr/bin/env python3\nexit(0)\n", {
+      mode: 0o755,
+    });
+
+    // Створюємо симлінк .steam/root -> XDG Steam
+    const dotSteamDir = path.join(homeDir, ".steam");
+    await fs.mkdir(dotSteamDir, { recursive: true });
+    await fs.symlink(steamRoot, path.join(dotSteamDir, "root"));
+
+    const report = await runUnifiedResourceDiscovery({
+      env: mockEnv,
+      homeDir,
+      providers: ["steam"],
+      kinds: ["compatibility-runtime"],
+      hostPackaging: "flatpak",
+      strictExecutableValidation: true,
+    });
+
+    expect(report.errors).toEqual([]);
+    // Завдяки дедуплікації (Phase 5) рантайм знайдено лише 1 раз
+    const runtimes = report.resources.filter((r) => r.kind === "compatibility-runtime");
+    expect(runtimes).toHaveLength(1);
+
+    const runtime = runtimes[0];
+    expect(runtime.id).toBe("steam:runtime:GE-Proton8-25");
+    // Валідація Phase 4 підтвердила наявність виконуваного файлу
+    expect(runtime.validationState.status).toBe("valid");
+    expect(runtime.confidence).toBe("confirmed");
+    // Оцінка Phase 3 визначила статус видимості пісочниці
+    expect(runtime.packagingContext.sandboxVisibility).toBeDefined();
+  });
 });

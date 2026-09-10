@@ -19,7 +19,14 @@ export type DiscoveredResourceKind =
 
 export type DiscoveryProviderId = "steam" | "heroic" | "lutris" | "system-xdg" | "custom-root";
 
-export type PackagingFormat = "native" | "flatpak" | "snap" | "appimage" | "portable" | "unknown";
+export type PackagingFormat =
+  | "native"
+  | "flatpak"
+  | "snap"
+  | "appimage"
+  | "nix"
+  | "portable"
+  | "unknown";
 
 export type SandboxVisibility = "direct" | "portal" | "restricted" | "isolated";
 

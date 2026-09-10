@@ -7,12 +7,16 @@ import {
   getSteamBoundedSources,
   type IBoundedSourceDescriptor,
 } from "./boundedSources";
+import { validateResourceCandidate } from "./candidateValidation";
+import { deduplicateAndMergeResources } from "./canonicalization";
 import {
   validateDiscoveredResource,
   type DiscoveredResourceKind,
   type DiscoveryProviderId,
   type IDiscoveredResource,
+  type PackagingFormat,
 } from "./contracts";
+import { assessSandboxVisibility, detectPackagingFormat } from "./packagingAndSandbox";
 import { discoverHeroicResources } from "./providers/heroicProvider";
 import { discoverLutrisResources } from "./providers/lutrisProvider";
 import { discoverSteamResources } from "./providers/steamProvider";
@@ -23,6 +27,8 @@ export interface IResourceDiscoveryOptions {
   customRoots?: string[];
   providers?: DiscoveryProviderId[];
   kinds?: DiscoveredResourceKind[];
+  hostPackaging?: PackagingFormat;
+  strictExecutableValidation?: boolean;
   signal?: AbortSignal;
 }
 
@@ -114,19 +120,60 @@ export async function runUnifiedResourceDiscovery(
     }
   }
 
+  const hostPackaging = options.hostPackaging || detectPackagingFormat(undefined, env).format;
+
+  // Фаза 3 & 4: Оцінка пісочниці та поглиблена валідація кандидатів
+  const enrichedResources: IDiscoveredResource[] = allDiscovered.map((res) => {
+    // Оцінка видимості пісочниці окремо від фізичного існування шляху
+    const sandboxAssessment = assessSandboxVisibility(res.canonicalPath, hostPackaging, {
+      env,
+      appId: res.packagingContext.appId,
+    });
+
+    let currentValidation = res.validationState;
+    let currentConfidence = res.confidence;
+
+    // Поглиблена перевірка кандидата для рантаймів або при запиті суворої перевірки
+    if (res.kind === "compatibility-runtime") {
+      const candidateCheck = validateResourceCandidate(res.canonicalPath, {
+        requiredSubpaths: ["proton"],
+        manifestOwned: res.evidence.some((e) => e.sourceType === "manifest"),
+      });
+      currentValidation = candidateCheck.validationState;
+      currentConfidence = candidateCheck.confidence;
+    } else if (options.strictExecutableValidation) {
+      const candidateCheck = validateResourceCandidate(res.canonicalPath, {
+        manifestOwned: res.evidence.some((e) => e.sourceType === "manifest"),
+      });
+      currentValidation = candidateCheck.validationState;
+      currentConfidence = candidateCheck.confidence;
+    }
+
+    return {
+      ...res,
+      packagingContext: {
+        ...res.packagingContext,
+        sandboxVisibility: sandboxAssessment.visibility,
+      },
+      validationState: currentValidation,
+      confidence: currentConfidence,
+      remediation: sandboxAssessment.remediation || res.remediation,
+    };
+  });
+
+  // Фаза 5: Канонізація, розв'язання симлінків, злиття свідчень та фізична дедуплікація
+  const deduplicated = deduplicateAndMergeResources(enrichedResources);
+
   // Валідація контрактів та фільтрація за запитаними типами (kinds)
-  const validResources = allDiscovered.filter((r) => {
+  const validResources = deduplicated.filter((r) => {
     if (!validateDiscoveredResource(r)) return false;
     if (kinds && kinds.length > 0 && !kinds.includes(r.kind)) return false;
     return true;
   });
 
-  // Дедуплікація за унікальним id
-  const deduplicated = Array.from(new Map(validResources.map((res) => [res.id, res])).values());
-
   return {
     scannedSourcesCount,
-    resources: deduplicated,
+    resources: validResources,
     errors,
   };
 }
