@@ -73,12 +73,18 @@ export function redactUserPaths(
   }
 
   if (userName && userName.length > 2) {
-    const userRegex = new RegExp(`(/home/)${userName}([/\\\\]|$)`, "g");
+    const userRegex = new RegExp(`(/(?:home|Users|media|run/media)/)${userName}([/\\\\]|$)`, "g");
     result = result.replace(userRegex, "$1<user>$2");
   }
 
-  result = result.replace(/\/(?:home|Users)\/[^/\\\s]+/g, (match) => {
-    const root = match.startsWith("/Users/") ? "/Users" : "/home";
+  result = result.replace(/\/(?:home|Users|run\/media|media)\/[^/\\\s?]+/g, (match) => {
+    const root = match.startsWith("/Users/")
+      ? "/Users"
+      : match.startsWith("/run/media/")
+        ? "/run/media"
+        : match.startsWith("/media/")
+          ? "/media"
+          : "/home";
     return `${root}/<user>`;
   });
 
