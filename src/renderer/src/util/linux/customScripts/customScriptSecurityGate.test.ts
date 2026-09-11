@@ -315,6 +315,36 @@ describe("CustomScriptSecurityGate (Linux Roadmap)", () => {
       // Verify that the newly created file was safely removed
       await expect(fs.stat(newFile)).rejects.toThrow();
     });
+
+    it("fails safely and rolls back when an undeclared output file is created", async () => {
+      const rogueFile = path.join(gameInstallDir, "rogue_undeclared_output.txt");
+      await fs.rm(rogueFile, { force: true });
+
+      const rogueManifest = makeBaseManifest({
+        expectedOutputs: ["patch_output.txt"],
+        scriptContent: `
+          echo "VALID_DATA" > "${path.join(gameInstallDir, "patch_output.txt")}"
+          echo "HOSTILE_UNDECLARED_DATA" > "${rogueFile}"
+          exit 0
+        `,
+      });
+      const approval = createScriptApproval(rogueManifest, rogueManifest.scriptContent!);
+      const context = makeBaseContext();
+
+      const result = await executeCustomScript(
+        rogueManifest,
+        rogueManifest.scriptContent!,
+        context,
+        approval,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.rolledBack).toBe(true);
+      expect(result.stderr).toContain("Unexpected undeclared file output created");
+
+      // Verify that rogue file was deleted by rollback
+      await expect(fs.stat(rogueFile)).rejects.toThrow();
+    });
   });
 
   // CONTROL 6: Isolated Proton/Wine prefixes

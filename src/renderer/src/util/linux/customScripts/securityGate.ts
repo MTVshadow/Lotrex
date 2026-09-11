@@ -405,28 +405,55 @@ export async function executeCustomScript(
     }
 
     // CONTROL 5: Verify and commit outputs
-    const writeVerification = await verifyAndCommitWrites(
-      transactionalPlan,
-      manifest,
-      context,
-      workspace.workspacePath,
-    );
+    try {
+      const writeVerification = await verifyAndCommitWrites(
+        transactionalPlan,
+        manifest,
+        context,
+        workspace.workspacePath,
+      );
 
-    return {
-      success: true,
-      exitCode: executionOutcome.exitCode,
-      timedOut: false,
-      cancelled: false,
-      dryRun: false,
-      stdout: redactScriptOutput(executionOutcome.stdout),
-      stderr: redactScriptOutput(executionOutcome.stderr),
-      createdFiles: writeVerification.createdFiles,
-      modifiedFiles: writeVerification.modifiedFiles,
-      rolledBack: false,
-      diagnostics: [...diagnostics, "Execution completed successfully."],
-      durationMs: Date.now() - startTime,
-      operationId,
-    };
+      return {
+        success: true,
+        exitCode: executionOutcome.exitCode,
+        timedOut: false,
+        cancelled: false,
+        dryRun: false,
+        stdout: redactScriptOutput(executionOutcome.stdout),
+        stderr: redactScriptOutput(executionOutcome.stderr),
+        createdFiles: writeVerification.createdFiles,
+        modifiedFiles: writeVerification.modifiedFiles,
+        rolledBack: false,
+        diagnostics: [...diagnostics, "Execution completed successfully."],
+        durationMs: Date.now() - startTime,
+        operationId,
+      };
+    } catch (err: any) {
+      // Automatic rollback if unexpected outputs or mutations were detected
+      await rollbackTransactionalWrites(transactionalPlan);
+      if (saveBackupResult && context.saveRoots) {
+        await restoreSaveBackup(context.saveRoots, saveBackupResult.backupDirectory);
+      }
+
+      return {
+        success: false,
+        exitCode: executionOutcome.exitCode,
+        timedOut: false,
+        cancelled: false,
+        dryRun: false,
+        stdout: redactScriptOutput(executionOutcome.stdout),
+        stderr: redactScriptOutput(err.message),
+        createdFiles: [],
+        modifiedFiles: [],
+        rolledBack: true,
+        diagnostics: [
+          ...diagnostics,
+          `Output verification failed: ${err.message}. Changes safely rolled back.`,
+        ],
+        durationMs: Date.now() - startTime,
+        operationId,
+      };
+    }
   } finally {
     // Ephemeral workspace cleanup
     if (workspace) {

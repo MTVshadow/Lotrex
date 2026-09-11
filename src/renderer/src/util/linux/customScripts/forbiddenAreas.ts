@@ -88,7 +88,7 @@ export function assertNoPrivilegeEscalation(
 
   if (scriptContent) {
     // Check for escalation commands at word boundaries in the script content
-    const escalationRegex = /\b(sudo|pkexec|doas|su|gksu|kdesu)\b/i;
+    const escalationRegex = /\b(sudo|pkexec|doas|su|gksu|kdesu|runas)\b/i;
     const match = escalationRegex.exec(scriptContent);
     if (match) {
       throw new PrivilegeEscalationForbiddenError(match[0]);
