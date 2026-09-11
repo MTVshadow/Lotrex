@@ -61,9 +61,11 @@ export function evaluateSupportTier(
   // 1. Calculate age of last verification
   const lastDate = new Date(record.lastVerificationDate);
   const diffMs = currentDate.getTime() - lastDate.getTime();
-  const ageInDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
-  const isStale = ageInDays > record.staleAfterDays;
-  const staleDays = Math.max(0, ageInDays - record.staleAfterDays);
+  const isInvalidDate = isNaN(lastDate.getTime());
+  const staleThreshold = record.staleAfterDays > 0 ? record.staleAfterDays : 90;
+  const ageInDays = isInvalidDate ? 99999 : Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+  const isStale = isInvalidDate || ageInDays > staleThreshold;
+  const staleDays = isInvalidDate ? staleThreshold : Math.max(0, ageInDays - staleThreshold);
 
   // 2. Identify blocking limitations
   const blockingLimitations = record.knownLimitations.filter((lim) => lim.severity === "blocking");

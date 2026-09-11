@@ -392,6 +392,32 @@ describe("Phase 9: Game Support Tiers and Catalog", () => {
     expect(native1?.effectiveTier).toBe("supported");
   });
 
+  it("treats invalid or malformed date strings as stale without crashing", () => {
+    const record: ISupportCatalogRecord = {
+      id: "malformed:game:steam:linux-native",
+      gameId: "malformed",
+      editionId: "game",
+      storeId: "steam",
+      platform: "linux-native",
+      declaredTier: "supported",
+      maintainer: "Maintainer",
+      adapterId: "adapter",
+      adapterVersion: "1.0.0",
+      testedArtifact: "build",
+      distroMatrix: [{ distro: "arch" }],
+      deploymentMatrix: ["hardlink"],
+      knownLimitations: [],
+      lastVerificationDate: "invalid-not-a-date",
+      staleAfterDays: 90,
+      evidenceHistory: [],
+    };
+
+    const evaluation = evaluateSupportTier(record, now);
+    expect(evaluation.isStale).toBe(true);
+    expect(evaluation.downgraded).toBe(true);
+    expect(evaluation.effectiveTier).not.toBe("supported");
+  });
+
   it("lists all mandatory checklist steps correctly", () => {
     expect(FULL_LIFECYCLE_STEPS).toHaveLength(10);
     expect(COMMUNITY_TESTED_MANDATORY_STEPS).toHaveLength(4);
