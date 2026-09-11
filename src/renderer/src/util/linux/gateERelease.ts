@@ -161,7 +161,7 @@ export function evaluateGateEReadiness(options: {
 
   // 2. Check Lockfile Policy
   let lockfilePassed = false;
-  let lockfileEvidence = "";
+  let lockfileEvidence: string;
   if (fs.existsSync(pkgPath) && fs.existsSync(lockfilePath)) {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
     const lockRaw = fs.readFileSync(lockfilePath, "utf8");

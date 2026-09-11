@@ -48,6 +48,11 @@ if (typeof window !== "undefined" && !(window as any).api) {
   };
 }
 
+import * as nodeFs from "node:fs";
+
+import i18next from "i18next";
+import { initReactI18next } from "react-i18next";
+
 // Initialize once per (isolated) test file so getVortexPath returns the stub paths above.
 // The instance getter throws until initialized; use that to init exactly once.
 beforeAll(async () => {
@@ -55,5 +60,34 @@ beforeAll(async () => {
     void ApplicationData.instance;
   } catch {
     await ApplicationData.init();
+  }
+
+  // Initialize i18next with bundled English locale strings for test rendering
+  if (!i18next.isInitialized) {
+    const localesDir = path.resolve(__dirname, "../../locales/en");
+    const resources: Record<string, unknown> = {};
+    if (nodeFs.existsSync(localesDir)) {
+      for (const file of nodeFs.readdirSync(localesDir)) {
+        if (file.endsWith(".json")) {
+          const ns = file.replace(/\.json$/, "");
+          try {
+            resources[ns] = JSON.parse(nodeFs.readFileSync(path.join(localesDir, file), "utf8"));
+          } catch {
+            // Ignore invalid JSON in tests
+          }
+        }
+      }
+    }
+    await i18next.use(initReactI18next).init({
+      lng: "en",
+      fallbackLng: "en",
+      defaultNS: "common",
+      nsSeparator: ":::",
+      keySeparator: "::",
+      resources: {
+        en: resources,
+      },
+      interpolation: { escapeValue: false },
+    });
   }
 });

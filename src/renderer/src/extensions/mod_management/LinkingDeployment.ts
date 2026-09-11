@@ -20,6 +20,10 @@ import {
   type ICaseCollisionItem,
 } from "../../util/linux/caseCollisions";
 import {
+  isDescriptorMutationSupported,
+  openLinuxDestinationHandle,
+} from "../../util/linux/descriptorMutation";
+import {
   type IStructuredFilesystemError,
   isFatalDeploymentFilesystemError,
   translateFilesystemError,
@@ -916,16 +920,38 @@ abstract class LinkingActivator implements IDeploymentMethod {
         throw err;
       }
 
-      if (targetExists) {
-        // Validate parent directory identity immediately before unlink mutation (TOCTOU protection)
-        await assertLinuxDestinationSafety(dataPath, outputPath, parentIdentity);
-        await this.unlinkFile(outputPath, sourcePath);
-      }
-      runDeploymentFaultPoint("after-unlink");
-      if (restoreBackup) {
-        // Validate parent directory identity immediately before restoring vanilla backup
-        await assertLinuxDestinationSafety(dataPath, outputPath, parentIdentity);
-        await fs.renameAsync(outputPath + BACKUP_TAG, outputPath).catch(() => undefined);
+      if (process.platform === "linux" && isDescriptorMutationSupported()) {
+        const leafName = path.basename(outputPath);
+        if (targetExists || restoreBackup) {
+          const handle = await openLinuxDestinationHandle(dataPath, outputPath, {
+            expectedParentIdentity: parentIdentity,
+          });
+          try {
+            if (targetExists) {
+              await this.unlinkFile(handle.fdPath(leafName), sourcePath);
+            }
+            runDeploymentFaultPoint("after-unlink");
+            if (restoreBackup) {
+              await handle.restoreBackup(leafName, BACKUP_TAG);
+            }
+          } finally {
+            await handle.close();
+          }
+        } else {
+          runDeploymentFaultPoint("after-unlink");
+        }
+      } else {
+        if (targetExists) {
+          // Validate parent directory identity immediately before unlink mutation (TOCTOU protection)
+          await assertLinuxDestinationSafety(dataPath, outputPath, parentIdentity);
+          await this.unlinkFile(outputPath, sourcePath);
+        }
+        runDeploymentFaultPoint("after-unlink");
+        if (restoreBackup) {
+          // Validate parent directory identity immediately before restoring vanilla backup
+          await assertLinuxDestinationSafety(dataPath, outputPath, parentIdentity);
+          await fs.renameAsync(outputPath + BACKUP_TAG, outputPath).catch(() => undefined);
+        }
       }
       delete this.mContext.previousDeployment[key];
     } catch (err: unknown) {
@@ -968,29 +994,49 @@ abstract class LinkingActivator implements IDeploymentMethod {
     await this.ensureDir(resolvedDir, dirTags);
     const parentIdentity = await assertLinuxDestinationSafety(dataPath, fullOutputPath);
 
-    const backupProm: Promise<void> = replace
-      ? Promise.resolve()
-      : Promise.resolve(this.isLink(fullOutputPath, fullPath))
-          .then((link) =>
-            link
-              ? Promise.resolve(undefined) // don't re-create link that's already correct
-              : fs.renameAsync(fullOutputPath, fullOutputPath + BACKUP_TAG),
-          )
-          .catch((err: unknown) =>
-            getErrorCode(err) === "ENOENT"
-              ? // if the backup fails because there is nothing to backup, that's great,
-                // that's the most common outcome. Otherwise we failed to backup an existing
-                // file, so continuing could cause data loss
-                Promise.resolve(undefined)
-              : Promise.reject(err),
-          );
+    if (process.platform === "linux" && isDescriptorMutationSupported()) {
+      const leafName = path.basename(fullOutputPath);
+      const handle = await openLinuxDestinationHandle(dataPath, fullOutputPath, {
+        expectedParentIdentity: parentIdentity,
+      });
+      try {
+        if (!replace) {
+          const isLinked = await this.isLink(fullOutputPath, fullPath);
+          if (!isLinked) {
+            await handle.ensureBackup(leafName, BACKUP_TAG);
+          }
+        }
+        runDeploymentFaultPoint("after-backup");
+        await this.linkFile(handle.fdPath(leafName), fullPath, dirTags);
+        runDeploymentFaultPoint("after-link");
+      } finally {
+        await handle.close();
+      }
+    } else {
+      const backupProm: Promise<void> = replace
+        ? Promise.resolve()
+        : Promise.resolve(this.isLink(fullOutputPath, fullPath))
+            .then((link) =>
+              link
+                ? Promise.resolve(undefined) // don't re-create link that's already correct
+                : fs.renameAsync(fullOutputPath, fullOutputPath + BACKUP_TAG),
+            )
+            .catch((err: unknown) =>
+              getErrorCode(err) === "ENOENT"
+                ? // if the backup fails because there is nothing to backup, that's great,
+                  // that's the most common outcome. Otherwise we failed to backup an existing
+                  // file, so continuing could cause data loss
+                  Promise.resolve(undefined)
+                : Promise.reject(err),
+            );
 
-    await backupProm;
-    runDeploymentFaultPoint("after-backup");
-    // Validate parent identity and allowed-root containment immediately before link mutation (TOCTOU protection)
-    await assertLinuxDestinationSafety(dataPath, fullOutputPath, parentIdentity);
-    await this.linkFile(fullOutputPath, fullPath, dirTags);
-    runDeploymentFaultPoint("after-link");
+      await backupProm;
+      runDeploymentFaultPoint("after-backup");
+      // Validate parent identity and allowed-root containment immediately before link mutation (TOCTOU protection)
+      await assertLinuxDestinationSafety(dataPath, fullOutputPath, parentIdentity);
+      await this.linkFile(fullOutputPath, fullPath, dirTags);
+      runDeploymentFaultPoint("after-link");
+    }
     this.mContext.previousDeployment[key] = this.mContext.newDeployment[key];
     return this.mContext.newDeployment[key];
   }

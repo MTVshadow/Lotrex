@@ -320,8 +320,22 @@ class DeploymentMethod extends LinkingDeployment {
   }
 
   private createLink(sourcePath: string, linkPath: string): PromiseBB<void> {
+    // When operating under descriptor-bound mutations on Linux, linkPath may be a /proc/self/fd/<fd>/<leaf>
+    // path. We must persist the canonical filesystem target path in the .lnk metadata so that future sessions
+    // can reliably identify and restore the file after the file descriptor is closed.
+    let targetPath = linkPath;
+    if (linkPath.startsWith("/proc/self/fd/")) {
+      try {
+        const dirFd = path.dirname(linkPath);
+        const resolvedDir = fs.readlinkSync(dirFd);
+        targetPath = path.join(resolvedDir, path.basename(linkPath));
+      } catch {
+        // Fallback to linkPath if reading fd link fails
+      }
+    }
+
     const linkInfo = JSON.stringify({
-      target: linkPath,
+      target: targetPath,
     });
     // if the sourcePath doesn't exist but a link placeholder, restore the link
     // first before creating it again

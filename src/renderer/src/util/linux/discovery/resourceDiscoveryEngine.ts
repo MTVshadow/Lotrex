@@ -14,7 +14,7 @@ import {
   type IDiscoveredResource,
   type PackagingFormat,
 } from "./contracts";
-import { computeFilesystemFingerprint, DiscoveryCache } from "./discoveryCache";
+import { computeFilesystemFingerprint, type DiscoveryCache } from "./discoveryCache";
 import { assessSandboxVisibility, detectPackagingFormat } from "./packagingAndSandbox";
 import {
   checkCancellation,
