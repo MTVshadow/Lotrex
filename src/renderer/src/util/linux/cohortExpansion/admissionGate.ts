@@ -1,6 +1,7 @@
 import { runAdapterConformanceSuite } from "../adapterSdk/conformanceTester";
 import type { GameSupportTier } from "../supportCatalog/contracts";
 import type { ICandidateGateResult, ICohortCandidate } from "./contracts";
+import { SmokeScenarioRunner } from "./smokeScenarioRunner";
 
 /**
  * Permitted well-understood mod formats.
@@ -22,6 +23,8 @@ export const ALLOWED_MOD_FORMATS = new Set([
  * - Rejects catalog bloat: a large catalog is not a success metric if entries cannot pass their declared support tier.
  */
 export class CohortAdmissionGate {
+  constructor(private readonly smokeRunner: SmokeScenarioRunner = new SmokeScenarioRunner()) {}
+
   /**
    * Evaluates a candidate game adapter against all 7 mandatory intake criteria.
    */
@@ -52,7 +55,8 @@ export class CohortAdmissionGate {
       candidate.fixtureProvenance &&
       candidate.fixtureProvenance.isLegallyRedistributable &&
       candidate.fixtureProvenance.licenseOrPermission &&
-      candidate.fixtureProvenance.fixtureChecksum,
+      candidate.fixtureProvenance.fixtureChecksum &&
+      candidate.fixtureProvenance.fixtureChecksum.length >= 8,
     );
     if (!legalFixtureProvenanceVerified) {
       rejectionReasons.push(
@@ -70,16 +74,12 @@ export class CohortAdmissionGate {
       );
     }
 
-    // 5. Repeatable Smoke Scenario check
-    const repeatableSmokeDefined = Boolean(
-      candidate.smokeScenario &&
-      candidate.smokeScenario.name &&
-      candidate.smokeScenario.expectedArtifactPath &&
-      candidate.smokeScenario.timeoutSeconds > 0,
-    );
-    if (!repeatableSmokeDefined) {
+    // 5. Repeatable Smoke Scenario execution check
+    const smokeResult = this.smokeRunner.executeSmokeScenario(candidate);
+    const repeatableSmokePassed = smokeResult.passed;
+    if (!repeatableSmokePassed) {
       rejectionReasons.push(
-        "Candidate lacks a defined, deterministic repeatable smoke scenario with expected output artifacts.",
+        `Repeatable smoke scenario failed: ${smokeResult.error ?? "Unknown error"}`,
       );
     }
 
@@ -99,12 +99,13 @@ export class CohortAdmissionGate {
       );
     }
 
-    // Calculate Recommended Tier
+    // 7. Calculate Recommended Tier
     let recommendedTier: GameSupportTier = "experimental";
     if (
       sdkConformancePassed &&
       hasDedicatedMaintainer &&
       legalFixtureProvenanceVerified &&
+      repeatableSmokePassed &&
       lifecycleEvidenceRetained
     ) {
       const allTenPassed =
@@ -129,11 +130,12 @@ export class CohortAdmissionGate {
         hasDedicatedMaintainer,
         legalFixtureProvenanceVerified,
         wellUnderstoodModFormat,
-        repeatableSmokeDefined,
+        repeatableSmokePassed,
         lifecycleEvidenceRetained,
       },
       rejectionReasons,
       recommendedTier,
+      smokeExecution: smokeResult,
     };
   }
 }

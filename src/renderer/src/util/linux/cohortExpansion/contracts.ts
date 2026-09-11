@@ -1,6 +1,6 @@
 import type { ISdkAdapterManifest } from "../adapterSdk/contracts";
 import type { IGameAdapter } from "../gameAdapters/contracts";
-import type { GamePlatform, GameStoreId } from "../gameIdentity/contracts";
+import type { GamePlatform, GameStoreId, IUnifiedGameIdentity } from "../gameIdentity/contracts";
 import type { GameSupportTier, ILifecycleEvidence } from "../supportCatalog/contracts";
 
 /**
@@ -36,6 +36,17 @@ export interface IRepeatableSmokeScenario {
 }
 
 /**
+ * Result of executing an automated smoke scenario.
+ */
+export interface ISmokeExecutionResult {
+  passed: boolean;
+  durationMs: number;
+  artifactVerified: boolean;
+  outputLog: string[];
+  error?: string;
+}
+
+/**
  * Proposed candidate game adapter for intake into a controlled expansion cohort.
  */
 export interface ICohortCandidate {
@@ -64,11 +75,12 @@ export interface ICandidateGateResult {
     hasDedicatedMaintainer: boolean;
     legalFixtureProvenanceVerified: boolean;
     wellUnderstoodModFormat: boolean;
-    repeatableSmokeDefined: boolean;
+    repeatableSmokePassed: boolean;
     lifecycleEvidenceRetained: boolean;
   };
   rejectionReasons: string[];
   recommendedTier: GameSupportTier;
+  smokeExecution?: ISmokeExecutionResult;
 }
 
 /**
@@ -99,4 +111,35 @@ export interface ICohortReviewSummary {
   acceptedCandidates: number;
   rejectedCandidates: number;
   candidateResults: ICandidateGateResult[];
+}
+
+/**
+ * Automatic game-extension recommendation (Phase 11 & Roadmap line 729).
+ *
+ * Adheres strictly to Scope Rule 637:
+ * "Never advertise a discovered game as mod-supported unless a compatible game adapter is active."
+ */
+export interface IGameExtensionSuggestion {
+  identity: IUnifiedGameIdentity;
+  /** True only if a compatible game adapter is currently active and installed in Lotrex */
+  hasActiveAdapter: boolean;
+  /** True only if hasActiveAdapter is true; NEVER advertise mod support for bare discovered games */
+  modSupportAdvertised: boolean;
+  suggestedExtension?: {
+    adapterId: string;
+    name: string;
+    version: string;
+    maintainer: string;
+    tier: GameSupportTier;
+    declaredRoots: string[];
+    knownLimitations: string[];
+    isReviewedCatalogEntry: boolean;
+  };
+  suggestedAction:
+    | "activate-existing"
+    | "install-reviewed-extension"
+    | "scaffold-sdk-template"
+    | "none";
+  scaffoldCommandHint?: string;
+  diagnosticMessage: string;
 }
