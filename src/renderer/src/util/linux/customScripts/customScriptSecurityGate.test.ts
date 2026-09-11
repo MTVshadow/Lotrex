@@ -130,6 +130,16 @@ describe("CustomScriptSecurityGate (Linux Roadmap)", () => {
         ApprovalRevokedError,
       );
     });
+
+    it("fails closed when no operating-system sandbox is available", async () => {
+      const manifest = makeBaseManifest();
+      const content = manifest.scriptContent!;
+      const approval = createScriptApproval(manifest, content);
+
+      await expect(
+        executeCustomScript(manifest, content, makeBaseContext(), approval),
+      ).rejects.toThrow("operating-system sandbox");
+    });
   });
 
   // CONTROL 2: Minimum filesystem permissions
@@ -278,6 +288,7 @@ describe("CustomScriptSecurityGate (Linux Roadmap)", () => {
         failingManifest.scriptContent!,
         context,
         approval,
+        { allowUnsandboxedTestExecution: true },
       );
 
       expect(result.success).toBe(false);
@@ -307,6 +318,7 @@ describe("CustomScriptSecurityGate (Linux Roadmap)", () => {
         failingManifest.scriptContent!,
         context,
         approval,
+        { allowUnsandboxedTestExecution: true },
       );
 
       expect(result.success).toBe(false);
@@ -336,6 +348,7 @@ describe("CustomScriptSecurityGate (Linux Roadmap)", () => {
         rogueManifest.scriptContent!,
         context,
         approval,
+        { allowUnsandboxedTestExecution: true },
       );
 
       expect(result.success).toBe(false);
@@ -423,6 +436,7 @@ describe("CustomScriptSecurityGate (Linux Roadmap)", () => {
         hangingManifest.scriptContent!,
         context,
         approval,
+        { allowUnsandboxedTestExecution: true },
       );
 
       expect(result.success).toBe(false);
@@ -504,6 +518,7 @@ describe("CustomScriptSecurityGate (Linux Roadmap)", () => {
         riskyManifest.scriptContent!,
         context,
         approval,
+        { allowUnsandboxedTestExecution: true },
       );
 
       expect(result.success).toBe(true);
@@ -536,6 +551,7 @@ describe("CustomScriptSecurityGate (Linux Roadmap)", () => {
         failingRiskyManifest.scriptContent!,
         context,
         approval,
+        { allowUnsandboxedTestExecution: true },
       );
 
       expect(result.success).toBe(false);
@@ -652,6 +668,7 @@ describe("CustomScriptSecurityGate (Linux Roadmap)", () => {
         benignManifest.scriptContent!,
         context,
         approval,
+        { allowUnsandboxedTestExecution: true },
       );
 
       expect(result.success).toBe(true);

@@ -37,7 +37,13 @@ export function generateInstallationId(
   identity: IUnifiedGameIdentity,
   fingerprint?: string,
 ): string {
-  const seed = `${identity.gameId}:${identity.editionId}:${fingerprint ?? "default"}`;
+  const seed = [
+    identity.gameId,
+    identity.editionId,
+    identity.storeId,
+    identity.storeAppId ?? "unknown-app",
+    fingerprint ?? "unknown-installation",
+  ].join(":");
   return sha256(seed);
 }
 
@@ -137,7 +143,12 @@ export function mergeGameDiscoveries(
   }
 
   // Case B: Brand new game or new distinct edition
-  const installationId = generateInstallationId(candidate.identity, candidate.fingerprint);
+  // A provider fingerprint is the only reliable way to reconcile a relocation. When it is absent,
+  // include the canonical path so two installations of the same edition cannot collide. Such an
+  // installation may still be relocated explicitly through reconcileInstallationRelocation().
+  const installationFingerprint =
+    candidate.fingerprint ?? `path:${getCanonicalPath(candidate.installPath)}`;
+  const installationId = generateInstallationId(candidate.identity, installationFingerprint);
   const defaultProfileId = `profile_${candidate.identity.gameId}_${candidate.identity.editionId}_${installationId.slice(0, 8)}`;
 
   const newInstallation: IUnifiedGameInstallation = {

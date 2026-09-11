@@ -69,6 +69,7 @@ import ModTypeWidget from "./views/ModTypeWidget";
 import PathSelectionDialog from "./views/PathSelection";
 import ProgressFooter from "./views/ProgressFooter";
 import RecentlyManagedDashlet from "./views/RecentlyManagedDashlet";
+import { UnifiedGameLibraryPage } from "./views/UnifiedGameLibraryPage";
 
 const gameStoreLaunchers: IGameStore[] = [];
 
@@ -703,6 +704,14 @@ function init(context: IExtensionContext): boolean {
       mdi: mdiGamepadSquareOutline,
     },
   );
+  context.registerMainPage("game", "Lotrex library", UnifiedGameLibraryPage, {
+    id: "lotrex-game-library",
+    priority: 11,
+    group: "global",
+    newLayout: true,
+    mdi: mdiGamepadSquareOutline,
+    visible: () => process.platform === "linux",
+  });
   context.registerFooter("discovery-progress", ProgressFooter);
 
   context.registerTableAttribute("mods", genModTypeAttribute(context.api));

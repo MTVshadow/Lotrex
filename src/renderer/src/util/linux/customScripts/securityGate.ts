@@ -34,6 +34,8 @@ import {
 export interface IExecuteScriptOptions {
   platform?: NodeJS.Platform;
   abortSignal?: AbortSignal;
+  /** Allows process execution only inside the Vitest harness until an OS sandbox is integrated. */
+  allowUnsandboxedTestExecution?: boolean;
 }
 
 /**
@@ -326,6 +328,13 @@ export async function executeCustomScript(
       durationMs: Date.now() - startTime,
       operationId,
     };
+  }
+
+  const isTestHarness = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+  if (!isTestHarness || options.allowUnsandboxedTestExecution !== true) {
+    throw new ScriptExecutionForbiddenError(
+      "Custom script execution is disabled until an operating-system sandbox enforces the declared filesystem and network permissions.",
+    );
   }
 
   // Ephemeral workspace setup

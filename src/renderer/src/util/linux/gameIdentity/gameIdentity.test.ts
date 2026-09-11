@@ -231,4 +231,23 @@ describe("Unified Game Identity (Phase 1)", () => {
     expect(reconciled.profileId).toBe(originalProfileId);
     expect(reconciled.installPath).toBe("/mnt/archive/skyrim");
   });
+
+  it("keeps separate installations unique when a provider has no stable fingerprint", () => {
+    const first = mergeGameDiscoveries([], {
+      identity: baseSkyrimIdentity,
+      installPath: "/games/skyrim-primary",
+      executablePath: "/games/skyrim-primary/SkyrimSE.exe",
+      confidence: "confirmed",
+    });
+    const second = mergeGameDiscoveries(first.installations, {
+      identity: baseSkyrimIdentity,
+      installPath: "/games/skyrim-secondary",
+      executablePath: "/games/skyrim-secondary/SkyrimSE.exe",
+      confidence: "confirmed",
+    });
+
+    expect(second.installations).toHaveLength(2);
+    expect(second.installations[0].installationId).not.toBe(second.installations[1].installationId);
+    expect(second.installations[0].profileId).not.toBe(second.installations[1].profileId);
+  });
 });

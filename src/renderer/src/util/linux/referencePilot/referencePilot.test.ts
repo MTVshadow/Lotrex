@@ -163,7 +163,7 @@ describe("Phase 10: Reference-Game Pilot", () => {
     expect(result.evidence.checklist.purgeRestoration).toBe(true);
   });
 
-  it("runs full reference pilot suite and qualifies both games for supported tier in catalog", () => {
+  it("keeps synthetic pilot evidence experimental in the support catalog", () => {
     const memFs = new InMemoryTransactionalFs();
     const catalog = new GameSupportCatalog();
     const runner = new ReferencePilotRunner(memFs, catalog);
@@ -177,20 +177,18 @@ describe("Phase 10: Reference-Game Pilot", () => {
     // Evaluate native record in catalog
     const nativeEval = catalog.evaluateRecord("native-ref:standard:steam:linux-native");
     expect(nativeEval).toBeDefined();
-    expect(nativeEval?.declaredTier).toBe("supported");
-    expect(nativeEval?.effectiveTier).toBe("supported");
-    expect(nativeEval?.downgraded).toBe(false);
+    expect(nativeEval?.declaredTier).toBe("experimental");
+    expect(nativeEval?.effectiveTier).toBe("experimental");
     expect(nativeEval?.isStale).toBe(false);
-    expect(nativeEval?.blockingLimitations).toHaveLength(0);
+    expect(nativeEval?.blockingLimitations).toHaveLength(1);
 
     // Evaluate Proton Skyrim record in catalog
     const protonEval = catalog.evaluateRecord("skyrimse:special-edition:steam:windows-proton");
     expect(protonEval).toBeDefined();
-    expect(protonEval?.declaredTier).toBe("supported");
-    expect(protonEval?.effectiveTier).toBe("supported");
-    expect(protonEval?.downgraded).toBe(false);
+    expect(protonEval?.declaredTier).toBe("experimental");
+    expect(protonEval?.effectiveTier).toBe("experimental");
     expect(protonEval?.isStale).toBe(false);
-    expect(protonEval?.blockingLimitations).toHaveLength(0);
+    expect(protonEval?.blockingLimitations).toHaveLength(1);
   });
 
   it("captures errors gracefully when executable discovery fails", () => {
