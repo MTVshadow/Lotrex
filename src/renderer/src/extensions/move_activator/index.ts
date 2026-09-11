@@ -1,3 +1,4 @@
+import * as fsNode from "node:fs";
 import * as path from "path";
 import * as util from "util";
 
@@ -327,7 +328,7 @@ class DeploymentMethod extends LinkingDeployment {
     if (linkPath.startsWith("/proc/self/fd/")) {
       try {
         const dirFd = path.dirname(linkPath);
-        const resolvedDir = fs.readlinkSync(dirFd);
+        const resolvedDir = fsNode.readlinkSync(dirFd);
         targetPath = path.join(resolvedDir, path.basename(linkPath));
       } catch {
         // Fallback to linkPath if reading fd link fails
