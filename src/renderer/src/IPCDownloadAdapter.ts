@@ -30,7 +30,6 @@ import {
   initDownload,
   pauseDownload,
   removeDownload,
-  removeDownloadSilent,
   setCompatibleGames,
   setDownloadFilePath,
   setDownloadHash,
@@ -279,7 +278,7 @@ export class IPCDownloadAdapter {
       if (!["init", "started"].includes(download.state)) continue;
 
       const checkpoint = checkpoints[id];
-      if (checkpoint !== undefined) {
+      if (isResumableCheckpoint(checkpoint)) {
         log("debug", "auto-resuming interrupted download", { id });
         this.#activeDownloads.set(id, {
           lastBytesReceived: 0,
@@ -292,31 +291,18 @@ export class IPCDownloadAdapter {
           this.#api.store.dispatch(setDownloadInterrupted(id, download.received));
         });
       } else {
-        // Without a checkpoint there is no record of which byte ranges completed
-        // (chunks download in parallel, so the partial file may have holes) nor
-        // the etag needed to validate it, so the download cannot be resumed. The
-        // resolved CDN url is also likely expired by now. Discard the stale record
-        // and its unusable partial file so the collection installer (or the user)
-        // re-requests a fresh download instead of attempting a resume that is
-        // guaranteed to fail with "No checkpoint stored for download <id>".
-        log("debug", "interrupted download has no checkpoint, discarding", { id });
-        this.#discardStaleDownload(id, download).catch((err) => {
-          log("error", "failed to discard stale download", { id, err });
+        // A shutdown does not have time to produce a pause checkpoint. The partial
+        // file cannot safely be continued (chunked downloads may contain holes),
+        // but the persisted URL or Nexus reference can still start a new attempt.
+        // Keep the download record and restart it under its existing id so it stays
+        // visible in Downloads after the application restarts.
+        log("debug", "restarting interrupted download without usable checkpoint", { id });
+        this.#restoreDownload(id, download).catch((err) => {
+          log("warn", "failed to restart interrupted download", { id, err });
+          this.#api.store.dispatch(setDownloadInterrupted(id, download.received));
         });
       }
     }
-  }
-
-  async #discardStaleDownload(downloadId: string, download: IDownload): Promise<void> {
-    if (download.localPath !== undefined) {
-      const state = this.#api.getState();
-      const gameId = toInternalGameId(this.#api, download.game?.[0] ?? activeGameId(state));
-      const dlPath = downloadPathForGame(state, gameId);
-      await rm(path.join(dlPath, download.localPath), { force: true });
-    }
-    // Silent: this is automatic startup cleanup, not a user-initiated removal,
-    // so it shouldn't raise a "downloads removed" toast.
-    this.#api.store.dispatch(removeDownloadSilent(downloadId));
   }
 
   #emitAnalytics(
@@ -743,9 +729,8 @@ export class IPCDownloadAdapter {
         return;
       }
 
-      // Non-running downloads: the main-process cancel is a no-op (Manager cancel()
-      // only acts while running), so the poll loop never removes the record. Delete
-      // the temp file and Redux record directly.
+      // A completed, failed, or no-longer-tracked download has no active
+      // main-process handle. Delete its temporary file and Redux record directly.
       this.#activeDownloads.delete(downloadId);
       if (download?.localPath) {
         const gameId = toInternalGameId(this.#api, download.game?.[0] ?? activeGameId(state));

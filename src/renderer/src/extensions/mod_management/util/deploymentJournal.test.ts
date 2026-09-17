@@ -107,9 +107,9 @@ describe("deployment journal", () => {
     expect(isIncompleteDeploymentOperation(entry)).toBe(false);
   });
 
-  it("retains and reports an interrupted operation", async () => {
+  it("retains and reports an interrupted prepared operation", async () => {
     const stagingPath = await temporaryDirectory();
-    let entry = await beginDeploymentOperation({
+    const entry = await beginDeploymentOperation({
       operation: "purge",
       gameId: "skyrimse",
       instanceId: "instance-1",
@@ -117,7 +117,7 @@ describe("deployment journal", () => {
       stagingPath,
       targetPaths: ["/game/Data"],
     });
-    const interruptedEntry = await advanceDeploymentOperation(entry, "applying");
+    const interruptedEntry = entry;
 
     await expect(
       beginDeploymentOperation({
@@ -130,6 +130,37 @@ describe("deployment journal", () => {
       }),
     ).rejects.toMatchObject({ code: "EDEPLOYMENTINCOMPLETE" });
     expect(isIncompleteDeploymentOperation(interruptedEntry)).toBe(true);
+  });
+
+  it("retires an applying journal with no planned file mutations before starting again", async () => {
+    const stagingPath = await temporaryDirectory();
+    const targetPath = await temporaryDirectory();
+    let interrupted = await beginDeploymentOperation({
+      operation: "deploy",
+      gameId: "fallout4",
+      instanceId: "instance-before-restart",
+      deploymentMethod: "hardlink_activator",
+      stagingPath,
+      targetPaths: [targetPath],
+    });
+    interrupted = await advanceDeploymentOperation(interrupted, "applying");
+
+    expect(buildDeploymentRecoveryPlan(interrupted)).toMatchObject({
+      action: "rollback",
+      safe: true,
+    });
+
+    const next = await beginDeploymentOperation({
+      operation: "deploy",
+      gameId: "fallout4",
+      instanceId: "instance-after-restart",
+      deploymentMethod: "hardlink_activator",
+      stagingPath,
+      targetPaths: [targetPath],
+    });
+
+    expect(next.operationId).not.toBe(interrupted.operationId);
+    expect(next.phase).toBe("prepared");
   });
 
   it("rejects tampered journal content", async () => {

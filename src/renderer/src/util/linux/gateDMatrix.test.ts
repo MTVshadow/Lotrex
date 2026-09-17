@@ -280,7 +280,7 @@ describe("Gate D — Flatpak, Snap, desktop, and filesystem matrix verification 
       },
     ];
 
-    it("ext4: recommends hardlinks when staging and game share the filesystem", () => {
+    it("ext4: recommends symlinks when both linking methods are available", () => {
       const assessed: IDeploymentMethodAssessment[] = [
         { activator: createMockDeploymentMethod("hardlink_activator"), errors: [], warnings: [] },
         { activator: createMockDeploymentMethod("symlink_activator"), errors: [], warnings: [] },
@@ -291,8 +291,8 @@ describe("Gate D — Flatpak, Snap, desktop, and filesystem matrix verification 
         symlink: true,
       });
 
-      expect(recommendation.activator?.id).toBe("hardlink_activator");
-      expect(recommendation.reason).toContain("Hardlinks are supported");
+      expect(recommendation.activator?.id).toBe("symlink_activator");
+      expect(recommendation.reason).toContain("safer automatic Linux choice");
     });
 
     it("ext4: automatically falls back to symlinks across partition boundaries (EXDEV)", () => {
@@ -316,9 +316,7 @@ describe("Gate D — Flatpak, Snap, desktop, and filesystem matrix verification 
       });
 
       expect(recommendation.activator?.id).toBe("symlink_activator");
-      expect(recommendation.reason).toContain(
-        "Symlinks are supported; hardlink requirements were not met",
-      );
+      expect(recommendation.reason).toContain("safer automatic Linux choice");
     });
 
     it("btrfs: handles cross-subvolume boundaries where hardlinks are prohibited by the kernel (EXDEV)", () => {

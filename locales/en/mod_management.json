@@ -26,6 +26,10 @@
     "game_label": "Game: {{gameId}}",
     "journal_invalid_text": "The deployment journal could not be validated. Vortex will not start another deployment or purge in this staging folder until the journal is repaired or reviewed.",
     "journal_validation_failed": "Deployment journal validation failed.",
+    "launch_blocked_text": "The game was not started because Lotrex cannot prove that its deployment state is consistent.",
+    "launch_blocked_title": "Game launch blocked",
+    "launch_incomplete_message": "An interrupted {{operation}} operation is still at phase {{phase}}. Inspect it, complete the offered safe recovery, or cancel. Lotrex will not claim that the game is clean.",
+    "launch_invalid_message": "The deployment journal is damaged or cannot be verified. Inspect the report before changing managed game files.",
     "method_label": "Deployment Method: {{method}}",
     "more_files_notice": "... and {{count}} more files (see exported report)",
     "no_entry_found": "No deployment journal entry found.",
@@ -48,6 +52,20 @@
     "startup_noti_interrupted": "An interrupted {{operation}} operation was found at phase {{phase}}.",
     "startup_noti_title": "Deployment recovery required",
     "targets_label": "Targets: {{targets}}"
+  },
+  "protected_baseline": {
+    "finish_cleanup_action": "Finish recovery cleanup",
+    "interrupted_text": "Restore transaction {{transactionId}} stopped at phase {{phase}}. The game will remain blocked until its rollback is completed safely.",
+    "interrupted_title": "Protected restore was interrupted",
+    "journal_invalid": "The protected restore journal is damaged or failed its integrity check. Automatic recovery is disabled.",
+    "keep_blocked_action": "Keep blocked",
+    "recovery_files": "Files that did not return to their protected state:\n{{files}}",
+    "recovery_text": "Lotrex did not verify a clean critical-file state after removing mods. Restoring uses independently verified backup copies and will replace the listed files. Nothing will be restored without your confirmation.",
+    "recovery_title": "Critical game files were not restored",
+    "review_recovery_action": "Review recovery",
+    "rollback_interrupted_action": "Roll back interrupted restore",
+    "startup_message": "An unfinished protected-file restore requires review before this game can be launched.",
+    "restore_action": "Restore protected files"
   },
   "linux_setup": {
     "assessment_dialog_title": "Linux configuration assessment",

@@ -80,4 +80,56 @@ describe("legacy game architecture bridge", () => {
     expect(result.installations).toEqual([]);
     expect(result.adapterRegistry.listAdapters()).toEqual([]);
   });
+
+  it("keeps a provider-owned installation ID stable after its library path changes", () => {
+    const firstPath = fs.mkdtempSync(path.join(os.tmpdir(), "lotrex-provider-first-"));
+    const movedPath = fs.mkdtempSync(path.join(os.tmpdir(), "lotrex-provider-moved-"));
+    temporaryRoots.push(firstPath, movedPath);
+    fs.writeFileSync(path.join(firstPath, "game.exe"), "MZ");
+    fs.writeFileSync(path.join(movedPath, "game.exe"), "MZ");
+
+    const games: IGameStored[] = [
+      {
+        id: "relocated-game",
+        name: "Relocated Game",
+        executable: "game.exe",
+        requiredFiles: ["game.exe"],
+        capabilities: {
+          platforms: { linux: { launch: "steam-proton", steamAppId: "5678" } },
+        },
+      },
+    ];
+
+    const before = buildLegacyUnifiedLibrary(
+      games,
+      { "relocated-game": { path: firstPath, store: "steam" } },
+      {},
+    );
+    const after = buildLegacyUnifiedLibrary(
+      games,
+      { "relocated-game": { path: movedPath, store: "steam" } },
+      {},
+    );
+
+    expect(after.installations[0].installationId).toBe(before.installations[0].installationId);
+  });
+
+  it("keeps manual discoveries path-bound when no provider identity exists", () => {
+    const games: IGameStored[] = [
+      { id: "manual-game", name: "Manual Game", executable: "game", requiredFiles: [] },
+    ];
+
+    const before = buildLegacyUnifiedLibrary(
+      games,
+      { "manual-game": { path: "/games/first", pathSetManually: true } },
+      {},
+    );
+    const after = buildLegacyUnifiedLibrary(
+      games,
+      { "manual-game": { path: "/games/moved", pathSetManually: true } },
+      {},
+    );
+
+    expect(after.installations[0].installationId).not.toBe(before.installations[0].installationId);
+  });
 });

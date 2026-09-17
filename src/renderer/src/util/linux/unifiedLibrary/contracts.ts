@@ -53,7 +53,15 @@ export interface ILibraryCompatibilityStatus {
     | "degraded"
     | "missing-executable";
   message: string;
+  messageDescriptor?: ILibraryMessage;
   remedies: string[];
+  remedyDescriptors?: ILibraryMessage[];
+}
+
+/** Locale-independent UI message emitted by library services. */
+export interface ILibraryMessage {
+  key: string;
+  values?: Record<string, number | string>;
 }
 
 /**
@@ -94,6 +102,7 @@ export interface ILibraryAdapterSupportSummary {
   canAcceptMods: boolean;
   /** Technical explanation if mod acceptance is blocked */
   modRejectionReason?: string;
+  modRejectionMessage?: ILibraryMessage;
 }
 
 /**
@@ -102,7 +111,9 @@ export interface ILibraryAdapterSupportSummary {
 export interface ILibraryLaunchAvailability {
   canLaunch: boolean;
   blockingReasons: string[];
+  blockingReasonMessages?: ILibraryMessage[];
   launchExplanation: string;
+  launchExplanationMessage?: ILibraryMessage;
 }
 
 /**
@@ -125,6 +136,7 @@ export interface ILibraryDuplicateSummary {
   totalInGroup: number;
   otherLocations: string[];
   explanation: string;
+  explanationMessage?: ILibraryMessage;
 }
 
 /**
@@ -224,10 +236,13 @@ export type LibrarySortKey =
 export interface IDiagnosticCheckItem {
   domain: "launch" | "modding" | "filesystem" | "runtime";
   check: string;
+  checkDescriptor?: ILibraryMessage;
   passed: boolean;
   severity: "error" | "warning" | "info";
   message: string;
+  messageDescriptor?: ILibraryMessage;
   resolutionHint?: string;
+  resolutionDescriptor?: ILibraryMessage;
 }
 
 /**
@@ -242,4 +257,5 @@ export interface ILibraryDiagnosticReport {
   canAcceptMods: boolean;
   checks: IDiagnosticCheckItem[];
   summary: string;
+  summaryDescriptor?: ILibraryMessage;
 }

@@ -41,5 +41,5 @@ function firstQueryId(
 ): string | undefined {
   if (typeof query === "string") return query;
   const first = Array.isArray(query) ? query[0] : query;
-  return first?.id;
+  return typeof first === "string" ? first : first?.id;
 }

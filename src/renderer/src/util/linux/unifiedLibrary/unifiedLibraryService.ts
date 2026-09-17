@@ -53,6 +53,7 @@ export class UnifiedLibraryService {
       totalInGroup: 1,
       otherLocations: [],
       explanation: "Unique installation on host system.",
+      explanationMessage: { key: "unified_library::service::duplicates::unique" },
     };
 
     // 2. Fetch manual corrections without modifying launcher files

@@ -7,13 +7,13 @@ const method = (id: string) => ({ id, priority: 1 }) as IDeploymentMethod;
 const ok = (id: string) => ({ activator: method(id), errors: [], warnings: [] });
 
 describe("Linux automatic deployment selection", () => {
-  it("prefers hardlinks when the filesystem assessment accepts them", () => {
+  it("prefers symlinks to avoid shared inodes when both Linux methods are available", () => {
     const result = rankAutomaticDeploymentMethods(
       [ok("symlink_activator"), ok("hardlink_activator")],
       "linux",
     );
-    expect(result.activator?.id).toBe("hardlink_activator");
-    expect(result.reason).toContain("shares a filesystem");
+    expect(result.activator?.id).toBe("symlink_activator");
+    expect(result.reason).toContain("safer automatic Linux choice");
   });
 
   it("falls back to symlinks when hardlinks are blocked", () => {
@@ -24,7 +24,7 @@ describe("Linux automatic deployment selection", () => {
     };
     const result = rankAutomaticDeploymentMethods([hardlink, ok("symlink_activator")], "linux");
     expect(result.activator?.id).toBe("symlink_activator");
-    expect(result.reason).toContain("hardlink requirements");
+    expect(result.reason).toContain("safer automatic Linux choice");
   });
 
   it("does not offer move deployment unless the game opts in", () => {

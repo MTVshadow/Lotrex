@@ -303,23 +303,26 @@ export function quickDiscovery(
         log("debug", "discovering game", game.id);
         let prom: Bluebird<string>;
 
-        if (game.queryArgs !== undefined) {
-          prom = queryByArgs(discoveredGames, game).then((result) => {
-            if (result !== undefined) {
-              return handleDiscoveredGame(
-                game,
-                result.gamePath,
-                result.gameStoreId,
-                discoveredGames,
-                onDiscoveredGame,
-                onDiscoveredTool,
-              );
-            } else {
-              return Bluebird.resolve(undefined);
-            }
-          });
-        } else if (game.queryPath !== undefined) {
-          prom = queryByCB(game).then((result) => {
+        const queryByCustomPath = () =>
+          game.queryPath === undefined ? Bluebird.resolve(undefined) : queryByCB(game);
+
+        const queryByStore =
+          game.queryArgs === undefined
+            ? Bluebird.resolve(undefined)
+            : queryByArgs(discoveredGames, game).catch((err) => {
+                if (game.queryPath === undefined) {
+                  return Bluebird.reject(err);
+                }
+                log("debug", "store lookup failed; trying custom game path", {
+                  game: game.id,
+                  error: getErrorMessageOrDefault(err),
+                });
+                return Bluebird.resolve(undefined);
+              });
+
+        prom = queryByStore
+          .then((result) => (result === undefined ? queryByCustomPath() : result))
+          .then((result) => {
             if (result === undefined) {
               return Bluebird.resolve(undefined);
             }
@@ -332,9 +335,6 @@ export function quickDiscovery(
               onDiscoveredTool,
             );
           });
-        } else {
-          prom = Bluebird.resolve(undefined);
-        }
         return prom.catch((err) => {
           if (
             !(err instanceof GameEntryNotFound) &&

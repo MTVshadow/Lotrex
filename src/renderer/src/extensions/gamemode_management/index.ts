@@ -57,6 +57,7 @@ import { currentGame, currentGameDiscovery, discoveryByGame, gameById } from "./
 import type { IDiscoveryResult } from "./types/IDiscoveryResult";
 import type { IGameStored } from "./types/IGameStored";
 import type { IModType } from "./types/IModType";
+import type { IQuickDiscoveryResult, QuickDiscoveryCallback } from "./types/IQuickDiscoveryResult";
 import getDriveList from "./util/getDriveList";
 import { getGame, getGameStore, getGameStores } from "./util/getGame";
 import { getModType, getModTypeExtensions, registerModType } from "./util/modTypeExtensions";
@@ -70,6 +71,12 @@ import PathSelectionDialog from "./views/PathSelection";
 import ProgressFooter from "./views/ProgressFooter";
 import RecentlyManagedDashlet from "./views/RecentlyManagedDashlet";
 import { UnifiedGameLibraryPage } from "./views/UnifiedGameLibraryPage";
+
+declare module "../../types/IExtensionContext" {
+  interface ApiEvents {
+    "start-quick-discovery": (callback?: QuickDiscoveryCallback) => void;
+  }
+}
 
 const gameStoreLaunchers: IGameStore[] = [];
 
@@ -1006,7 +1013,7 @@ function init(context: IExtensionContext): boolean {
 
     // IMPORTANT: internal event but lacking alternatives, extensions may use it (to refresh
     //    tool discovery). Therefore this must not be changed (breaking change) before Vortex 1.6
-    events.on("start-quick-discovery", (cb?: (gameIds: string[]) => void) => {
+    events.on("start-quick-discovery", (cb?: QuickDiscoveryCallback) => {
       const { discovered } = store.getState().settings.gameMode;
       const discoveredGames = new Set(
         Object.keys(discovered).filter((gameId) => discovered[gameId].path !== undefined),
@@ -1017,14 +1024,22 @@ function init(context: IExtensionContext): boolean {
         .then((gameIds: string[]) => {
           return removeDisappearedGames(context.api, discoveredGames).then(() => {
             if (cb !== undefined) {
-              cb(gameIds);
+              const result: IQuickDiscoveryResult = { gameIds, status: "success" };
+              cb(gameIds, result);
             }
           });
         })
         .catch((err) => {
-          err["attachLogOnReport"] = true;
+          if (typeof err === "object" && err !== null) {
+            err["attachLogOnReport"] = true;
+          }
           context.api.showErrorNotification("Discovery failed", err);
-          cb?.(Array.from(discoveredGames));
+          const gameIds = Array.from(discoveredGames);
+          cb?.(gameIds, {
+            error: { message: getErrorMessageOrDefault(err) },
+            gameIds,
+            status: "failed",
+          });
         });
     });
     context.api.onAsync("discover-tools", (gameId: string) =>

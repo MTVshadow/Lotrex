@@ -2,6 +2,7 @@ import * as nodeFs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
+import { fs as vortexFs } from "@nexusmods/vortex-api";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 const paths = vi.hoisted(() => ({ pluginDir: "", dataDir: "", native: [] as string[] }));
@@ -42,6 +43,9 @@ describe("PluginPersistor", () => {
   };
 
   beforeEach(async () => {
+    vi.mocked(vortexFs.readdirAsync).mockImplementation(
+      (dirPath: string) => nodeFs.promises.readdir(dirPath) as never,
+    );
     paths.pluginDir = nodeFs.mkdtempSync(path.join(os.tmpdir(), "plugin-persistor-"));
     paths.dataDir = nodeFs.mkdtempSync(path.join(os.tmpdir(), "plugin-data-"));
     paths.native = [];
@@ -264,6 +268,38 @@ describe("PluginPersistor", () => {
       expect(written).toContain("*Multi.esp");
       expect(written).toContain("*Old.esp");
     });
+  });
+
+  it("reuses engine-cased Plugins.txt on a case-sensitive filesystem", async () => {
+    await persistor.disable();
+
+    nodeFs.writeFileSync(
+      path.join(paths.pluginDir, "Plugins.txt"),
+      `${VORTEX_HEADER}\r\n*Z_Architect.esm\r\n*Z_Horizon.esp\r\n`,
+      { encoding: "latin1" },
+    );
+    nodeFs.writeFileSync(path.join(paths.pluginDir, "plugins.txt"), "stale lowercase file\r\n", {
+      encoding: "latin1",
+    });
+
+    const linuxPersistor = new PluginPersistor(vi.fn(), () => false);
+    linuxPersistor.setResetCallback(vi.fn(async () => undefined));
+    await linuxPersistor.loadFiles("fallout4");
+    linuxPersistor.setKnownPlugins({
+      "z_architect.esm": "Z_Architect.esm",
+      "z_horizon.esp": "Z_Horizon.esp",
+    });
+
+    await vi.waitFor(() => {
+      const engineFile = nodeFs.readFileSync(path.join(paths.pluginDir, "Plugins.txt"), "latin1");
+      expect(engineFile).toContain("*Z_Architect.esm");
+      expect(engineFile).toContain("*Z_Horizon.esp");
+    });
+    expect(nodeFs.readFileSync(path.join(paths.pluginDir, "plugins.txt"), "latin1")).toBe(
+      "stale lowercase file\r\n",
+    );
+
+    await linuxPersistor.disable();
   });
 
   it("syncFromState merges: entries absent from the hive keep their position", async () => {

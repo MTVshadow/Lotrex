@@ -25,6 +25,7 @@ describe("resolveGameSteamAppId", () => {
     expect(resolveGameSteamAppId({ queryArgs: { steam: "40" } }, "linux")).toBe("40");
     expect(resolveGameSteamAppId({ queryArgs: { steam: { id: "50" } } }, "linux")).toBe("50");
     expect(resolveGameSteamAppId({ queryArgs: { steam: [{ id: "60" }] } }, "linux")).toBe("60");
+    expect(resolveGameSteamAppId({ queryArgs: { steam: ["70", "80"] } }, "linux")).toBe("70");
   });
 
   it("does not apply Linux capabilities on another platform", () => {

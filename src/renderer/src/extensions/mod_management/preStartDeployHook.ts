@@ -2,8 +2,17 @@ import type { IExtensionApi, IRunParameters } from "../../types/IExtensionContex
 import type { IState } from "../../types/IState";
 import { UserCanceled } from "../../util/CustomErrors";
 import onceCB from "../../util/onceCB";
-import { needToDeploy } from "./selectors";
+import { activeGameId } from "../../util/selectors";
+import { installPathForGame, needToDeploy } from "./selectors";
 import getText from "./texts";
+import { withActivationLock } from "./util/activationStore";
+import {
+  buildDeploymentRecoveryPlan,
+  completeDeploymentRecovery,
+  inspectDeploymentJournal,
+} from "./util/deploymentJournal";
+import { showDeploymentRecoveryDetails, translateWithFallback } from "./util/deploymentRecoveryUI";
+import { checkProtectedRestoreBeforeLaunch } from "./util/protectedBaselineRecoveryUI";
 
 type DeployResult = "auto" | "yes" | "skip" | "cancel";
 
@@ -80,9 +89,94 @@ function checkDeploy(api: IExtensionApi): Promise<void> {
   });
 }
 
+export async function checkDeploymentRecoveryBeforeLaunch(api: IExtensionApi): Promise<void> {
+  if (process.platform !== "linux") return;
+
+  const state = api.store.getState();
+  const gameId = activeGameId(state);
+  if (gameId === undefined) return;
+
+  await checkProtectedRestoreBeforeLaunch(api, gameId);
+
+  const stagingPath = installPathForGame(state, gameId);
+  if (stagingPath === undefined) return;
+
+  const inspection = await inspectDeploymentJournal(stagingPath);
+  if (inspection === undefined) return;
+
+  const t = (key: string, options?: any) =>
+    translateWithFallback(api.translate?.bind(api), key, options);
+  const recoveryPlan =
+    inspection.entry !== undefined
+      ? buildDeploymentRecoveryPlan(inspection.entry, inspection.reconciliation)
+      : undefined;
+  const detailsLabel = t("mod_management:::deployment_recovery::action_details");
+  const cancelLabel = t("mod_management:::deployment_recovery::btn_cancel");
+  const recoveryLabel =
+    recoveryPlan?.action === "rollback"
+      ? t("mod_management:::deployment_recovery::action_rollback")
+      : t("mod_management:::deployment_recovery::action_finish");
+  const message =
+    inspection.status === "invalid"
+      ? t("mod_management:::deployment_recovery::launch_invalid_message")
+      : t("mod_management:::deployment_recovery::launch_incomplete_message", {
+          operation: inspection.entry?.operation,
+          phase: inspection.entry?.phase,
+          replace: {
+            operation: inspection.entry?.operation,
+            phase: inspection.entry?.phase,
+          },
+        });
+  const actions = [
+    { label: detailsLabel },
+    ...(recoveryPlan?.safe === true && recoveryPlan.action !== undefined
+      ? [{ label: recoveryLabel }]
+      : []),
+    { label: cancelLabel, default: true },
+  ];
+
+  const result = await api.showDialog(
+    "error",
+    t("mod_management:::deployment_recovery::launch_blocked_title"),
+    {
+      text: t("mod_management:::deployment_recovery::launch_blocked_text"),
+      message,
+    },
+    actions,
+  );
+
+  if (result.action === detailsLabel || result.action === "Details") {
+    await showDeploymentRecoveryDetails(api, gameId, inspection);
+    throw new UserCanceled();
+  }
+
+  if (
+    recoveryPlan?.safe === true &&
+    recoveryPlan.action !== undefined &&
+    inspection.entry !== undefined &&
+    (result.action === recoveryLabel ||
+      result.action === "Roll back" ||
+      result.action === "Finish recovery")
+  ) {
+    await withActivationLock(() =>
+      completeDeploymentRecovery(
+        inspection.entry!,
+        recoveryPlan.action!,
+        inspection.reconciliation,
+      ),
+    );
+    const remaining = await inspectDeploymentJournal(stagingPath);
+    if (remaining === undefined) return;
+  }
+
+  throw new UserCanceled();
+}
+
 function preStartDeployHook(api: IExtensionApi, input: IRunParameters): Promise<IRunParameters> {
   return input.options.suggestDeploy === true
-    ? checkDeploy(api).then(() => input)
+    ? checkDeploymentRecoveryBeforeLaunch(api)
+        .then(() => checkDeploy(api))
+        .then(() => input)
     : Promise.resolve(input);
 }
 

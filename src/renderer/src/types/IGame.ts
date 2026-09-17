@@ -67,9 +67,12 @@ export interface IGame extends ITool {
    * - a string (treated as an app ID): `{ steam: "2870" }`
    * - a single query object: `{ steam: { id: "2870" } }`
    * - an array of query objects: `{ steam: [{ id: "2870" }] }`
+   * - legacy arrays of app ID strings are also accepted for compatibility
    *
    * Consumers should pass the per-store value through
-   * `normalizeStoreQuery` rather than branching on the three forms by hand.
+   * `normalizeStoreQuery` rather than branching on the supported forms by hand.
+   * If both `queryArgs` and `queryPath` are provided, `queryPath` is used as a
+   * fallback when store lookup does not find an installed game.
    */
   queryArgs?: { [storeId: string]: IQueryArgEntry };
 

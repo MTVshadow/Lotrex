@@ -15,6 +15,16 @@ import type { IManualCorrectionAudit, IManualCorrectionRecord } from "./contract
 export class ManualCorrectionManager {
   private readonly corrections = new Map<string, IManualCorrectionRecord>();
 
+  public replaceCorrections(records: Record<string, unknown>): void {
+    this.corrections.clear();
+    Object.entries(records).forEach(([installationId, value]) => {
+      const record = validateCorrectionRecord(installationId, value);
+      if (record !== undefined) {
+        this.corrections.set(installationId, record);
+      }
+    });
+  }
+
   /**
    * Applies or updates a manual correction overlay for a specific installation.
    * Discovered launcher data is preserved in originalData.
@@ -61,6 +71,12 @@ export class ManualCorrectionManager {
    */
   public getCorrection(installationId: string): IManualCorrectionRecord | null {
     return this.corrections.get(installationId) ?? null;
+  }
+
+  /** Returns the serializable subset. Environment variables are intentionally session-only. */
+  public getPersistableCorrection(installationId: string): IManualCorrectionRecord | null {
+    const record = this.corrections.get(installationId);
+    return record === undefined ? null : (validateCorrectionRecord(installationId, record) ?? null);
   }
 
   /**
@@ -191,4 +207,64 @@ export class ManualCorrectionManager {
       discoverySources: [...installation.discoverySources],
     };
   }
+}
+
+function validateCorrectionRecord(
+  installationId: string,
+  value: unknown,
+): IManualCorrectionRecord | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const record = value as Partial<IManualCorrectionRecord>;
+  if (
+    record.installationId !== installationId ||
+    typeof record.correctedAt !== "number" ||
+    !Number.isFinite(record.correctedAt) ||
+    typeof record.originalData !== "object" ||
+    record.originalData === null ||
+    typeof record.originalData.executablePath !== "string" ||
+    typeof record.originalData.installPath !== "string" ||
+    typeof record.overrides !== "object" ||
+    record.overrides === null
+  ) {
+    return undefined;
+  }
+
+  const optionalStrings = [
+    record.originalData.prefixPath,
+    record.originalData.runtime,
+    record.overrides.executablePath,
+    record.overrides.installPath,
+    record.overrides.prefixPath,
+    record.overrides.runtime,
+    record.reason,
+  ];
+  if (optionalStrings.some((entry) => entry !== undefined && typeof entry !== "string")) {
+    return undefined;
+  }
+  if (
+    record.overrides.customLaunchArgs !== undefined &&
+    (!Array.isArray(record.overrides.customLaunchArgs) ||
+      record.overrides.customLaunchArgs.some((entry) => typeof entry !== "string"))
+  ) {
+    return undefined;
+  }
+
+  return {
+    correctedAt: record.correctedAt,
+    installationId,
+    overrides: {
+      executablePath: record.overrides.executablePath,
+      installPath: record.overrides.installPath,
+      prefixPath: record.overrides.prefixPath,
+      runtime: record.overrides.runtime,
+      customLaunchArgs: record.overrides.customLaunchArgs?.slice(),
+    },
+    originalData: {
+      executablePath: record.originalData.executablePath,
+      installPath: record.originalData.installPath,
+      prefixPath: record.originalData.prefixPath,
+      runtime: record.originalData.runtime,
+    },
+    reason: record.reason,
+  };
 }

@@ -48,6 +48,26 @@ export function generateInstallationId(
 }
 
 /**
+ * Builds a path-independent fingerprint only when a launcher supplies a stable catalog identity.
+ * Manual and standalone discoveries remain path-bound because guessing across moves could attach
+ * profiles and overrides to the wrong installation.
+ */
+export function getProviderFingerprint(identity: IUnifiedGameIdentity): string | undefined {
+  const storeAppId = identity.storeAppId?.trim();
+  if (
+    storeAppId === undefined ||
+    storeAppId === "" ||
+    identity.storeId === "manual" ||
+    identity.owningLauncher === "manual" ||
+    identity.owningLauncher === "standalone"
+  ) {
+    return undefined;
+  }
+
+  return ["provider-v1", identity.owningLauncher, identity.storeId, storeAppId].join(":");
+}
+
+/**
  * Merges a newly discovered game candidate into an existing collection of managed game installations.
  *
  * Enforces Phase 1 acceptance criteria:

@@ -30,6 +30,7 @@ const retryCount = 3;
 class PluginPersistor implements types.IPersistor {
   private mDataPath: string;
   private mPluginPath: string;
+  private mPluginsFileName: string = "plugins.txt";
   private mPluginFormat: PluginFormat;
   private mNativePlugins: string[];
   private mGameId: string;
@@ -74,6 +75,7 @@ class PluginPersistor implements types.IPersistor {
         new Promise<void>((resolve) => {
           this.mPlugins = {};
           this.mPluginPath = undefined;
+          this.mPluginsFileName = "plugins.txt";
           this.mPluginFormat = undefined;
           this.mNativePlugins = undefined;
           this.mLoaded = false;
@@ -106,18 +108,23 @@ class PluginPersistor implements types.IPersistor {
       this.mPluginFormat = pluginFormat(gameMode);
       this.mNativePlugins = nativePlugins(gameMode);
       this.mGameId = gameMode;
-      this.updateNative();
-      // ensure that the native plugins are always included
-      log("debug", "synching plugins", { pluginsPath: this.mPluginPath });
-      // read the files now and update the store
-      return (
-        this.deserialize()
-          // start watching for external changes
-          .then(() => {
-            this.startWatch();
-            return Promise.resolve();
-          })
-      );
+      return this.resolvePluginsFileName().then(() => {
+        this.updateNative();
+        // ensure that the native plugins are always included
+        log("debug", "synching plugins", {
+          pluginsPath: this.mPluginPath,
+          pluginsFileName: this.mPluginsFileName,
+        });
+        // read the files now and update the store
+        return (
+          this.deserialize()
+            // start watching for external changes
+            .then(() => {
+              this.startWatch();
+              return Promise.resolve();
+            })
+        );
+      });
     });
   }
 
@@ -379,7 +386,7 @@ class PluginPersistor implements types.IPersistor {
       .map((pluginId) => this.mKnownPlugins[pluginId]);
 
     const loadOrderFile = path.join(destPath, "loadorder.txt");
-    const pluginsFile = path.join(destPath, "plugins.txt");
+    const pluginsFile = path.join(destPath, this.mPluginsFileName);
     // this ensureDir should not be necessary
     return fs
       .ensureDirAsync(destPath)
@@ -512,7 +519,7 @@ class PluginPersistor implements types.IPersistor {
 
     let offset = 0;
 
-    const pluginsFile = path.join(this.mPluginPath, "plugins.txt");
+    const pluginsFile = path.join(this.mPluginPath, this.mPluginsFileName);
 
     const newPlugins: IPluginMap = {};
 
@@ -630,6 +637,40 @@ class PluginPersistor implements types.IPersistor {
     }, timeout);
   }
 
+  /**
+   * Bethesda opens this file as `Plugins.txt`, while older Vortex code always
+   * wrote `plugins.txt`. Windows treats those paths as identical; a native
+   * Linux filesystem does not. Reuse the engine-cased file when it exists and
+   * otherwise preserve the casing of any case-insensitive match instead of
+   * creating a second file.
+   */
+  private resolvePluginsFileName(): Promise<void> {
+    if (this.mPluginPath === undefined) {
+      return Promise.resolve();
+    }
+
+    return Promise.resolve(fs.readdirAsync(this.mPluginPath))
+      .then((fileNames: string[]) => {
+        const matches = (fileNames ?? []).filter(
+          (fileName) => fileName.toLowerCase() === "plugins.txt",
+        );
+        this.mPluginsFileName =
+          matches.find((fileName) => fileName === "Plugins.txt") ??
+          matches.find((fileName) => fileName === "plugins.txt") ??
+          matches[0] ??
+          "plugins.txt";
+      })
+      .catch((err) => {
+        if (err?.code !== "ENOENT") {
+          log("warn", "failed to resolve plugins file casing", {
+            pluginPath: this.mPluginPath,
+            error: err?.message,
+          });
+        }
+        this.mPluginsFileName = "plugins.txt";
+      });
+  }
+
   private startWatch() {
     if (this.mWatch !== undefined) {
       this.mWatch.close();
@@ -641,11 +682,15 @@ class PluginPersistor implements types.IPersistor {
 
     try {
       this.mWatch = fs.watch(this.mPluginPath, {}, (evt, fileName: string) => {
+        const normalizedFileName = fileName?.toLowerCase();
         if (
           !this.mSerializing &&
-          ["loadorder.txt", "plugins.txt"].includes(fileName) &&
+          ["loadorder.txt", "plugins.txt"].includes(normalizedFileName) &&
           this.mPluginPath !== undefined
         ) {
+          if (normalizedFileName === "plugins.txt") {
+            this.mPluginsFileName = fileName;
+          }
           fs.statAsync(path.join(this.mPluginPath, fileName))
             .then((stats) => {
               if (stats.mtime > this.mLastWriteTime) {

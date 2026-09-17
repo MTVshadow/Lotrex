@@ -101,6 +101,44 @@ function wireState(status: string, bytesReceived: number) {
 }
 
 describe("runtime restore", () => {
+  test("restarts a checkpointless interrupted download during startup", async ({
+    makeDownloadAdapter,
+  }) => {
+    const h = makeDownloadAdapter({ download: { state: "started" } });
+
+    h.adapter.hydrateFromState();
+    await h.started.promise;
+
+    expect(h.resume).not.toHaveBeenCalled();
+    expect(h.start).toHaveBeenCalledWith(h.dest, expect.any(Number), h.downloadId);
+    expect(h.dispatched).toContainEqual(downloadProgress(h.downloadId, 0, 100, undefined));
+    expect(h.dispatched).toContainEqual(pauseDownload(h.downloadId, false));
+    expect(h.dispatched).toContainEqual(clearDownloadCheckpoint(h.downloadId));
+  });
+
+  test("continues a checkpointed interrupted download during startup", async ({
+    makeDownloadAdapter,
+  }) => {
+    const h = makeDownloadAdapter({
+      download: { state: "started" },
+      checkpoint: {
+        downloadId: "",
+        resource: "https://cdn.example/file.bin",
+        dest: "d",
+        completedRanges: [{ start: 0, end: 1023 }],
+        etag: "etag-1",
+      },
+    });
+
+    h.adapter.hydrateFromState();
+    await Promise.resolve();
+
+    expect(h.resume).toHaveBeenCalledWith(
+      expect.objectContaining({ completedRanges: [{ start: 0, end: 1023 }] }),
+    );
+    expect(h.start).not.toHaveBeenCalled();
+  });
+
   test("restores a checkpointless paused download under the same id", async ({
     makeDownloadAdapter,
   }) => {

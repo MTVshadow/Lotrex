@@ -1,3 +1,171 @@
 {
-  "_comment": "Game management strings - to be populated during migration"
+  "_comment": "Game management strings - migration in progress",
+  "unified_library": {
+    "actions": {
+      "cancel": "Cancel",
+      "close": "Close",
+      "correct": "Correct",
+      "diagnostics": "Diagnostics",
+      "launch": "Launch",
+      "launch_tooltip": "Start game",
+      "refresh": "Refresh library",
+      "refreshing": "Refreshing…",
+      "revert": "Revert to launcher data",
+      "save_override": "Save override",
+      "try_again": "Try again"
+    },
+    "badges": {
+      "duplicate": "Duplicate ({{current}}/{{total}})",
+      "isolated_edition": "Isolated edition",
+      "multi_launcher": "Multiple launchers",
+      "user_override_active": "User override active"
+    },
+    "correction": {
+      "arguments_label": "Custom launch arguments (space-separated)",
+      "description": "This is a non-destructive configuration overlay. Launcher source files (VDF, SQLite, JSON) and discovery records are never modified.",
+      "discovered": "Discovered",
+      "executable_label": "Executable path override",
+      "executable_placeholder": "Enter a custom absolute executable path…",
+      "prefix_label": "Proton or Wine prefix override",
+      "prefix_placeholder": "Enter a custom prefix directory…",
+      "reason_label": "Correction reason (for the audit log)",
+      "reason_placeholder": "For example, moved to a secondary NVMe drive…",
+      "runtime_label": "Runtime version override",
+      "runtime_placeholder": "For example, GE-Proton9-11 or proton-9.0…",
+      "title": "Manual correction: {{game}}"
+    },
+    "diagnostics": {
+      "adapter_authored_reason": "Reason supplied by the game adapter.",
+      "cannot_accept_mods": "Mods cannot be accepted.",
+      "compatible_adapter": "Compatible adapter ‘{{adapter}}’ is active. All required capabilities are supported.",
+      "deduplication": "Deduplication and provenance",
+      "description": "A detailed explanation of launch availability and mod acceptance.",
+      "failed": "Failed",
+      "full_report": "Detailed checks",
+      "launch_availability": "Launch availability",
+      "mod_acceptance": "Mod acceptance status",
+      "passed": "Passed",
+      "recommendation": "Recommendation",
+      "title": "Diagnostic report: {{game}}",
+      "unsupported_capabilities": "Declared unsupported capabilities"
+    },
+    "empty": {
+      "no_games": "No installed games were found.",
+      "no_games_description": "Refresh the library after installing a game or adding a supported library location.",
+      "no_matches": "No games match the selected filters.",
+      "reset_filters": "Reset all filters"
+    },
+    "error": {
+      "description": "Lotrex could not prepare the game library. Your existing game and launcher data was not changed.",
+      "title": "The game library could not be loaded"
+    },
+    "filters": {
+      "all_entries": "All entries",
+      "all_launchers": "All launchers",
+      "all_levels": "All levels",
+      "all_runtimes": "All runtimes",
+      "all_states": "All states",
+      "duplicates_label": "Duplicates",
+      "duplicates_only": "Duplicates only",
+      "launch_readiness_label": "Launch readiness",
+      "launcher_label": "Launcher",
+      "manual_launcher": "Manual or standalone",
+      "mod_support_label": "Mod support",
+      "native_linux": "Native Linux",
+      "runtime_label": "Runtime",
+      "search_label": "Search games",
+      "search_placeholder": "Filter by title, edition, or path…",
+      "unique_only": "Unique only"
+    },
+    "header": {
+      "description": "A unified game library across Steam, Heroic, Lutris, Bottles, and manual installations, with runtime compatibility and mod readiness.",
+      "title": "Lotrex game library"
+    },
+    "labels": {
+      "modding": "Modding",
+      "path": "Path",
+      "profile": "Profile",
+      "state": "State"
+    },
+    "loading": {
+      "description": "Lotrex is reading the available launcher and installation records.",
+      "refreshing": "Refreshing the library. Existing results remain available.",
+      "title": "Loading the game library…"
+    },
+    "service": {
+      "compatibility": {
+        "missing_executable": "The game executable is missing at ‘{{path}}’.",
+        "needs_prefix": "The Proton or Wine prefix is missing or has not been initialized.",
+        "needs_runtime": "No Proton runtime or Wine binary is configured.",
+        "ready": "Ready for launch and mod management."
+      },
+      "duplicates": {
+        "distinct_edition": "Edition ‘{{edition}}’ of {{gameId}} is kept separate from other editions ({{otherEditions}}) to prevent save or mod corruption.",
+        "multiple_installations": "Duplicate installation of {{gameId}} [{{edition}}] (copy {{copy}} of {{total}}). Installed at {{path}}. Other copies: {{locations}}. Each copy has an independent profile.",
+        "multiple_launchers": "The same installation at {{path}} is tracked by multiple launchers ({{launchers}}). Updates and DRM remain owned by their launchers.",
+        "same_path": "Multiple discovery passes found the same filesystem path: {{path}}.",
+        "unique": "Unique installation on this system."
+      },
+      "launch": {
+        "blocked": "Launch is blocked by {{count}} issue(s).",
+        "invalid_prefix": "The configured prefix directory ‘{{path}}’ does not exist. Launch the game once from its store client to initialize it.",
+        "missing_executable": "The primary executable does not exist at ‘{{path}}’. Verify the installation or set a manual correction.",
+        "missing_prefix": "The Wine or Proton prefix is missing. Launch the game once from Steam or Heroic, or configure a prefix.",
+        "missing_runtime": "No runtime is selected. A Proton version or Wine binary is required for this Windows game.",
+        "not_executable": "The file ‘{{path}}’ is not executable. Check its Linux file permissions.",
+        "ready": "Launch is ready. The executable at ‘{{path}}’ was verified for the {{platform}} runtime."
+      },
+      "modding": {
+        "adapter_disabled": "The game adapter ‘{{adapter}}’ is disabled in settings.",
+        "adapter_missing": "No compatible adapter is registered for ‘{{gameId}}’. Lotrex cannot advertise mod support without one.",
+        "capability_unsupported": "The adapter does not support ‘{{capability}}’: {{reason}}",
+        "edition_unsupported": "Adapter ‘{{adapter}}’ supports editions [{{supported}}], but this installation is ‘{{edition}}’.",
+        "install_path_missing": "The installation directory ‘{{path}}’ does not exist. Mods cannot be staged or deployed.",
+        "install_path_read_only": "The game directory ‘{{path}}’ is read-only. Mod deployment requires write access."
+      },
+      "remedies": {
+        "check_relocation": "Check whether the game was moved to another disk.",
+        "initialize_or_set_prefix": "Launch the game once through its store client or assign a valid prefix path.",
+        "initialize_prefix": "Launch the game once from its store client to create the prefix.",
+        "install_or_enable_adapter": "Install or enable an adapter that declares mod-type and deployment-target capabilities.",
+        "install_runtime": "Install Proton Experimental or GE-Proton.",
+        "select_runtime": "Select an installed Proton version in the game settings.",
+        "set_executable": "Set an executable-path override in manual corrections.",
+        "set_prefix": "Configure a custom prefix in manual corrections.",
+        "verify_files": "Verify the game files through Steam, Heroic, or Lutris.",
+        "verify_or_override": "Verify the files with the launcher or configure a manual override."
+      },
+      "report": {
+        "adapter_ready": "The active adapter ‘{{adapter}}’ supports mod deployment.",
+        "checks": {
+          "adapter": "Game adapter availability",
+          "executable": "Executable presence",
+          "prefix": "Prefix validity"
+        },
+        "executable_found": "The executable exists at ‘{{path}}’.",
+        "executable_missing": "The executable was not found at ‘{{path}}’.",
+        "prefix_invalid": "The prefix directory is missing or invalid: ‘{{path}}’.",
+        "prefix_valid": "The prefix was verified at ‘{{path}}’.",
+        "summary_launch_blocked_mods_accepted": "Diagnostic summary: launch blocked, mods accepted. Issues detected: {{issues}}.",
+        "summary_launch_blocked_mods_blocked": "Diagnostic summary: launch blocked, mods blocked. Issues detected: {{issues}}.",
+        "summary_launch_ready_mods_accepted": "Diagnostic summary: launch ready, mods accepted. Issues detected: {{issues}}.",
+        "summary_launch_ready_mods_blocked": "Diagnostic summary: launch ready, mods blocked. Issues detected: {{issues}}."
+      }
+    },
+    "status": {
+      "launch_blocked": "Launch blocked",
+      "launch_ready": "Launch ready",
+      "ready_to_launch": "Ready to launch"
+    },
+    "support": {
+      "community_tested": "Community-tested",
+      "experimental": "Experimental",
+      "supported": "Supported",
+      "unsupported": "Unsupported"
+    },
+    "values": {
+      "default": "Default",
+      "none": "None"
+    }
+  }
 }

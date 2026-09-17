@@ -152,7 +152,7 @@ export class DownloadManager {
   }
 
   /**
-   * Cancels a download if it is running. Returns the resulting state.
+   * Cancels a download while it is queued or running. Returns the resulting state.
    * Throws if the `downloadId` is unknown.
    */
   cancel(downloadId: string): DownloadState {
@@ -221,6 +221,12 @@ export class DownloadManager {
     log("debug", "queuing download", { downloadId, dest });
 
     const rawPromise = this.#downloadQueue.add(() => {
+      // A queued request can be cancelled before PQueue grants it a slot. Do
+      // not promote it to "running" in that case: no resolver or network
+      // request must run after the user has pressed Cancel.
+      if (abortController.signal.aborted) {
+        throw new DownloadError({ code: "cancellation" }, "Download cancelled");
+      }
       log("debug", "download starting", { downloadId });
       progressReporter.status = "running";
       return download(
@@ -258,7 +264,7 @@ export class DownloadManager {
     let terminalError: DownloadError | null = null;
 
     const cancel = (): DownloadState => {
-      if (progressReporter.status === "running") {
+      if (["queued", "running"].includes(progressReporter.status)) {
         log("debug", "cancelling download", { downloadId });
         progressReporter.status = "canceled";
         abortController.abort();

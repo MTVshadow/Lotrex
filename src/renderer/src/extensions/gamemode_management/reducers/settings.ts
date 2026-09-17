@@ -112,6 +112,10 @@ export const settingsReducer: IReducerSpec<ISettingsGameMode> = {
     [actions.setSortManaged as any]: (state, payload) => setSafe(state, ["sortManaged"], payload),
     [actions.setSortUnmanaged as any]: (state, payload) =>
       setSafe(state, ["sortUnmanaged"], payload),
+    [actions.setUnifiedLibraryCorrection as any]: (state, payload) =>
+      setSafe(state, ["unifiedLibraryCorrections", payload.installationId], payload),
+    [actions.removeUnifiedLibraryCorrection as any]: (state, payload) =>
+      deleteOrNop(state, ["unifiedLibraryCorrections", payload]),
   },
   defaults: {
     discovered: {},
@@ -119,5 +123,6 @@ export const settingsReducer: IReducerSpec<ISettingsGameMode> = {
     pickerLayout: "small",
     sortManaged: "alphabetical",
     sortUnmanaged: "alphabetical",
+    unifiedLibraryCorrections: {},
   },
 };

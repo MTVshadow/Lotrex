@@ -13,6 +13,7 @@ import {
   areSamePhysicalPath,
   createProfileBinding,
   generateInstallationId,
+  getProviderFingerprint,
   mergeGameDiscoveries,
   reconcileInstallationRelocation,
 } from "./identityEngine";
@@ -62,6 +63,18 @@ describe("Unified Game Identity (Phase 1)", () => {
     expect(id1).toBe(id2);
     expect(typeof id1).toBe("string");
     expect(id1.length).toBe(64); // SHA-256
+  });
+
+  it("creates path-independent fingerprints only for provider-owned installations", () => {
+    expect(getProviderFingerprint(baseSkyrimIdentity)).toBe("provider-v1:steam:steam:489830");
+    expect(
+      getProviderFingerprint({
+        ...baseSkyrimIdentity,
+        owningLauncher: "manual",
+        storeId: "manual",
+        storeAppId: undefined,
+      }),
+    ).toBeUndefined();
   });
 
   it("merges duplicate Steam, Heroic, and Lutris discoveries pointing to the same physical install", () => {

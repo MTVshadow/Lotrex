@@ -19,7 +19,7 @@ import type {
   IUnifiedGameInstallation,
   OwningLauncher,
 } from "../gameIdentity/contracts";
-import { mergeGameDiscoveries } from "../gameIdentity/identityEngine";
+import { getProviderFingerprint, mergeGameDiscoveries } from "../gameIdentity/identityEngine";
 import { ProtonPaths } from "../ProtonPaths";
 
 export interface ILegacyLibraryBridgeResult {
@@ -165,22 +165,24 @@ export function buildLegacyUnifiedLibrary(
       .filter((candidate) => candidate.gameId === game.id && !candidate.pendingRemove)
       .sort((left, right) => right.lastActivated - left.lastActivated)[0];
 
+    const identity: IDiscoveredGameCandidate["identity"] = {
+      gameId: game.id,
+      editionId,
+      platform,
+      storeId,
+      storeAppId: resolveGameSteamAppId(game, "linux", discovery.environment?.SteamAPPId),
+      owningLauncher: normalizeLauncher(discovery),
+      executable: path.basename(resolvedExecutable),
+      adapterVersion: "legacy-bridge-1",
+    };
     const candidate: IDiscoveredGameCandidate = {
-      identity: {
-        gameId: game.id,
-        editionId,
-        platform,
-        storeId,
-        storeAppId: resolveGameSteamAppId(game, "linux", discovery.environment?.SteamAPPId),
-        owningLauncher: normalizeLauncher(discovery),
-        executable: path.basename(resolvedExecutable),
-        adapterVersion: "legacy-bridge-1",
-      },
+      identity,
       installPath: discovery.path,
       executablePath: resolvedExecutable,
       prefixPath: proton?.prefixPath ?? discovery.environment?.WINEPREFIX,
       runtime: proton?.protonPath ?? discovery.environment?.VORTEX_PROTON_PATH,
       confidence: discovery.pathSetManually ? "confirmed" : "probable",
+      fingerprint: getProviderFingerprint(identity),
     };
 
     const merged = mergeGameDiscoveries(installations, candidate);

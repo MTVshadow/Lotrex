@@ -2,7 +2,7 @@ const path = require("path");
 let api;
 try {
   api = require("@nexusmods/vortex-api");
-} catch (e) {
+} catch {
   try {
     api = require("@vortex/extension-test-mocks");
   } catch {
@@ -16,15 +16,93 @@ const { fs, log, util } = api;
  * Nexus Mods домен: https://www.nexusmods.com/gothic3
  */
 const GAME_ID = "gothic3";
+const FORSAKEN_GODS_GAME_ID = "gothic3fg";
 const STEAM_APP_ID = "39500";
-const FORSAKEN_GODS_STEAM_ID = "65610";
+const FORSAKEN_GODS_STEAM_ID = "65600";
 const GOG_APP_ID = "1207658986";
-const FORSAKEN_GODS_GOG_ID = "1435828767";
+const FORSAKEN_GODS_GOG_ID = "1207658993";
 
 const PRIMARY_EXE = "Gothic3.exe";
 const FINAL_EXE = "Gothic3Final.exe";
+const FORSAKEN_GODS_EXE = "Gothic III Forsaken Gods.exe";
 const GE3_INI = path.join("Ini", "ge3.ini");
-const MOUNTLIST_INI = path.join("Ini", "mountlist.INI");
+
+// Stable ids used by the locally repacked Community Patch and Update Pack.
+// The installer records their ordering rules so the Update Pack always wins
+// for the engine files it deliberately replaces.
+const COMMUNITY_PATCH_MOD_ID = "Gothic_3_EE_Patch_v1.75.14_Int_Full";
+const UPDATE_PACK_MOD_ID = "Gothic_3_EE_v1.75_Int_Update_Pack_v1.04.11";
+const PATCH_COMPILATION_FILE = "gothic 3 patches-46-04-06-26-1767543105.7z";
+
+const BASE_GAME = {
+  id: GAME_ID,
+  name: "Gothic 3",
+  steamAppId: STEAM_APP_ID,
+  gogAppId: GOG_APP_ID,
+  installDir: "Gothic 3",
+  executable: PRIMARY_EXE,
+  alternateExecutable: FINAL_EXE,
+  registryQueries: [
+    {
+      hive: "HKLM",
+      key: `Software\\GOG.com\\Games\\${GOG_APP_ID}`,
+      value: "PATH",
+    },
+    {
+      hive: "HKLM",
+      key: `Software\\WOW6432Node\\GOG.com\\Games\\${GOG_APP_ID}`,
+      value: "PATH",
+    },
+    {
+      hive: "HKLM",
+      key: "Software\\JoWooD\\Gothic III",
+      value: "InstallDir",
+    },
+    {
+      hive: "HKLM",
+      key: "Software\\WOW6432Node\\JoWooD\\Gothic III",
+      value: "InstallDir",
+    },
+    {
+      hive: "HKLM",
+      key: "Software\\JoWooD Productions Software AG\\Gothic III",
+      value: "InstallDir",
+    },
+  ],
+};
+
+const FORSAKEN_GODS_GAME = {
+  id: FORSAKEN_GODS_GAME_ID,
+  name: "Gothic 3: Forsaken Gods Enhanced Edition",
+  steamAppId: FORSAKEN_GODS_STEAM_ID,
+  gogAppId: FORSAKEN_GODS_GOG_ID,
+  installDir: "Gothic 3 Forsaken Gods",
+  executable: FORSAKEN_GODS_EXE,
+  registryQueries: [
+    {
+      hive: "HKLM",
+      key: `Software\\GOG.com\\Games\\${FORSAKEN_GODS_GOG_ID}`,
+      value: "PATH",
+    },
+    {
+      hive: "HKLM",
+      key: `Software\\WOW6432Node\\GOG.com\\Games\\${FORSAKEN_GODS_GOG_ID}`,
+      value: "PATH",
+    },
+    {
+      hive: "HKLM",
+      key: "Software\\JoWooD\\Gothic III - Forsaken Gods",
+      value: "InstallDir",
+    },
+    {
+      hive: "HKLM",
+      key: "Software\\WOW6432Node\\JoWooD\\Gothic III - Forsaken Gods",
+      value: "InstallDir",
+    },
+  ],
+};
+
+const GAMES = [BASE_GAME, FORSAKEN_GODS_GAME];
 
 /**
  * ПРИНЦИП РОБОТИ РУШІЯ GOTHIC 3 ТА СИСТЕМИ МОДИНГУ:
@@ -112,104 +190,73 @@ function isGothic3DataFile(ext) {
 /**
  * Детекція встановлення гри (Steam, GOG, реєстр Windows та Linux-шляхи)
  */
-function findGame() {
-  return util.steam
-    .findByAppId(STEAM_APP_ID)
-    .then((game) => game.gamePath)
-    .catch(() =>
-      util.GameStoreHelper.findByAppId(
-        [STEAM_APP_ID, FORSAKEN_GODS_STEAM_ID, GOG_APP_ID, FORSAKEN_GODS_GOG_ID],
-        "steam",
-      )
-        .then((game) => game.gamePath)
-        .catch(() =>
-          util.GameStoreHelper.findByRegistry(
-            [
-              {
-                hive: "HKLM",
-                key: `Software\\GOG.com\\Games\\${GOG_APP_ID}`,
-                value: "PATH",
-              },
-              {
-                hive: "HKLM",
-                key: `Software\\WOW6432Node\\GOG.com\\Games\\${GOG_APP_ID}`,
-                value: "PATH",
-              },
-              {
-                hive: "HKLM",
-                key: "Software\\JoWooD\\Gothic III",
-                value: "InstallDir",
-              },
-              {
-                hive: "HKLM",
-                key: "Software\\WOW6432Node\\JoWooD\\Gothic III",
-                value: "InstallDir",
-              },
-              {
-                hive: "HKLM",
-                key: "Software\\JoWooD Productions Software AG\\Gothic III",
-                value: "InstallDir",
-              },
-            ],
-            PRIMARY_EXE,
-          ),
-        ),
-    )
-    .catch(() => {
-      // Резервний пошук на системі Linux для стандартних бібліотек Steam
-      if (process.platform === "linux") {
-        const home = process.env.HOME || "";
-        const candidatePaths = [
-          path.join(home, ".local", "share", "Steam", "steamapps", "common", "Gothic 3"),
-          path.join(home, ".steam", "steam", "steamapps", "common", "Gothic 3"),
-          path.join(
-            home,
-            ".var",
-            "app",
-            "com.valvesoftware.Steam",
-            ".local",
-            "share",
-            "Steam",
-            "steamapps",
-            "common",
-            "Gothic 3",
-          ),
-        ];
+function linuxSteamCandidates(game, env = process.env) {
+  const home = env.HOME || "";
+  const dataHome = env.XDG_DATA_HOME || path.join(home, ".local", "share");
+  const steamRoots = [
+    path.join(dataHome, "Steam"),
+    path.join(home, ".steam", "steam"),
+    path.join(home, ".var", "app", "com.valvesoftware.Steam", ".local", "share", "Steam"),
+  ];
 
-        for (const candidate of candidatePaths) {
-          try {
-            const stat = fs.statSync(path.join(candidate, PRIMARY_EXE));
-            if (stat.isFile()) {
-              return Promise.resolve(candidate);
-            }
-          } catch (e) {
-            // Шлях відсутній, перевіряємо наступний
-          }
-        }
-      }
-
-      return Promise.reject(new util.ProcessCanceled("Gothic 3 not found"));
-    });
+  return steamRoots.map((root) => path.join(root, "steamapps", "common", game.installDir));
 }
 
 /**
  * Визначення виконуваного файлу для запуску (Gothic3.exe або Gothic3Final.exe)
  */
-function getExecutable(discoveryPath) {
+function getExecutable(discoveryPath, game = BASE_GAME) {
   if (!discoveryPath) {
-    return PRIMARY_EXE;
+    return game.executable;
   }
 
-  try {
-    const finalStat = fs.statSync(path.join(discoveryPath, FINAL_EXE));
-    if (finalStat.isFile()) {
-      return FINAL_EXE;
+  for (const candidate of [game.alternateExecutable, game.executable].filter(Boolean)) {
+    try {
+      const candidateStat = fs.statSync(path.join(discoveryPath, candidate));
+      if (candidateStat.isFile()) {
+        return candidate;
+      }
+    } catch {
+      // Try the next executable name for this game edition.
     }
-  } catch (err) {
-    // Gothic3Final.exe відсутній, використовуємо Gothic3.exe
   }
 
-  return PRIMARY_EXE;
+  return game.executable;
+}
+
+function findGame(game = BASE_GAME) {
+  const findSteam = () =>
+    util.steam
+      .findByAppId(game.steamAppId)
+      .then((entry) => entry.gamePath)
+      .catch(() => util.GameStoreHelper.findByAppId([game.steamAppId], "steam"))
+      .then((entry) => entry.gamePath);
+
+  const findGog = () =>
+    util.GameStoreHelper.findByAppId([game.gogAppId], "gog").then((entry) => entry.gamePath);
+
+  const findRegistry = () =>
+    util.GameStoreHelper.findByRegistry(game.registryQueries, game.executable);
+
+  return findSteam()
+    .catch(() => findGog())
+    .catch(() => findRegistry())
+    .catch(() => {
+      if (process.platform === "linux") {
+        for (const candidate of linuxSteamCandidates(game)) {
+          try {
+            const stat = fs.statSync(path.join(candidate, game.executable));
+            if (stat.isFile()) {
+              return Promise.resolve(candidate);
+            }
+          } catch {
+            // The game is not installed in this standard Steam library path.
+          }
+        }
+      }
+
+      return Promise.reject(new util.ProcessCanceled(`${game.name} not found`));
+    });
 }
 
 /**
@@ -251,17 +298,17 @@ async function prepareForModding(discovery) {
             log("info", `Created lowercase symlink for ${base}.ini on Linux`);
           } catch {}
         }
-      } catch (err) {
+      } catch {
         // Ігноруємо помилки створення симлінків
       }
     }
 
-    const binaries = [PRIMARY_EXE, FINAL_EXE];
+    const binaries = [PRIMARY_EXE, FINAL_EXE, FORSAKEN_GODS_EXE];
     for (const bin of binaries) {
       const fullPath = path.join(discovery.path, bin);
       try {
         await fs.chmodAsync(fullPath, 0o755);
-      } catch (err) {
+      } catch {
         // Якщо бінарник відсутній або права не вдалося змінити, ігноруємо
       }
     }
@@ -348,7 +395,7 @@ function normalizeGothic3Path(filePath, rootPrefix = "") {
  * Валідація підтримки моду інсталятором
  */
 function testSupportedContent(files, gameId) {
-  if (gameId !== GAME_ID) {
+  if (!GAMES.some((game) => game.id === gameId)) {
     return Promise.resolve({ supported: false, requiredFiles: [] });
   }
 
@@ -391,10 +438,138 @@ function testSupportedContent(files, gameId) {
   return Promise.resolve({ supported, requiredFiles: [] });
 }
 
+function normalizedArchivePath(filePath) {
+  return filePath.replace(/\\/g, "/").toLowerCase();
+}
+
+function isPatchBundle(files) {
+  // Nexus patch compilations often bundle several mutually exclusive EXE
+  // installers (base patch, update packs, betas and language packs). Installing
+  // that compilation as one mod creates inert wrapper folders in the game and
+  // makes its components overwrite each other.
+  return files.filter((file) => /\.exe$/i.test(file)).length > 1;
+}
+
+function isCommunityPatch(files) {
+  const paths = new Set(files.map(normalizedArchivePath));
+  return paths.has("gothic3.exe") && paths.has("data/projects_compiled.cpt");
+}
+
+function isUpdatePack(files) {
+  const paths = new Set(files.map(normalizedArchivePath));
+  return paths.has("data/projects_compiled.p01") && paths.has("data/strings.p00");
+}
+
+function isUkrainianLocalization(files) {
+  const paths = new Set(files.map(normalizedArchivePath));
+  return paths.has("data/projects_compiled/stringtable.bin") && paths.has("ini/ge3.ini");
+}
+
+function patchOrderingInstructions(files) {
+  if (isCommunityPatch(files)) {
+    return [
+      {
+        type: "rule",
+        rule: {
+          type: "before",
+          reference: { id: UPDATE_PACK_MOD_ID, versionMatch: "*" },
+        },
+      },
+    ];
+  }
+
+  if (isUpdatePack(files)) {
+    return [
+      {
+        type: "rule",
+        rule: {
+          type: "after",
+          reference: { id: COMMUNITY_PATCH_MOD_ID, versionMatch: "*" },
+        },
+      },
+    ];
+  }
+
+  if (isUkrainianLocalization(files)) {
+    return [
+      {
+        type: "rule",
+        rule: {
+          type: "after",
+          reference: { id: COMMUNITY_PATCH_MOD_ID, versionMatch: "*" },
+        },
+      },
+      {
+        type: "rule",
+        rule: {
+          type: "after",
+          reference: { id: UPDATE_PACK_MOD_ID, versionMatch: "*" },
+        },
+      },
+    ];
+  }
+
+  return [];
+}
+
+function reconcileInstalledPatchStack(api) {
+  const apiActions = api?.actions;
+  if (!api?.store || !apiActions?.addModRule || !apiActions?.setModEnabled) {
+    return;
+  }
+
+  const state = api.getState();
+  const mods = state.persistent.mods?.[GAME_ID] ?? {};
+  const profiles = Object.values(state.persistent.profiles ?? {}).filter(
+    (profile) => profile.gameId === GAME_ID,
+  );
+  const hasMod = (modId) => mods[modId] !== undefined;
+  const addRule = (modId, rule) => {
+    const rules = mods[modId]?.rules ?? [];
+    const duplicate = rules.some(
+      (existing) => existing.type === rule.type && existing.reference?.id === rule.reference.id,
+    );
+    if (!duplicate) {
+      api.store.dispatch(apiActions.addModRule(GAME_ID, modId, rule));
+    }
+  };
+
+  if (hasMod(COMMUNITY_PATCH_MOD_ID) && hasMod(UPDATE_PACK_MOD_ID)) {
+    addRule(COMMUNITY_PATCH_MOD_ID, {
+      type: "before",
+      reference: { id: UPDATE_PACK_MOD_ID, versionMatch: "*" },
+    });
+    addRule(UPDATE_PACK_MOD_ID, {
+      type: "after",
+      reference: { id: COMMUNITY_PATCH_MOD_ID, versionMatch: "*" },
+    });
+  }
+
+  for (const [modId, mod] of Object.entries(mods)) {
+    if (mod.attributes?.fileName?.toLowerCase() !== PATCH_COMPILATION_FILE) continue;
+    for (const profile of profiles) {
+      if (profile.modState?.[modId]?.enabled === true) {
+        // This is a bundle of mutually exclusive installers, not a deployable
+        // mod. Disable it before it leaves wrapper folders and unrelated beta
+        // files in the game directory.
+        api.store.dispatch(apiActions.setModEnabled(profile.id, modId, false));
+      }
+    }
+  }
+}
+
 /**
  * Розумний інсталятор для розгортання модифікацій Gothic 3
  */
 function installContent(files) {
+  if (isPatchBundle(files)) {
+    return Promise.reject(
+      new Error(
+        "This archive bundles multiple Gothic 3 patch installers. Extract and install one selected patch at a time; do not deploy the whole compilation as a single mod.",
+      ),
+    );
+  }
+
   const realFiles = files.filter((f) => !/[\\/]$/.test(f));
   const rootPrefix = findCommonRoot(realFiles);
 
@@ -407,7 +582,9 @@ function installContent(files) {
     };
   });
 
-  return Promise.resolve({ instructions });
+  return Promise.resolve({
+    instructions: instructions.concat(patchOrderingInstructions(realFiles)),
+  });
 }
 
 function requiresLauncher(gamePath, store) {
@@ -451,49 +628,56 @@ const supportedTools = [
  * Точка входу розширення Vortex
  */
 function main(context) {
-  context.registerGame({
-    id: GAME_ID,
-    name: "Gothic 3",
-    mergeMods: true,
-    queryPath: findGame,
-    queryModPath: () => ".",
-    logo: "gameart.jpg",
-    executable: (discoveryPath) => getExecutable(discoveryPath),
-    requiredFiles: [PRIMARY_EXE],
-    setup: prepareForModding,
-    requiresLauncher,
-    environment: {
-      SteamAPPId: STEAM_APP_ID,
-    },
-    details: {
-      steamAppId: parseInt(STEAM_APP_ID, 10),
-      gogAppId: GOG_APP_ID,
-    },
-    capabilities: {
-      platforms: {
-        linux: {
-          steamAppId: STEAM_APP_ID,
-        },
-        win32: {
-          steamAppId: STEAM_APP_ID,
+  for (const game of GAMES) {
+    context.registerGame({
+      id: game.id,
+      name: game.name,
+      mergeMods: true,
+      queryPath: () => findGame(game),
+      queryModPath: () => ".",
+      logo: "gameart.jpg",
+      executable: (discoveryPath) => getExecutable(discoveryPath, game),
+      requiredFiles: [game.executable],
+      setup: prepareForModding,
+      requiresLauncher,
+      environment: {
+        SteamAPPId: game.steamAppId,
+      },
+      details: {
+        steamAppId: parseInt(game.steamAppId, 10),
+        gogAppId: game.gogAppId,
+        nexusPageId: GAME_ID,
+      },
+      capabilities: {
+        platforms: {
+          linux: {
+            steamAppId: game.steamAppId,
+          },
+          win32: {
+            steamAppId: game.steamAppId,
+          },
         },
       },
-    },
-    queryArgs: {
-      steam: [STEAM_APP_ID, FORSAKEN_GODS_STEAM_ID],
-      gog: [GOG_APP_ID, FORSAKEN_GODS_GOG_ID],
-      registry: [
-        `HKEY_LOCAL_MACHINE:SOFTWARE\\GOG.com\\Games\\${GOG_APP_ID}:PATH`,
-        `HKEY_LOCAL_MACHINE:SOFTWARE\\WOW6432Node\\GOG.com\\Games\\${GOG_APP_ID}:PATH`,
-        "HKEY_LOCAL_MACHINE:SOFTWARE\\JoWooD\\Gothic III:InstallDir",
-        "HKEY_LOCAL_MACHINE:SOFTWARE\\WOW6432Node\\JoWooD\\Gothic III:InstallDir",
-        "HKEY_LOCAL_MACHINE:SOFTWARE\\JoWooD Productions Software AG\\Gothic III:InstallDir",
-      ],
-    },
-    supportedTools,
-  });
+      queryArgs: {
+        steam: [game.steamAppId],
+        gog: [game.gogAppId],
+        registry: game.registryQueries.map(
+          (query) => `HKEY_LOCAL_MACHINE:${query.key}:${query.value}`,
+        ),
+      },
+      supportedTools,
+    });
+  }
 
   context.registerInstaller("gothic3-mod", 25, testSupportedContent, installContent);
+
+  if (context.api?.events) {
+    context.api.events.on("gamemode-activated", (gameId) => {
+      if (gameId === GAME_ID) {
+        reconcileInstalledPatchStack(context.api);
+      }
+    });
+  }
 
   return true;
 }
@@ -501,16 +685,31 @@ function main(context) {
 module.exports = {
   default: main,
   GAME_ID,
+  FORSAKEN_GODS_GAME_ID,
   PRIMARY_EXE,
   FINAL_EXE,
+  FORSAKEN_GODS_EXE,
   STEAM_APP_ID,
+  FORSAKEN_GODS_STEAM_ID,
   GOG_APP_ID,
+  FORSAKEN_GODS_GOG_ID,
+  BASE_GAME,
+  FORSAKEN_GODS_GAME,
+  GAMES,
+  linuxSteamCandidates,
   GOTHIC3_DATA_FOLDERS,
   GOTHIC3_INI_FILES,
   isGothic3DataArchive,
   isGothic3DataFile,
   findCommonRoot,
   normalizeGothic3Path,
+  normalizedArchivePath,
+  isPatchBundle,
+  isCommunityPatch,
+  isUpdatePack,
+  isUkrainianLocalization,
+  patchOrderingInstructions,
+  reconcileInstalledPatchStack,
   testSupportedContent,
   installContent,
   getExecutable,

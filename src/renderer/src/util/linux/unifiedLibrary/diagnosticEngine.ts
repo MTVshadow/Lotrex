@@ -15,6 +15,7 @@ import type {
   ILibraryCompatibilityStatus,
   ILibraryDiagnosticReport,
   ILibraryLaunchAvailability,
+  ILibraryMessage,
   LibraryInstallState,
 } from "./contracts";
 
@@ -93,6 +94,7 @@ export class DiagnosticEngine {
     effectiveRuntime?: string,
   ): ILibraryLaunchAvailability {
     const blockingReasons: string[] = [];
+    const blockingReasonMessages: ILibraryMessage[] = [];
     const execPath = effectiveExecutablePath ?? installation.executablePath;
     const prefixPath = effectivePrefixPath ?? installation.prefixPath;
     const runtime = effectiveRuntime ?? installation.runtime;
@@ -103,6 +105,10 @@ export class DiagnosticEngine {
       blockingReasons.push(
         `Primary executable does not exist at '${execPath}'. Please verify installation files or set a manual correction.`,
       );
+      blockingReasonMessages.push({
+        key: "unified_library::service::launch::missing_executable",
+        values: { path: execPath },
+      });
     }
 
     // 2. Platform-specific runtime and prefix validations
@@ -111,16 +117,26 @@ export class DiagnosticEngine {
         blockingReasons.push(
           `Wine/Proton prefix is missing. Windows games running on Linux require a configured prefix directory. Run once from Steam/Heroic or specify prefixPath in settings.`,
         );
+        blockingReasonMessages.push({
+          key: "unified_library::service::launch::missing_prefix",
+        });
       } else if (!this.fsInspector.existsSync(prefixPath)) {
         blockingReasons.push(
           `Configured prefix directory '${prefixPath}' does not exist on disk. Launch the game once from the store client to initialize the prefix.`,
         );
+        blockingReasonMessages.push({
+          key: "unified_library::service::launch::invalid_prefix",
+          values: { path: prefixPath },
+        });
       }
 
       if (!runtime || runtime.trim() === "") {
         blockingReasons.push(
           `No runtime environment selected. A Proton version or Wine binary is required to execute Windows binaries.`,
         );
+        blockingReasonMessages.push({
+          key: "unified_library::service::launch::missing_runtime",
+        });
       }
     } else if (platform === "linux-native") {
       // Native Linux binary must be executable
@@ -128,6 +144,10 @@ export class DiagnosticEngine {
         blockingReasons.push(
           `File '${execPath}' is not marked as executable. Please check POSIX file permissions (chmod +x).`,
         );
+        blockingReasonMessages.push({
+          key: "unified_library::service::launch::not_executable",
+          values: { path: execPath },
+        });
       }
     }
 
@@ -139,7 +159,17 @@ export class DiagnosticEngine {
     return {
       canLaunch,
       blockingReasons,
+      blockingReasonMessages,
       launchExplanation,
+      launchExplanationMessage: canLaunch
+        ? {
+            key: "unified_library::service::launch::ready",
+            values: { path: execPath, platform },
+          }
+        : {
+            key: "unified_library::service::launch::blocked",
+            values: { count: blockingReasons.length },
+          },
     };
   }
 
@@ -171,6 +201,10 @@ export class DiagnosticEngine {
         unsupportedCapabilities: [],
         canAcceptMods: false,
         modRejectionReason: `No compatible game adapter is registered for game '${gameId}'. Lotrex requires a declared adapter before advertising mod support.`,
+        modRejectionMessage: {
+          key: "unified_library::service::modding::adapter_missing",
+          values: { gameId },
+        },
       };
     }
 
@@ -185,6 +219,10 @@ export class DiagnosticEngine {
         unsupportedCapabilities: [],
         canAcceptMods: false,
         modRejectionReason: `Game adapter '${adapter.manifest.name}' (${adapter.manifest.id}) is currently disabled in settings.`,
+        modRejectionMessage: {
+          key: "unified_library::service::modding::adapter_disabled",
+          values: { adapter: adapter.manifest.name },
+        },
       };
     }
 
@@ -204,6 +242,14 @@ export class DiagnosticEngine {
         }' supports editions [${adapter.manifest.targetEditions.join(
           ", ",
         )}], but this installation is edition '${editionId}'.`,
+        modRejectionMessage: {
+          key: "unified_library::service::modding::edition_unsupported",
+          values: {
+            adapter: adapter.manifest.id,
+            edition: editionId,
+            supported: adapter.manifest.targetEditions.join(", "),
+          },
+        },
       };
     }
 
@@ -241,6 +287,13 @@ export class DiagnosticEngine {
         modRejectionReason: `Adapter declared 'mod-types' capability as unsupported: ${
           modTypesDesc.unsupportedReason ?? "Reason not specified."
         }`,
+        modRejectionMessage: {
+          key: "unified_library::service::modding::capability_unsupported",
+          values: {
+            capability: "mod-types",
+            reason: modTypesDesc.unsupportedReason ?? "Reason not specified.",
+          },
+        },
       };
     }
 
@@ -257,6 +310,13 @@ export class DiagnosticEngine {
         modRejectionReason: `Adapter declared 'deployment-targets' capability as unsupported: ${
           deployDesc.unsupportedReason ?? "Reason not specified."
         }`,
+        modRejectionMessage: {
+          key: "unified_library::service::modding::capability_unsupported",
+          values: {
+            capability: "deployment-targets",
+            reason: deployDesc.unsupportedReason ?? "Reason not specified.",
+          },
+        },
       };
     }
 
@@ -271,6 +331,10 @@ export class DiagnosticEngine {
         unsupportedCapabilities,
         canAcceptMods: false,
         modRejectionReason: `Install path '${installPath}' does not exist on disk. Cannot stage or deploy mods.`,
+        modRejectionMessage: {
+          key: "unified_library::service::modding::install_path_missing",
+          values: { path: installPath },
+        },
       };
     }
 
@@ -284,6 +348,10 @@ export class DiagnosticEngine {
         unsupportedCapabilities,
         canAcceptMods: false,
         modRejectionReason: `Game directory '${installPath}' is read-only. Mod deployment requires write permissions.`,
+        modRejectionMessage: {
+          key: "unified_library::service::modding::install_path_read_only",
+          values: { path: installPath },
+        },
       };
     }
 
@@ -318,10 +386,19 @@ export class DiagnosticEngine {
       return {
         status: "missing-executable",
         message: `Game executable missing at '${installation.executablePath}'.`,
+        messageDescriptor: {
+          key: "unified_library::service::compatibility::missing_executable",
+          values: { path: installation.executablePath },
+        },
         remedies: [
           "Verify game files via Steam / Heroic / Lutris.",
           "Check whether game was relocated to another disk.",
           "Set executable path override in manual corrections.",
+        ],
+        remedyDescriptors: [
+          { key: "unified_library::service::remedies::verify_files" },
+          { key: "unified_library::service::remedies::check_relocation" },
+          { key: "unified_library::service::remedies::set_executable" },
         ],
       };
     }
@@ -334,9 +411,16 @@ export class DiagnosticEngine {
         return {
           status: "needs-prefix",
           message: "Proton/Wine prefix directory is missing or uninitialized.",
+          messageDescriptor: {
+            key: "unified_library::service::compatibility::needs_prefix",
+          },
           remedies: [
             "Launch the game once from the store client to generate the prefix.",
             "Configure a custom prefixPath under manual corrections.",
+          ],
+          remedyDescriptors: [
+            { key: "unified_library::service::remedies::initialize_prefix" },
+            { key: "unified_library::service::remedies::set_prefix" },
           ],
         };
       }
@@ -345,9 +429,16 @@ export class DiagnosticEngine {
         return {
           status: "needs-runtime",
           message: "No Proton runtime or Wine binary configured.",
+          messageDescriptor: {
+            key: "unified_library::service::compatibility::needs_runtime",
+          },
           remedies: [
             "Select an installed Proton version in game settings.",
             "Install Proton Experimental or GE-Proton.",
+          ],
+          remedyDescriptors: [
+            { key: "unified_library::service::remedies::select_runtime" },
+            { key: "unified_library::service::remedies::install_runtime" },
           ],
         };
       }
@@ -357,14 +448,18 @@ export class DiagnosticEngine {
       return {
         status: "degraded",
         message: launch.launchExplanation,
+        messageDescriptor: launch.launchExplanationMessage,
         remedies: launch.blockingReasons,
+        remedyDescriptors: launch.blockingReasonMessages,
       };
     }
 
     return {
       status: "ready",
       message: "Ready for launch and mod management.",
+      messageDescriptor: { key: "unified_library::service::compatibility::ready" },
       remedies: [],
+      remedyDescriptors: [],
     };
   }
 
@@ -383,14 +478,24 @@ export class DiagnosticEngine {
     checks.push({
       domain: "filesystem",
       check: "Executable presence",
+      checkDescriptor: { key: "unified_library::service::report::checks::executable" },
       passed: execExists,
       severity: execExists ? "info" : "error",
       message: execExists
         ? `Executable exists at '${installation.executablePath}'.`
         : `Executable not found at '${installation.executablePath}'.`,
+      messageDescriptor: {
+        key: execExists
+          ? "unified_library::service::report::executable_found"
+          : "unified_library::service::report::executable_missing",
+        values: { path: installation.executablePath },
+      },
       resolutionHint: execExists
         ? undefined
         : "Re-verify files with launcher or configure a manual override.",
+      resolutionDescriptor: execExists
+        ? undefined
+        : { key: "unified_library::service::remedies::verify_or_override" },
     });
 
     // Prefix check
@@ -404,14 +509,24 @@ export class DiagnosticEngine {
       checks.push({
         domain: "runtime",
         check: "Prefix validity",
+        checkDescriptor: { key: "unified_library::service::report::checks::prefix" },
         passed: prefixExists,
         severity: prefixExists ? "info" : "error",
         message: prefixExists
           ? `Prefix verified at '${installation.prefixPath}'.`
           : `Prefix directory missing or invalid: '${installation.prefixPath ?? "none"}'.`,
+        messageDescriptor: {
+          key: prefixExists
+            ? "unified_library::service::report::prefix_valid"
+            : "unified_library::service::report::prefix_invalid",
+          values: { path: installation.prefixPath ?? "none" },
+        },
         resolutionHint: prefixExists
           ? undefined
           : "Launch the game once through Steam or assign a valid prefix path.",
+        resolutionDescriptor: prefixExists
+          ? undefined
+          : { key: "unified_library::service::remedies::initialize_or_set_prefix" },
       });
     }
 
@@ -419,14 +534,24 @@ export class DiagnosticEngine {
     checks.push({
       domain: "modding",
       check: "Game adapter availability",
+      checkDescriptor: { key: "unified_library::service::report::checks::adapter" },
       passed: modSupport.canAcceptMods,
       severity: modSupport.canAcceptMods ? "info" : "warning",
       message: modSupport.canAcceptMods
         ? `Active adapter '${modSupport.adapterName}' supports mod deployment.`
         : (modSupport.modRejectionReason ?? "Cannot accept mods."),
+      messageDescriptor: modSupport.canAcceptMods
+        ? {
+            key: "unified_library::service::report::adapter_ready",
+            values: { adapter: modSupport.adapterName ?? "unknown" },
+          }
+        : modSupport.modRejectionMessage,
       resolutionHint: modSupport.canAcceptMods
         ? undefined
         : "Install or enable a game adapter declaring 'mod-types' and 'deployment-targets' capabilities.",
+      resolutionDescriptor: modSupport.canAcceptMods
+        ? undefined
+        : { key: "unified_library::service::remedies::install_or_enable_adapter" },
     });
 
     const summary = `Diagnostic summary: Launch=${launch.canLaunch ? "Ready" : "Blocked"}, Mods=${
@@ -442,6 +567,14 @@ export class DiagnosticEngine {
       canAcceptMods: modSupport.canAcceptMods,
       checks,
       summary,
+      summaryDescriptor: {
+        key: `unified_library::service::report::summary_${
+          launch.canLaunch ? "launch_ready" : "launch_blocked"
+        }_${modSupport.canAcceptMods ? "mods_accepted" : "mods_blocked"}`,
+        values: {
+          issues: checks.filter((check) => !check.passed).length,
+        },
+      },
     };
   }
 }

@@ -1,6 +1,7 @@
 import * as path from "node:path";
 
-import React, { useCallback, useMemo, useReducer } from "react";
+import { getErrorMessageOrDefault } from "@vortex/shared";
+import React, { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { shallowEqual, useDispatch, useSelector } from "react-redux";
 
 import { useExtensionContext } from "../../../ExtensionProvider";
@@ -15,33 +16,84 @@ import { showError } from "../../../util/message";
 import StarterInfo from "../../../util/StarterInfo";
 import { Page } from "../../../views/components/Page/Page";
 import { UnifiedLibraryView } from "../../../views/UnifiedLibraryView";
+import { removeUnifiedLibraryCorrection, setUnifiedLibraryCorrection } from "../actions/settings";
+import type { IQuickDiscoveryResult } from "../types/IQuickDiscoveryResult";
+
+const EMPTY_CORRECTIONS = {};
 
 const selectKnownGames = (state: IState) => state.session.gameMode.known ?? [];
 const selectDiscoveredGames = (state: IState) => state.settings.gameMode.discovered ?? {};
 const selectProfiles = (state: IState) => state.persistent.profiles ?? {};
+const selectDiscoveryRunning = (state: IState) => state.session.discovery.running;
+const selectLibraryCorrections = (state: IState) =>
+  state.settings.gameMode.unifiedLibraryCorrections ?? EMPTY_CORRECTIONS;
 
 /**
  * Production bridge for the experimental Lotrex library. It deliberately consumes the existing
  * Vortex discovery/profile/launch paths while the new contracts mature behind them.
  */
-export const UnifiedGameLibraryPage = () => {
+export const UnifiedGameLibraryPage = ({
+  active,
+  pageId,
+}: {
+  active?: boolean;
+  pageId?: string;
+}) => {
   const dispatch = useDispatch();
   const extensions = useExtensionContext();
   const api = extensions.getApi();
   const knownGames = useSelector(selectKnownGames, shallowEqual);
   const discoveredGames = useSelector(selectDiscoveredGames, shallowEqual);
   const profiles = useSelector(selectProfiles, shallowEqual);
+  const discoveryRunning = useSelector(selectDiscoveryRunning);
+  const persistedCorrections = useSelector(selectLibraryCorrections, shallowEqual);
+  const [refreshRequested, setRefreshRequested] = useState(false);
+  const [refreshError, setRefreshError] = useState<string>();
   const [correctionRevision, refreshCorrections] = useReducer((value: number) => value + 1, 0);
   const service = useMemo(() => new UnifiedLibraryService(), []);
+
+  useEffect(() => {
+    service.manualCorrections.replaceCorrections(persistedCorrections);
+    refreshCorrections();
+  }, [persistedCorrections, service]);
 
   const bridge = useMemo(
     () => buildLegacyUnifiedLibrary(knownGames, discoveredGames, profiles),
     [knownGames, discoveredGames, profiles],
   );
-  const items = useMemo(
-    () => service.buildLibrary(bridge.installations, bridge.adapterRegistry),
-    [bridge, correctionRevision, service],
-  );
+  const libraryResult = useMemo(() => {
+    try {
+      return {
+        error: undefined,
+        items: service.buildLibrary(bridge.installations, bridge.adapterRegistry),
+      };
+    } catch (error) {
+      return {
+        error: getErrorMessageOrDefault(error),
+        items: [],
+      };
+    }
+  }, [bridge, correctionRevision, service]);
+
+  const refreshLibrary = useCallback(() => {
+    setRefreshRequested(true);
+    setRefreshError(undefined);
+    try {
+      api.events.emit(
+        "start-quick-discovery",
+        (_gameIds: string[], result?: IQuickDiscoveryResult) => {
+          setRefreshRequested(false);
+          if (result?.status === "failed") {
+            setRefreshError(result.error.message);
+          }
+        },
+      );
+    } catch (error) {
+      setRefreshRequested(false);
+      setRefreshError(getErrorMessageOrDefault(error));
+      showError(dispatch, "Failed to refresh the game library", error, { allowReport: true });
+    }
+  }, [api.events, dispatch]);
 
   const launch = useCallback(
     (item: IUnifiedLibraryItem) => {
@@ -87,26 +139,35 @@ export const UnifiedGameLibraryPage = () => {
       );
       if (!installation) return;
       service.manualCorrections.applyCorrection(installation, overrides, reason);
+      const persistedRecord = service.manualCorrections.getPersistableCorrection(itemId);
+      if (persistedRecord !== null) {
+        dispatch(setUnifiedLibraryCorrection(persistedRecord));
+      }
       refreshCorrections();
     },
-    [bridge.installations, service],
+    [bridge.installations, dispatch, service],
   );
 
   const revertCorrection = useCallback(
     (itemId: string) => {
       service.manualCorrections.revertCorrection(itemId);
+      dispatch(removeUnifiedLibraryCorrection(itemId));
       refreshCorrections();
     },
-    [service],
+    [dispatch, service],
   );
 
   return (
-    <Page isFullWidth pageId="lotrex-game-library">
+    <Page active={active} isFullWidth pageId={pageId ?? "lotrex-game-library"}>
       <UnifiedLibraryView
-        items={items}
+        error={libraryResult.error ?? refreshError}
+        isLoading={(discoveryRunning || refreshRequested) && libraryResult.items.length === 0}
+        isRefreshing={(discoveryRunning || refreshRequested) && libraryResult.items.length > 0}
+        items={libraryResult.items}
         service={service}
         onApplyCorrection={applyCorrection}
         onLaunch={launch}
+        onRefresh={refreshLibrary}
         onRevertCorrection={revertCorrection}
       />
     </Page>

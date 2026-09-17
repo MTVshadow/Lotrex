@@ -1,6 +1,7 @@
 import { createAction } from "redux-act";
 
 import type { IDiscoveredTool } from "../../../types/IDiscoveredTool";
+import type { IManualCorrectionRecord } from "../../../util/linux/unifiedLibrary/contracts";
 import type { IDiscoveryResult } from "../types/IDiscoveryResult";
 
 /**
@@ -78,3 +79,13 @@ export const setPickerLayout = createAction(
 
 export const setSortManaged = createAction("SET_SORT_MANAGED", (order: string) => order);
 export const setSortUnmanaged = createAction("SET_SORT_UNMANAGED", (order: string) => order);
+
+export const setUnifiedLibraryCorrection = createAction(
+  "SET_UNIFIED_LIBRARY_CORRECTION",
+  (record: IManualCorrectionRecord) => record,
+);
+
+export const removeUnifiedLibraryCorrection = createAction(
+  "REMOVE_UNIFIED_LIBRARY_CORRECTION",
+  (installationId: string) => installationId,
+);

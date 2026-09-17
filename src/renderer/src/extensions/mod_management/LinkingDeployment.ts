@@ -46,6 +46,12 @@ import {
   type IDeploymentFileOperation,
   recordPlannedFileOperations,
 } from "./util/deploymentJournal";
+import { assertLinuxHardlinkPlanSafe } from "./util/linuxHardlinkSafety";
+import {
+  attestUnmanagedCriticalBaseline,
+  ensureCriticalDeploymentBaseline,
+} from "./util/protectedBaseline";
+import { offerProtectedBaselineRecovery } from "./util/protectedBaselineRecoveryUI";
 
 export interface IDeployment {
   [relPath: string]: IDeployedFile;
@@ -261,6 +267,13 @@ abstract class LinkingActivator implements IDeploymentMethod {
           })
         : [];
 
+    const plannedTargetPaths = Object.values(context.newDeployment).map((entry) =>
+      path.join(entry.target || "", entry.relPath),
+    );
+    const previousTargetPaths = Object.values(context.previousDeployment).map((entry) =>
+      path.join(entry.target || "", entry.relPath),
+    );
+
     const removalOperation = (key: string, restoreBackup: boolean): IDeploymentFileOperation => {
       const entry = context.previousDeployment[key];
       const targetPath = path.join(dataPath, entry.target || "", entry.relPath);
@@ -290,6 +303,16 @@ abstract class LinkingActivator implements IDeploymentMethod {
 
     return (
       Promise.resolve()
+        .then(() => assertLinuxHardlinkPlanSafe(this.id, process.platform, plannedTargetPaths))
+        .then(() =>
+          ensureCriticalDeploymentBaseline({
+            gameId,
+            previousManagedRelativePaths: previousTargetPaths,
+            relativePaths: plannedTargetPaths,
+            stagingPath: installationPath,
+            targetRoot: dataPath,
+          }),
+        )
         .then(() => {
           if (caseCollisions.length > 0) {
             throw new CaseCollisionError(caseCollisions);
@@ -406,6 +429,31 @@ abstract class LinkingActivator implements IDeploymentMethod {
                 .then(() => progress()),
             100,
           ),
+        )
+        .then(() =>
+          attestUnmanagedCriticalBaseline(
+            {
+              gameId,
+              relativePaths: plannedTargetPaths,
+              stagingPath: installationPath,
+              targetRoot: dataPath,
+            },
+            plannedTargetPaths,
+          ).catch((err: unknown) => {
+            if (getErrorCode(err) !== "EBASELINEATTESTATION") throw err;
+            const files = Array.isArray(err?.["files"]) ? err["files"] : [];
+            return offerProtectedBaselineRecovery(
+              this.mApi,
+              {
+                gameId,
+                relativePaths: plannedTargetPaths,
+                stagingPath: installationPath,
+                targetRoot: dataPath,
+              },
+              plannedTargetPaths,
+              files,
+            );
+          }),
         )
         .then(() => {
           if (errorCount > 0) {

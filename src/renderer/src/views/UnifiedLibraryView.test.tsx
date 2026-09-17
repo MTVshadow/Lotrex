@@ -146,8 +146,8 @@ describe("UnifiedLibraryView Component (Phase 4)", () => {
     expect(screen.getByTestId("launch-status-item-2")).toHaveTextContent("Launch Blocked");
 
     // Mod support status
-    expect(screen.getByTestId("adapter-support-item-1")).toHaveTextContent("SUPPORTED");
-    expect(screen.getByTestId("adapter-support-item-2")).toHaveTextContent("UNSUPPORTED");
+    expect(screen.getByTestId("adapter-support-item-1")).toHaveTextContent("Supported");
+    expect(screen.getByTestId("adapter-support-item-2")).toHaveTextContent("Unsupported");
 
     // Duplicate badge on second item
     expect(screen.getByTestId("duplicate-badge-item-2")).toHaveTextContent("Duplicate (1/2)");
@@ -174,6 +174,46 @@ describe("UnifiedLibraryView Component (Phase 4)", () => {
 
     expect(screen.queryByText("Skyrim Special Edition")).not.toBeInTheDocument();
     expect(screen.getByText("The Witcher 3 GOTY")).toBeInTheDocument();
+  });
+
+  it("distinguishes loading, empty-library, and filtered-empty states", async () => {
+    const { rerender } = render(<UnifiedLibraryView isLoading items={[]} />);
+
+    expect(screen.getByTestId("library-loading-placeholder")).toBeInTheDocument();
+    expect(screen.queryByTestId("empty-library-placeholder")).not.toBeInTheDocument();
+
+    rerender(<UnifiedLibraryView items={[]} />);
+    expect(screen.getByTestId("empty-library-placeholder")).toBeInTheDocument();
+
+    const item = createMockItem("1", "skyrimse", "se", "Skyrim SE", true, true);
+    rerender(<UnifiedLibraryView items={[item]} />);
+    await userEvent.type(screen.getByTestId("library-search-input"), "not-present");
+
+    expect(screen.getByTestId("no-filter-results-placeholder")).toBeInTheDocument();
+    expect(screen.queryByTestId("empty-library-placeholder")).not.toBeInTheDocument();
+  });
+
+  it("keeps existing results visible while refreshing", () => {
+    const item = createMockItem("1", "skyrimse", "se", "Skyrim SE", true, true);
+
+    render(<UnifiedLibraryView isRefreshing items={[item]} />);
+
+    expect(screen.getByTestId("library-refreshing-status")).toBeInTheDocument();
+    expect(screen.getByText("Skyrim SE")).toBeInTheDocument();
+  });
+
+  it("shows a recoverable error state", async () => {
+    const onRefresh = vi.fn();
+
+    render(
+      <UnifiedLibraryView error="Adapter registry unavailable" items={[]} onRefresh={onRefresh} />,
+    );
+
+    expect(screen.getByTestId("library-error-placeholder")).toHaveTextContent(
+      "Adapter registry unavailable",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
   it("filters items by duplicate filter", async () => {
@@ -246,10 +286,53 @@ describe("UnifiedLibraryView Component (Phase 4)", () => {
     expect(screen.getByTestId("diagnostic-mod-explanation")).toHaveTextContent(
       "No compatible adapter active or mod-types unsupported.",
     );
+    expect(screen.getByTestId("diagnostic-full-report")).toBeInTheDocument();
+    expect(screen.getByTestId("diagnostic-check-filesystem")).toHaveTextContent(
+      "Executable presence",
+    );
+    expect(screen.getByTestId("diagnostic-check-runtime")).toHaveTextContent("Prefix validity");
+    expect(screen.getByTestId("diagnostic-check-modding")).toHaveTextContent(
+      "Game adapter availability",
+    );
+    expect(screen.getByTestId("diagnostic-report-summary")).toHaveTextContent(
+      "launch blocked, mods blocked",
+    );
 
     // Close modal
     await userEvent.click(screen.getByTestId("btn-close-diagnostics"));
     expect(screen.queryByTestId("diagnostics-modal")).not.toBeInTheDocument();
+  });
+
+  it("closes diagnostics with Escape and restores focus to its trigger", async () => {
+    const item = createMockItem("1", "skyrimse", "se", "Skyrim SE", true, true);
+    render(<UnifiedLibraryView items={[item]} />);
+    const trigger = screen.getByTestId("diagnostics-button-1");
+
+    await userEvent.click(trigger);
+    expect(
+      screen.getByRole("dialog", { name: "Diagnostic report: Skyrim SE" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("btn-close-diagnostics")).toHaveFocus();
+
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByTestId("diagnostics-modal")).not.toBeInTheDocument();
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it("traps reverse tab navigation in correction dialog and restores focus after Escape", async () => {
+    const item = createMockItem("1", "skyrimse", "se", "Skyrim SE", true, true);
+    render(<UnifiedLibraryView items={[item]} />);
+    const trigger = screen.getByTestId("manual-correction-button-1");
+
+    await userEvent.click(trigger);
+    expect(screen.getByTestId("input-override-executable")).toHaveFocus();
+
+    await userEvent.keyboard("{Shift>}{Tab}{/Shift}");
+    expect(screen.getByTestId("btn-save-correction")).toHaveFocus();
+
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByTestId("manual-correction-modal")).not.toBeInTheDocument();
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
   it("opens manual correction modal, allows entering overrides, and calls onApplyCorrection", async () => {

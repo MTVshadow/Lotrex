@@ -72,6 +72,16 @@ export class DuplicateAnalyzer {
           totalInGroup: Math.max(inst.discoverySources.length, pathGroup.length),
           otherLocations: [],
           explanation,
+          explanationMessage:
+            launchers.length > 1
+              ? {
+                  key: "unified_library::service::duplicates::multiple_launchers",
+                  values: { launchers: launchers.join(", "), path: inst.installPath },
+                }
+              : {
+                  key: "unified_library::service::duplicates::same_path",
+                  values: { path: inst.installPath },
+                },
         });
         continue;
       }
@@ -95,6 +105,17 @@ export class DuplicateAnalyzer {
           } of ${editionGroup.length}). Installed at ${
             inst.installPath
           }. Other copy at: ${otherLocations.join(", ")}. Each copy maintains independent profile bindings.`,
+          explanationMessage: {
+            key: "unified_library::service::duplicates::multiple_installations",
+            values: {
+              copy: index + 1,
+              edition: inst.identity.editionId,
+              gameId: inst.identity.gameId,
+              locations: otherLocations.join(", "),
+              path: inst.installPath,
+              total: editionGroup.length,
+            },
+          },
         });
         continue;
       }
@@ -118,6 +139,14 @@ export class DuplicateAnalyzer {
           explanation: `Distinct edition '${inst.identity.editionId}' of ${inst.identity.gameId}. Kept strictly isolated from other editions (${otherEditions.join(
             ", ",
           )}) to prevent save/mod corruption.`,
+          explanationMessage: {
+            key: "unified_library::service::duplicates::distinct_edition",
+            values: {
+              edition: inst.identity.editionId,
+              gameId: inst.identity.gameId,
+              otherEditions: otherEditions.join(", "),
+            },
+          },
         });
         continue;
       }
@@ -131,6 +160,7 @@ export class DuplicateAnalyzer {
         totalInGroup: 1,
         otherLocations: [],
         explanation: "Unique installation on host system.",
+        explanationMessage: { key: "unified_library::service::duplicates::unique" },
       });
     }
 

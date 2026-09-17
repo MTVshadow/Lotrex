@@ -53,6 +53,7 @@ vi.mock("../../util/fsAtomic", async () => {
 });
 
 describe("synthetic Skyrim deployment lifecycle", () => {
+  const linuxIt = process.platform === "linux" ? it : it.skip;
   let root: string;
   let stagingPath: string;
   let dataPath: string;
@@ -151,6 +152,25 @@ describe("synthetic Skyrim deployment lifecycle", () => {
     await expect(fs.stat(path.join(dataPath, "Synthetic.esp"))).rejects.toMatchObject({
       code: "ENOENT",
     });
+  });
+
+  linuxIt("blocks a critical binary before the deployment mutates the game directory", async () => {
+    const normalize = (value: string) => value.toLocaleLowerCase("en-US");
+    const blacklist = { has: () => false } as unknown as BlacklistSet;
+    const binaryModPath = path.join(stagingPath, "binary-mod");
+    const targetPath = path.join(dataPath, "scripts", "Script_Game.dll");
+    await fs.mkdir(path.join(binaryModPath, "scripts"), { recursive: true });
+    await fs.writeFile(path.join(binaryModPath, "scripts", "Script_Game.dll"), "patched");
+
+    await activator.prepare(dataPath, true, [], normalize);
+    await activator.activate(binaryModPath, "binary-mod", "", blacklist);
+
+    await expect(activator.finalize("gothic3", dataPath, stagingPath)).rejects.toMatchObject({
+      code: "ELINUXHARDLINKCRITICAL",
+      files: [path.join("scripts", "Script_Game.dll")],
+    });
+    await expect(fs.stat(targetPath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.stat(targetPath + ".vortex_backup")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("reports case-collision scan progress before applying files", async () => {

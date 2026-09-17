@@ -293,6 +293,44 @@ describe("Unified Library Domain & Service (Phase 4)", () => {
       const effective = manager.getEffectiveInstallation(inst);
       expect(effective.executablePath).toBe("/games/Witcher3/bin/witcher3.exe");
     });
+
+    it("restores valid persisted corrections and rejects malformed records", () => {
+      const manager = new ManualCorrectionManager();
+      manager.replaceCorrections({
+        "inst-valid": {
+          correctedAt: 123,
+          installationId: "inst-valid",
+          originalData: {
+            executablePath: "/games/valid/game.exe",
+            installPath: "/games/valid",
+          },
+          overrides: {
+            customEnvironment: { SECRET_TOKEN: "must-not-persist" },
+            customLaunchArgs: ["-windowed"],
+            executablePath: "/games/valid/custom.exe",
+          },
+        },
+        "inst-invalid": {
+          correctedAt: "yesterday",
+          installationId: "different-id",
+          originalData: {},
+          overrides: {},
+        },
+      });
+
+      const restored = manager.getCorrection("inst-valid");
+      expect(restored).toEqual(
+        expect.objectContaining({
+          installationId: "inst-valid",
+          overrides: expect.objectContaining({
+            customLaunchArgs: ["-windowed"],
+            executablePath: "/games/valid/custom.exe",
+          }),
+        }),
+      );
+      expect(restored?.overrides).not.toHaveProperty("customEnvironment");
+      expect(manager.getCorrection("inst-invalid")).toBeNull();
+    });
   });
 
   describe("DiagnosticEngine and Mod Readiness Rules", () => {
@@ -321,7 +359,15 @@ describe("Unified Library Domain & Service (Phase 4)", () => {
       expect(item.launchAvailability.blockingReasons[0]).toContain(
         "Primary executable does not exist",
       );
+      expect(item.launchAvailability.blockingReasonMessages?.[0]).toEqual({
+        key: "unified_library::service::launch::missing_executable",
+        values: { path: "/games/SkyrimSE/SkyrimSE.exe" },
+      });
       expect(item.compatibilityStatus.status).toBe("missing-executable");
+      expect(item.compatibilityStatus.messageDescriptor?.key).toBe(
+        "unified_library::service::compatibility::missing_executable",
+      );
+      expect(item.compatibilityStatus.remedyDescriptors).toHaveLength(3);
     });
 
     it("reports launch blocked when Proton prefix is missing for Windows game", () => {
@@ -347,7 +393,13 @@ describe("Unified Library Domain & Service (Phase 4)", () => {
       const item = service.buildLibraryItem(inst, [inst], registry);
       expect(item.launchAvailability.canLaunch).toBe(false);
       expect(item.launchAvailability.blockingReasons[0]).toContain("Wine/Proton prefix is missing");
+      expect(item.launchAvailability.blockingReasonMessages?.[0]?.key).toBe(
+        "unified_library::service::launch::missing_prefix",
+      );
       expect(item.compatibilityStatus.status).toBe("needs-prefix");
+      expect(item.compatibilityStatus.messageDescriptor?.key).toBe(
+        "unified_library::service::compatibility::needs_prefix",
+      );
     });
 
     it("reports mod support as unsupported when NO adapter is registered (Scope Rule)", () => {
@@ -379,6 +431,10 @@ describe("Unified Library Domain & Service (Phase 4)", () => {
       expect(item.adapterSupport.modRejectionReason).toContain(
         "No compatible game adapter is registered for game 'unsupported_game'",
       );
+      expect(item.adapterSupport.modRejectionMessage).toEqual({
+        key: "unified_library::service::modding::adapter_missing",
+        values: { gameId: "unsupported_game" },
+      });
     });
 
     it("reports mod support blocked when adapter declares mod-types as unsupported", () => {
@@ -435,6 +491,9 @@ describe("Unified Library Domain & Service (Phase 4)", () => {
       expect(item.adapterSupport.modRejectionReason).toContain(
         "Encrypted PAK archives cannot be unpacked",
       );
+      expect(item.adapterSupport.modRejectionMessage?.key).toBe(
+        "unified_library::service::modding::capability_unsupported",
+      );
     });
 
     it("verifies ready status when all launch and adapter criteria pass", () => {
@@ -465,12 +524,20 @@ describe("Unified Library Domain & Service (Phase 4)", () => {
       expect(item.adapterSupport.canAcceptMods).toBe(true);
       expect(item.adapterSupport.supportLevel).toBe("community-tested");
       expect(item.compatibilityStatus.status).toBe("ready");
+      expect(item.compatibilityStatus.messageDescriptor?.key).toBe(
+        "unified_library::service::compatibility::ready",
+      );
 
       // Verify diagnostic report
       const report = service.getDiagnosticReport(item);
       expect(report.canLaunch).toBe(true);
       expect(report.canAcceptMods).toBe(true);
       expect(report.checks.every((c) => c.passed)).toBe(true);
+      expect(report.checks.every((check) => check.checkDescriptor !== undefined)).toBe(true);
+      expect(report.checks.every((check) => check.messageDescriptor !== undefined)).toBe(true);
+      expect(report.summaryDescriptor?.key).toBe(
+        "unified_library::service::report::summary_launch_ready_mods_accepted",
+      );
     });
   });
 

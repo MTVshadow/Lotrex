@@ -285,9 +285,13 @@ async function main(): Promise<void> {
     NODE_OPTIONS + ` --max-http-header-size=${HTTP_HEADER_SIZE}` + " --no-force-async-hooks-checks";
 
   if (mainArgs.disableGPU) {
+    // Electron expects switch names without the leading "--".  Supplying
+    // the dashes creates an unrecognised command-line switch and leaves the
+    // GPU process available to crash on problematic Linux EGL/GBM stacks.
+    // Keep the software rasterizer enabled: it is the safe fallback when
+    // hardware acceleration is deliberately disabled.
     app.disableHardwareAcceleration();
-    app.commandLine.appendSwitch("--disable-software-rasterizer");
-    app.commandLine.appendSwitch("--disable-gpu");
+    app.commandLine.appendSwitch("disable-gpu");
   }
 
   app.commandLine.appendSwitch("disable-features", "WidgetLayering");

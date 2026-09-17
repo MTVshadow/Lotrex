@@ -373,6 +373,32 @@ describe("DownloadManager", () => {
       await handle.promise.catch(() => {});
     });
 
+    it("does not start a download cancelled while it is queued", async () => {
+      using route = server.route(serveFile({ body: SMALL_FILE, acceptRanges: false }));
+      await using tmp = await makeTmpDir();
+      const manager = new DownloadManager({ concurrency: 1 });
+      using blockerRoute = server.route(
+        withHooks(serveFile({ body: SMALL_FILE, acceptRanges: false }), delayAt("onRequest", 200)),
+      );
+      const blocker = manager.download(
+        blockerRoute.url,
+        path.join(tmp.dir, "blocker"),
+        urlResolver,
+      );
+      const dest = path.join(tmp.dir, "output");
+      const handle = manager.download(route.url, dest, urlResolver);
+
+      expect(manager.numPending).toBe(1);
+      expect(handle.cancel().status).toBe("canceled");
+
+      blocker.cancel();
+      await blocker.promise.catch(() => {});
+      await handle.promise;
+
+      await expect(access(dest)).rejects.toThrow();
+      expect(handle.getState().status).toBe("canceled");
+    });
+
     it("does not throw when pause is called after the download has already completed", async () => {
       using route = server.route(serveFile({ body: SMALL_FILE, acceptRanges: false }));
       await using tmp = await makeTmpDir();

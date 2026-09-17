@@ -25,18 +25,19 @@ export interface IStoreQuery {
 }
 
 /** Normalized form of one store's IGame.queryArgs entry. */
-export type IQueryArgEntry = string | IStoreQuery | IStoreQuery[];
+export type IQueryArgEntry = string | IStoreQuery | Array<string | IStoreQuery>;
 
 /**
  * Normalize the polymorphic form `IGame.queryArgs` accepts (string app ID,
- * single query, or array) into a single array of IStoreQuery. Callers that
- * iterate per-store entries should funnel through this so the three forms
- * are handled in one place.
+ * single query, or array) into a single array of IStoreQuery. Arrays of app ID
+ * strings are accepted for compatibility with existing game extensions.
  */
 export function normalizeStoreQuery(raw: IQueryArgEntry | undefined): IStoreQuery[] {
   if (raw === undefined) return [];
   if (typeof raw === "string") return [{ id: raw }];
-  if (Array.isArray(raw)) return raw;
+  if (Array.isArray(raw)) {
+    return raw.map((entry) => (typeof entry === "string" ? { id: entry } : entry));
+  }
   return [raw];
 }
 

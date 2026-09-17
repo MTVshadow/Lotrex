@@ -325,7 +325,15 @@ export async function beginDeploymentOperation(
   input: IDeploymentOperationInput,
 ): Promise<IDeploymentJournalEntry> {
   assertLinuxPathLimits([input.stagingPath, journalPath(input.stagingPath), ...input.targetPaths]);
-  const previous = await readDeploymentJournal(input.stagingPath);
+  let previous = await readDeploymentJournal(input.stagingPath);
+  // All activators persist their complete mutation plan before touching managed
+  // files. An applying journal with no planned operations therefore represents a
+  // failure during validation/preparation (for example, a case-collision check),
+  // not a partially applied deployment. Retire it here so a harmless validation
+  // error cannot permanently block this staging folder across restarts.
+  if (previous?.phase === "applying" && (previous.fileOperations?.length ?? 0) === 0) {
+    previous = await rollbackApplyingDeployment(previous);
+  }
   if (previous !== undefined && previous.phase !== "committed") {
     const err = new Error(
       `Deployment operation ${previous.operationId} is incomplete at phase ${previous.phase}`,
@@ -745,8 +753,7 @@ export async function rollbackApplyingDeployment(
     (entry.operation !== "deploy" && entry.operation !== "purge") ||
     (!entry.deploymentMethod.includes("hardlink") &&
       !entry.deploymentMethod.includes("symlink") &&
-      !entry.deploymentMethod.includes("move")) ||
-    (entry.fileOperations?.length ?? 0) === 0
+      !entry.deploymentMethod.includes("move"))
   ) {
     throw new Error("This applying operation does not support automatic rollback");
   }
@@ -792,6 +799,24 @@ export function buildDeploymentRecoveryPlan(
       safe: true,
       reason:
         "Managed file changes and manifests completed; only the final commit marker is missing.",
+      affectedPaths: entry.targetPaths,
+    };
+  }
+  if (
+    entry.phase === "applying" &&
+    (entry.operation === "deploy" || entry.operation === "purge") &&
+    (entry.fileOperations?.length ?? 0) === 0 &&
+    (entry.deploymentMethod.includes("hardlink") ||
+      entry.deploymentMethod.includes("symlink") ||
+      entry.deploymentMethod.includes("move"))
+  ) {
+    return {
+      operationId: entry.operationId,
+      phase: entry.phase,
+      action: "rollback",
+      safe: true,
+      reason:
+        "The operation stopped before any managed file mutation was planned, so it can be safely retired.",
       affectedPaths: entry.targetPaths,
     };
   }

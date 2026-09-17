@@ -34,18 +34,20 @@ export function rankAutomaticDeploymentMethods(
   }
 
   if (platform === "linux") {
-    const hardlink = candidates.find(({ activator }) => activator.id === "hardlink_activator");
-    if (hardlink !== undefined) {
-      return {
-        activator: hardlink.activator,
-        reason: "Hardlinks are supported and staging shares a filesystem with the game.",
-      };
-    }
     const symlink = candidates.find(({ activator }) => activator.id.includes("symlink"));
     if (symlink !== undefined) {
       return {
         activator: symlink.activator,
-        reason: "Symlinks are supported; hardlink requirements were not met.",
+        reason:
+          "Symlinks avoid sharing file inodes between staging and the game and are the safer automatic Linux choice.",
+      };
+    }
+    const hardlink = candidates.find(({ activator }) => activator.id === "hardlink_activator");
+    if (hardlink !== undefined) {
+      return {
+        activator: hardlink.activator,
+        reason:
+          "No compatible symlink method is available; hardlinks remain restricted for executable and script files.",
       };
     }
   }

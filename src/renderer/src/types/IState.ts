@@ -12,6 +12,7 @@ import type { IHistoryPersistent, IHistoryState } from "../extensions/history_ma
 import type { IMod } from "../extensions/mod_management/types/IMod";
 import type { IProfile } from "../extensions/profile_management/types/IProfile";
 import type { IProtonRuntimePreference } from "../util/linux/protonRuntimeSelection";
+import type { IManualCorrectionRecord } from "../util/linux/unifiedLibrary/contracts";
 import type { ICollectionInstallState } from "./collections/ICollectionInstallSession";
 import type { ExtensionType, IAvailableExtension, IExtension } from "./extensions";
 import type { IAttributeState } from "./IAttributeState";
@@ -242,6 +243,7 @@ export interface ISettingsProfiles {
 
 export interface ISettingsGameMode {
   discovered: { [id: string]: IDiscoveryResult };
+  unifiedLibraryCorrections?: { [installationId: string]: IManualCorrectionRecord };
   searchPaths: string[];
   pickerLayout: "list" | "small" | "large";
   sortManaged: string;

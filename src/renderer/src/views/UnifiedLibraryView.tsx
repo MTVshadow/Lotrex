@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import type {
   ILibraryFilterCriteria,
@@ -7,7 +8,71 @@ import type {
 } from "../util/linux/unifiedLibrary/contracts";
 import { UnifiedLibraryService } from "../util/linux/unifiedLibrary/unifiedLibraryService";
 
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
+
+function useModalFocus(isOpen: boolean, onClose: () => void) {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    returnFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const modal = modalRef.current;
+    const initialFocus = modal?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ?? modal;
+    initialFocus?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || modal === null) return;
+
+      const focusable = Array.from(modal.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      if (focusable.length === 0) {
+        event.preventDefault();
+        modal.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      const returnTarget = returnFocusRef.current;
+      window.requestAnimationFrame(() => {
+        if (returnTarget?.isConnected) returnTarget.focus();
+      });
+    };
+  }, [isOpen, onClose]);
+
+  return modalRef;
+}
+
 export interface IUnifiedLibraryViewProps {
+  error?: string;
+  isLoading?: boolean;
+  isRefreshing?: boolean;
   items: IUnifiedLibraryItem[];
   service?: UnifiedLibraryService;
   onLaunch?: (item: IUnifiedLibraryItem) => void;
@@ -18,6 +83,7 @@ export interface IUnifiedLibraryViewProps {
   ) => void;
   onRevertCorrection?: (itemId: string) => void;
   onRequestDiagnostics?: (item: IUnifiedLibraryItem) => void;
+  onRefresh?: () => void;
 }
 
 /**
@@ -28,13 +94,22 @@ export interface IUnifiedLibraryViewProps {
  * explainable duplicate status, and non-destructive manual corrections.
  */
 export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
+  error,
+  isLoading = false,
+  isRefreshing = false,
   items,
   service = new UnifiedLibraryService(),
   onLaunch,
   onApplyCorrection,
   onRevertCorrection,
   onRequestDiagnostics,
+  onRefresh,
 }) => {
+  const { t } = useTranslation(["gamemode_management", "common"]);
+  const localizeMessage = (
+    message: { key: string; values?: Record<string, number | string> } | undefined,
+    fallback: string,
+  ) => (message === undefined ? fallback : t(message.key, message.values));
   // Filter state
   const [filterCriteria, setFilterCriteria] = useState<ILibraryFilterCriteria>({
     searchQuery: "",
@@ -61,11 +136,20 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
   const [correctionRuntime, setCorrectionRuntime] = useState("");
   const [correctionArgs, setCorrectionArgs] = useState("");
   const [correctionReason, setCorrectionReason] = useState("");
+  const closeDiagnostics = useCallback(() => setSelectedDiagnosticItem(null), []);
+  const closeCorrection = useCallback(() => setSelectedCorrectionItem(null), []);
+  const diagnosticsModalRef = useModalFocus(selectedDiagnosticItem !== null, closeDiagnostics);
+  const correctionModalRef = useModalFocus(selectedCorrectionItem !== null, closeCorrection);
 
   // Filtered items
   const filteredItems = useMemo(() => {
     return service.filterLibrary(items, filterCriteria);
   }, [items, service, filterCriteria]);
+  const selectedDiagnosticReport = useMemo(
+    () =>
+      selectedDiagnosticItem === null ? null : service.getDiagnosticReport(selectedDiagnosticItem),
+    [selectedDiagnosticItem, service],
+  );
 
   // Open correction modal with existing data
   const handleOpenCorrection = (item: IUnifiedLibraryItem) => {
@@ -126,11 +210,27 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
     >
       {/* Header and Filter Toolbar */}
       <header className="mb-6">
-        <h1 className="mb-2 text-2xl font-bold tracking-tight">Unified Game Library</h1>
-        <p className="text-sm text-slate-400">
-          Deduplicated game library across Steam, Heroic, Lutris, Bottles, and manual installs with
-          runtime compatibility and mod readiness.
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="mb-2 text-2xl font-bold tracking-tight">
+              {t("unified_library::header::title")}
+            </h1>
+            <p className="text-sm text-slate-400">{t("unified_library::header::description")}</p>
+          </div>
+          {onRefresh && (
+            <button
+              aria-busy={isRefreshing || isLoading}
+              className="rounded bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-slate-600 disabled:cursor-wait disabled:opacity-60"
+              data-testid="library-refresh-button"
+              disabled={isRefreshing || isLoading}
+              onClick={onRefresh}
+            >
+              {isRefreshing || isLoading
+                ? t("unified_library::actions::refreshing")
+                : t("unified_library::actions::refresh")}
+            </button>
+          )}
+        </div>
 
         {/* Filters */}
         <div className="mt-4 grid grid-cols-1 gap-3 rounded-lg border border-slate-700/60 bg-slate-800/60 p-4 md:grid-cols-4 lg:grid-cols-7">
@@ -140,13 +240,13 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
               htmlFor="search-input"
               className="mb-1 block text-xs font-semibold text-slate-400"
             >
-              Search Games
+              {t("unified_library::filters::search_label")}
             </label>
             <input
               id="search-input"
               type="text"
               data-testid="library-search-input"
-              placeholder="Filter by title, edition, path..."
+              placeholder={t("unified_library::filters::search_placeholder")}
               value={filterCriteria.searchQuery ?? ""}
               onChange={(e) =>
                 setFilterCriteria({
@@ -164,7 +264,7 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
               htmlFor="launcher-filter-select"
               className="mb-1 block text-xs font-semibold text-slate-400"
             >
-              Launcher
+              {t("unified_library::filters::launcher_label")}
             </label>
             <select
               id="launcher-filter-select"
@@ -178,12 +278,12 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
               }
               className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-200"
             >
-              <option value="all">All Launchers</option>
+              <option value="all">{t("unified_library::filters::all_launchers")}</option>
               <option value="steam">Steam</option>
               <option value="heroic">Heroic</option>
               <option value="lutris">Lutris</option>
               <option value="bottles">Bottles</option>
-              <option value="manual">Manual / Standalone</option>
+              <option value="manual">{t("unified_library::filters::manual_launcher")}</option>
             </select>
           </div>
 
@@ -193,7 +293,7 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
               htmlFor="runtime-filter-select"
               className="mb-1 block text-xs font-semibold text-slate-400"
             >
-              Runtime
+              {t("unified_library::filters::runtime_label")}
             </label>
             <select
               id="runtime-filter-select"
@@ -207,8 +307,8 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
               }
               className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-200"
             >
-              <option value="all">All Runtimes</option>
-              <option value="linux-native">Native Linux</option>
+              <option value="all">{t("unified_library::filters::all_runtimes")}</option>
+              <option value="linux-native">{t("unified_library::filters::native_linux")}</option>
               <option value="windows-proton">Proton</option>
               <option value="windows-wine">Wine</option>
             </select>
@@ -220,7 +320,7 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
               htmlFor="support-filter-select"
               className="mb-1 block text-xs font-semibold text-slate-400"
             >
-              Mod Support
+              {t("unified_library::filters::mod_support_label")}
             </label>
             <select
               id="support-filter-select"
@@ -234,11 +334,13 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
               }
               className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-200"
             >
-              <option value="all">All Levels</option>
-              <option value="supported">Supported</option>
-              <option value="community-tested">Community</option>
-              <option value="experimental">Experimental</option>
-              <option value="unsupported">Unsupported</option>
+              <option value="all">{t("unified_library::filters::all_levels")}</option>
+              <option value="supported">{t("unified_library::support::supported")}</option>
+              <option value="community-tested">
+                {t("unified_library::support::community_tested")}
+              </option>
+              <option value="experimental">{t("unified_library::support::experimental")}</option>
+              <option value="unsupported">{t("unified_library::support::unsupported")}</option>
             </select>
           </div>
 
@@ -248,7 +350,7 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
               htmlFor="launch-filter-select"
               className="mb-1 block text-xs font-semibold text-slate-400"
             >
-              Launch Readiness
+              {t("unified_library::filters::launch_readiness_label")}
             </label>
             <select
               id="launch-filter-select"
@@ -262,9 +364,9 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
               }
               className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-200"
             >
-              <option value="all">All States</option>
-              <option value="canLaunch">Ready to Launch</option>
-              <option value="blocked">Launch Blocked</option>
+              <option value="all">{t("unified_library::filters::all_states")}</option>
+              <option value="canLaunch">{t("unified_library::status::ready_to_launch")}</option>
+              <option value="blocked">{t("unified_library::status::launch_blocked")}</option>
             </select>
           </div>
 
@@ -274,7 +376,7 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
               htmlFor="duplicate-filter-select"
               className="mb-1 block text-xs font-semibold text-slate-400"
             >
-              Duplicates
+              {t("unified_library::filters::duplicates_label")}
             </label>
             <select
               id="duplicate-filter-select"
@@ -288,21 +390,67 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
               }
               className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-200"
             >
-              <option value="all">All Entries</option>
-              <option value="duplicates-only">Duplicates Only</option>
-              <option value="unique-only">Unique Only</option>
+              <option value="all">{t("unified_library::filters::all_entries")}</option>
+              <option value="duplicates-only">
+                {t("unified_library::filters::duplicates_only")}
+              </option>
+              <option value="unique-only">{t("unified_library::filters::unique_only")}</option>
             </select>
           </div>
         </div>
       </header>
 
       {/* Library Content Items */}
-      {filteredItems.length === 0 ? (
+      {error !== undefined ? (
         <div
-          data-testid="empty-library-placeholder"
-          className="rounded-lg border border-dashed border-slate-700 bg-slate-800/40 py-16 text-center"
+          className="rounded-lg border border-rose-800 bg-rose-950/50 p-6 text-center"
+          data-testid="library-error-placeholder"
+          role="alert"
         >
-          <p className="font-medium text-slate-400">No games match the specified criteria.</p>
+          <p className="font-semibold text-rose-200">{t("unified_library::error::title")}</p>
+          <p className="mt-1 text-sm text-rose-300">{t("unified_library::error::description")}</p>
+          <p className="mt-2 font-mono text-xs text-rose-400">{error}</p>
+          {onRefresh && (
+            <button
+              className="mt-4 rounded bg-rose-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-rose-700"
+              onClick={onRefresh}
+            >
+              {t("unified_library::actions::try_again")}
+            </button>
+          )}
+        </div>
+      ) : isLoading ? (
+        <div
+          aria-live="polite"
+          className="rounded-lg border border-slate-700 bg-slate-800/40 py-16 text-center"
+          data-testid="library-loading-placeholder"
+        >
+          <p className="font-medium text-slate-300">{t("unified_library::loading::title")}</p>
+          <p className="mt-1 text-sm text-slate-400">
+            {t("unified_library::loading::description")}
+          </p>
+        </div>
+      ) : items.length === 0 ? (
+        <div
+          className="rounded-lg border border-dashed border-slate-700 bg-slate-800/40 py-16 text-center"
+          data-testid="empty-library-placeholder"
+        >
+          <p className="font-medium text-slate-400">{t("unified_library::empty::no_games")}</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {t("unified_library::empty::no_games_description")}
+          </p>
+          {onRefresh && (
+            <button className="mt-3 text-xs text-blue-400 hover:underline" onClick={onRefresh}>
+              {t("unified_library::actions::refresh")}
+            </button>
+          )}
+        </div>
+      ) : filteredItems.length === 0 ? (
+        <div
+          className="rounded-lg border border-dashed border-slate-700 bg-slate-800/40 py-16 text-center"
+          data-testid="no-filter-results-placeholder"
+        >
+          <p className="font-medium text-slate-400">{t("unified_library::empty::no_matches")}</p>
           <button
             onClick={() =>
               setFilterCriteria({
@@ -318,11 +466,20 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
             }
             className="mt-3 text-xs text-blue-400 hover:underline"
           >
-            Reset all filters
+            {t("unified_library::empty::reset_filters")}
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4" data-testid="library-grid">
+        <div aria-busy={isRefreshing} className="grid grid-cols-1 gap-4" data-testid="library-grid">
+          {isRefreshing && (
+            <div
+              aria-live="polite"
+              className="rounded border border-blue-800 bg-blue-950/50 px-3 py-2 text-xs text-blue-200"
+              data-testid="library-refreshing-status"
+            >
+              {t("unified_library::loading::refreshing")}
+            </div>
+          )}
           {filteredItems.map((item) => {
             const canLaunch = item.launchAvailability.canLaunch;
             const canAcceptMods = item.adapterSupport.canAcceptMods;
@@ -376,11 +533,17 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
                             ? "border border-amber-800 bg-amber-950 text-amber-300"
                             : "border border-cyan-800 bg-cyan-950 text-cyan-300"
                         }`}
-                        title={item.duplicateSummary.explanation}
+                        title={localizeMessage(
+                          item.duplicateSummary.explanationMessage,
+                          item.duplicateSummary.explanation,
+                        )}
                       >
                         {item.duplicateSummary.category === "multi-install"
-                          ? `Duplicate (${item.duplicateSummary.duplicateIndex}/${item.duplicateSummary.totalInGroup})`
-                          : "Multi-Launcher"}
+                          ? t("unified_library::badges::duplicate", {
+                              current: item.duplicateSummary.duplicateIndex,
+                              total: item.duplicateSummary.totalInGroup,
+                            })
+                          : t("unified_library::badges::multi_launcher")}
                       </span>
                     )}
 
@@ -389,9 +552,12 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
                       <span
                         data-testid={`edition-isolation-badge-${item.id}`}
                         className="rounded border border-indigo-800 bg-indigo-950 px-2 py-0.5 text-xs text-indigo-300"
-                        title={item.duplicateSummary.explanation}
+                        title={localizeMessage(
+                          item.duplicateSummary.explanationMessage,
+                          item.duplicateSummary.explanation,
+                        )}
                       >
-                        Isolated Edition
+                        {t("unified_library::badges::isolated_edition")}
                       </span>
                     )}
 
@@ -401,14 +567,15 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
                         data-testid={`manual-correction-badge-${item.id}`}
                         className="rounded border border-emerald-800 bg-emerald-950 px-2 py-0.5 text-xs font-medium text-emerald-300"
                       >
-                        User Override Active
+                        {t("unified_library::badges::user_override_active")}
                       </span>
                     )}
                   </div>
 
                   {/* Path & Details */}
                   <div className="mt-2 truncate font-mono text-xs text-slate-400">
-                    <span className="text-slate-500">Path:</span> {item.installPath}
+                    <span className="text-slate-500">{t("unified_library::labels::path")}:</span>{" "}
+                    {item.installPath}
                   </div>
 
                   {/* Status indicators */}
@@ -425,7 +592,11 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
                           canLaunch ? "bg-emerald-400" : "bg-rose-400"
                         }`}
                       />
-                      <span>{canLaunch ? "Launch Ready" : "Launch Blocked"}</span>
+                      <span>
+                        {canLaunch
+                          ? t("unified_library::status::launch_ready")
+                          : t("unified_library::status::launch_blocked")}
+                      </span>
                     </div>
 
                     {/* Mod Support Status */}
@@ -440,12 +611,17 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
                           canAcceptMods ? "bg-cyan-400" : "bg-amber-400"
                         }`}
                       />
-                      <span>Modding: {item.adapterSupport.supportLevel.toUpperCase()}</span>
+                      <span>
+                        {t("unified_library::labels::modding")}:{" "}
+                        {t(
+                          `unified_library::support::${item.adapterSupport.supportLevel.replace("-", "_")}`,
+                        )}
+                      </span>
                     </div>
 
                     {/* Install State */}
                     <div data-testid={`install-state-${item.id}`} className="text-slate-400">
-                      State: {item.installState}
+                      {t("unified_library::labels::state")}: {item.installState}
                     </div>
 
                     {/* Profile */}
@@ -453,7 +629,7 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
                       data-testid={`mod-profile-${item.id}`}
                       className="max-w-xs truncate text-slate-400"
                     >
-                      Profile: {item.activeModProfile.profileName}
+                      {t("unified_library::labels::profile")}: {item.activeModProfile.profileName}
                     </div>
                   </div>
                 </div>
@@ -471,7 +647,7 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
                     }}
                     className="rounded bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-slate-600"
                   >
-                    Diagnostics
+                    {t("unified_library::actions::diagnostics")}
                   </button>
 
                   {/* Manual Correction Button */}
@@ -480,7 +656,7 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
                     onClick={() => handleOpenCorrection(item)}
                     className="rounded bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-slate-600"
                   >
-                    Correct
+                    {t("unified_library::actions::correct")}
                   </button>
 
                   {/* Launch Button */}
@@ -489,7 +665,12 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
                     disabled={!canLaunch}
                     onClick={() => onLaunch?.(item)}
                     title={
-                      canLaunch ? "Start game execution" : item.launchAvailability.launchExplanation
+                      canLaunch
+                        ? t("unified_library::actions::launch_tooltip")
+                        : localizeMessage(
+                            item.launchAvailability.launchExplanationMessage,
+                            item.launchAvailability.launchExplanation,
+                          )
                     }
                     className={`rounded px-4 py-1.5 text-xs font-semibold transition ${
                       canLaunch
@@ -497,7 +678,7 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
                         : "cursor-not-allowed bg-slate-700/50 text-slate-500"
                     }`}
                   >
-                    Launch
+                    {t("unified_library::actions::launch")}
                   </button>
                 </div>
               </div>
@@ -512,12 +693,24 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
           data-testid="diagnostics-modal"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
         >
-          <div className="w-full max-w-2xl rounded-lg border border-slate-700 bg-slate-800 p-6 shadow-2xl">
-            <h3 className="mb-1 text-xl font-bold text-slate-100">
-              Diagnostic Report: {selectedDiagnosticItem.displayName}
+          <div
+            ref={diagnosticsModalRef}
+            aria-modal="true"
+            aria-labelledby="unified-library-diagnostics-title"
+            className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-slate-700 bg-slate-800 p-6 shadow-2xl"
+            role="dialog"
+            tabIndex={-1}
+          >
+            <h3
+              id="unified-library-diagnostics-title"
+              className="mb-1 text-xl font-bold text-slate-100"
+            >
+              {t("unified_library::diagnostics::title", {
+                game: selectedDiagnosticItem.displayName,
+              })}
             </h3>
             <p className="mb-4 text-xs text-slate-400">
-              Comprehensive explanation of launch availability and mod acceptance.
+              {t("unified_library::diagnostics::description")}
             </p>
 
             {/* Launch Status Section */}
@@ -530,15 +723,25 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
                       : "bg-rose-500"
                   }`}
                 />
-                <span className="text-sm font-semibold">Launch Availability</span>
+                <span className="text-sm font-semibold">
+                  {t("unified_library::diagnostics::launch_availability")}
+                </span>
               </div>
               <p data-testid="diagnostic-launch-explanation" className="text-xs text-slate-300">
-                {selectedDiagnosticItem.launchAvailability.launchExplanation}
+                {localizeMessage(
+                  selectedDiagnosticItem.launchAvailability.launchExplanationMessage,
+                  selectedDiagnosticItem.launchAvailability.launchExplanation,
+                )}
               </p>
               {selectedDiagnosticItem.launchAvailability.blockingReasons.length > 0 && (
                 <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-rose-300">
                   {selectedDiagnosticItem.launchAvailability.blockingReasons.map((reason, idx) => (
-                    <li key={idx}>{reason}</li>
+                    <li key={idx}>
+                      {localizeMessage(
+                        selectedDiagnosticItem.launchAvailability.blockingReasonMessages?.[idx],
+                        reason,
+                      )}
+                    </li>
                   ))}
                 </ul>
               )}
@@ -554,24 +757,34 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
                       : "bg-amber-500"
                   }`}
                 />
-                <span className="text-sm font-semibold">Mod Acceptance Status</span>
+                <span className="text-sm font-semibold">
+                  {t("unified_library::diagnostics::mod_acceptance")}
+                </span>
               </div>
               <p data-testid="diagnostic-mod-explanation" className="text-xs text-slate-300">
                 {selectedDiagnosticItem.adapterSupport.canAcceptMods
-                  ? `Compatible adapter '${selectedDiagnosticItem.adapterSupport.adapterName}' active. All required capabilities supported.`
-                  : (selectedDiagnosticItem.adapterSupport.modRejectionReason ??
-                    "Cannot accept mods.")}
+                  ? t("unified_library::diagnostics::compatible_adapter", {
+                      adapter: selectedDiagnosticItem.adapterSupport.adapterName,
+                    })
+                  : localizeMessage(
+                      selectedDiagnosticItem.adapterSupport.modRejectionMessage,
+                      selectedDiagnosticItem.adapterSupport.modRejectionReason ??
+                        t("unified_library::diagnostics::cannot_accept_mods"),
+                    )}
               </p>
               {selectedDiagnosticItem.adapterSupport.unsupportedCapabilities.length > 0 && (
                 <div className="mt-2">
                   <span className="text-xs font-semibold text-amber-400">
-                    Declared Unsupported Capabilities:
+                    {t("unified_library::diagnostics::unsupported_capabilities")}:
                   </span>
                   <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs text-slate-400">
                     {selectedDiagnosticItem.adapterSupport.unsupportedCapabilities.map(
                       (cap, idx) => (
                         <li key={idx}>
                           <span className="font-mono text-amber-300">{cap.kind}</span>: {cap.reason}
+                          <span className="sr-only">
+                            {t("unified_library::diagnostics::adapter_authored_reason")}
+                          </span>
                         </li>
                       ),
                     )}
@@ -582,19 +795,84 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
 
             {/* Duplicate Analysis Section */}
             <div className="mb-4 rounded border border-slate-700/60 bg-slate-900/70 p-3">
-              <span className="mb-1 block text-sm font-semibold">Deduplication & Provenance</span>
+              <span className="mb-1 block text-sm font-semibold">
+                {t("unified_library::diagnostics::deduplication")}
+              </span>
               <p data-testid="diagnostic-duplicate-explanation" className="text-xs text-slate-300">
-                {selectedDiagnosticItem.duplicateSummary.explanation}
+                {localizeMessage(
+                  selectedDiagnosticItem.duplicateSummary.explanationMessage,
+                  selectedDiagnosticItem.duplicateSummary.explanation,
+                )}
               </p>
             </div>
+
+            {selectedDiagnosticReport && (
+              <section
+                aria-labelledby="unified-library-full-report-title"
+                className="mb-4 rounded border border-slate-700/60 bg-slate-900/70 p-3"
+                data-testid="diagnostic-full-report"
+              >
+                <h4
+                  id="unified-library-full-report-title"
+                  className="mb-3 text-sm font-semibold text-slate-100"
+                >
+                  {t("unified_library::diagnostics::full_report")}
+                </h4>
+                <div className="space-y-2">
+                  {selectedDiagnosticReport.checks.map((check) => (
+                    <div
+                      key={`${check.domain}:${check.check}`}
+                      className="rounded border border-slate-700 bg-slate-800/70 p-3"
+                      data-testid={`diagnostic-check-${check.domain}`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs font-semibold text-slate-200">
+                          {localizeMessage(check.checkDescriptor, check.check)}
+                        </span>
+                        <span
+                          className={`text-xs font-semibold ${
+                            check.passed ? "text-emerald-400" : "text-rose-400"
+                          }`}
+                        >
+                          {check.passed
+                            ? t("unified_library::diagnostics::passed")
+                            : t("unified_library::diagnostics::failed")}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-300">
+                        {localizeMessage(check.messageDescriptor, check.message)}
+                      </p>
+                      {check.resolutionHint && (
+                        <p className="mt-2 text-xs text-amber-300">
+                          <span className="font-semibold">
+                            {t("unified_library::diagnostics::recommendation")}:
+                          </span>{" "}
+                          {localizeMessage(check.resolutionDescriptor, check.resolutionHint)}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p
+                  aria-live="polite"
+                  className="mt-3 border-t border-slate-700 pt-3 text-xs font-medium text-slate-200"
+                  data-testid="diagnostic-report-summary"
+                >
+                  {localizeMessage(
+                    selectedDiagnosticReport.summaryDescriptor,
+                    selectedDiagnosticReport.summary,
+                  )}
+                </p>
+              </section>
+            )}
 
             <div className="flex justify-end">
               <button
                 data-testid="btn-close-diagnostics"
-                onClick={() => setSelectedDiagnosticItem(null)}
+                onClick={closeDiagnostics}
                 className="rounded bg-slate-700 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:bg-slate-600"
               >
-                Close
+                {t("unified_library::actions::close")}
               </button>
             </div>
           </div>
@@ -607,13 +885,24 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
           data-testid="manual-correction-modal"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
         >
-          <div className="w-full max-w-xl rounded-lg border border-slate-700 bg-slate-800 p-6 shadow-2xl">
-            <h3 className="mb-1 text-xl font-bold text-slate-100">
-              Manual Correction: {selectedCorrectionItem.displayName}
+          <div
+            ref={correctionModalRef}
+            aria-modal="true"
+            aria-labelledby="unified-library-correction-title"
+            className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-lg border border-slate-700 bg-slate-800 p-6 shadow-2xl"
+            role="dialog"
+            tabIndex={-1}
+          >
+            <h3
+              id="unified-library-correction-title"
+              className="mb-1 text-xl font-bold text-slate-100"
+            >
+              {t("unified_library::correction::title", {
+                game: selectedCorrectionItem.displayName,
+              })}
             </h3>
             <p className="mb-4 text-xs text-amber-400">
-              Non-destructive configuration overlay. Launcher source files (VDF, SQLite, JSON) and
-              discovery records are NEVER modified.
+              {t("unified_library::correction::description")}
             </p>
 
             {/* Form Fields */}
@@ -623,16 +912,17 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
                   htmlFor="override-exec-input"
                   className="mb-1 block font-semibold text-slate-300"
                 >
-                  Executable Path Override
+                  {t("unified_library::correction::executable_label")}
                 </label>
                 <div className="mb-1 font-mono text-slate-500">
-                  Discovered: {selectedCorrectionItem.primaryInstallation.executablePath}
+                  {t("unified_library::correction::discovered")}:{" "}
+                  {selectedCorrectionItem.primaryInstallation.executablePath}
                 </div>
                 <input
                   id="override-exec-input"
                   type="text"
                   data-testid="input-override-executable"
-                  placeholder="Enter custom absolute executable path..."
+                  placeholder={t("unified_library::correction::executable_placeholder")}
                   value={correctionExec}
                   onChange={(e) => setCorrectionExec(e.target.value)}
                   className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-1.5 font-mono text-slate-200"
@@ -644,16 +934,18 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
                   htmlFor="override-prefix-input"
                   className="mb-1 block font-semibold text-slate-300"
                 >
-                  Proton / Wine Prefix Override
+                  {t("unified_library::correction::prefix_label")}
                 </label>
                 <div className="mb-1 font-mono text-slate-500">
-                  Discovered: {selectedCorrectionItem.primaryInstallation.prefixPath ?? "None"}
+                  {t("unified_library::correction::discovered")}:{" "}
+                  {selectedCorrectionItem.primaryInstallation.prefixPath ??
+                    t("unified_library::values::none")}
                 </div>
                 <input
                   id="override-prefix-input"
                   type="text"
                   data-testid="input-override-prefix"
-                  placeholder="Enter custom prefix directory..."
+                  placeholder={t("unified_library::correction::prefix_placeholder")}
                   value={correctionPrefix}
                   onChange={(e) => setCorrectionPrefix(e.target.value)}
                   className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-1.5 font-mono text-slate-200"
@@ -665,16 +957,18 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
                   htmlFor="override-runtime-input"
                   className="mb-1 block font-semibold text-slate-300"
                 >
-                  Runtime Version Override
+                  {t("unified_library::correction::runtime_label")}
                 </label>
                 <div className="mb-1 font-mono text-slate-500">
-                  Discovered: {selectedCorrectionItem.primaryInstallation.runtime ?? "Default"}
+                  {t("unified_library::correction::discovered")}:{" "}
+                  {selectedCorrectionItem.primaryInstallation.runtime ??
+                    t("unified_library::values::default")}
                 </div>
                 <input
                   id="override-runtime-input"
                   type="text"
                   data-testid="input-override-runtime"
-                  placeholder="e.g. GE-Proton9-11, proton-9.0..."
+                  placeholder={t("unified_library::correction::runtime_placeholder")}
                   value={correctionRuntime}
                   onChange={(e) => setCorrectionRuntime(e.target.value)}
                   className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-1.5 font-mono text-slate-200"
@@ -686,7 +980,7 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
                   htmlFor="override-args-input"
                   className="mb-1 block font-semibold text-slate-300"
                 >
-                  Custom Launch Arguments (space-separated)
+                  {t("unified_library::correction::arguments_label")}
                 </label>
                 <input
                   id="override-args-input"
@@ -704,13 +998,13 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
                   htmlFor="override-reason-input"
                   className="mb-1 block font-semibold text-slate-300"
                 >
-                  Correction Reason (for audit log)
+                  {t("unified_library::correction::reason_label")}
                 </label>
                 <input
                   id="override-reason-input"
                   type="text"
                   data-testid="input-override-reason"
-                  placeholder="e.g. Relocated to secondary NVMe drive..."
+                  placeholder={t("unified_library::correction::reason_placeholder")}
                   value={correctionReason}
                   onChange={(e) => setCorrectionReason(e.target.value)}
                   className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-1.5 text-slate-200"
@@ -725,23 +1019,23 @@ export const UnifiedLibraryView: React.FC<IUnifiedLibraryViewProps> = ({
                 onClick={handleRevertCorrection}
                 className="rounded border border-rose-700/60 bg-rose-900/60 px-3 py-1.5 text-xs font-medium text-rose-200 transition hover:bg-rose-800"
               >
-                Revert to Launcher Data
+                {t("unified_library::actions::revert")}
               </button>
 
               <div className="flex items-center gap-2">
                 <button
                   data-testid="btn-close-modal"
-                  onClick={() => setSelectedCorrectionItem(null)}
+                  onClick={closeCorrection}
                   className="rounded bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-slate-600"
                 >
-                  Cancel
+                  {t("unified_library::actions::cancel")}
                 </button>
                 <button
                   data-testid="btn-save-correction"
                   onClick={handleSaveCorrection}
                   className="rounded bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-500"
                 >
-                  Save Override
+                  {t("unified_library::actions::save_override")}
                 </button>
               </div>
             </div>

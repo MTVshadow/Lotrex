@@ -52,6 +52,13 @@ export const DEPLOYMENT_RECOVERY_DEFAULTS: Record<string, string> = {
     "The deployment journal could not be validated. Vortex will not start another deployment or purge in this staging folder until the journal is repaired or reviewed.",
   "mod_management:::deployment_recovery::journal_validation_failed":
     "Deployment journal validation failed.",
+  "mod_management:::deployment_recovery::launch_blocked_text":
+    "The game was not started because Lotrex cannot prove that its deployment state is consistent.",
+  "mod_management:::deployment_recovery::launch_blocked_title": "Game launch blocked",
+  "mod_management:::deployment_recovery::launch_incomplete_message":
+    "An interrupted {{operation}} operation is still at phase {{phase}}. Inspect it, complete the offered safe recovery, or cancel. Lotrex will not claim that the game is clean.",
+  "mod_management:::deployment_recovery::launch_invalid_message":
+    "The deployment journal is damaged or cannot be verified. Inspect the report before changing managed game files.",
   "mod_management:::deployment_recovery::method_label": "Deployment Method: {{method}}",
   "mod_management:::deployment_recovery::more_files_notice":
     "... and {{count}} more files (see exported report)",

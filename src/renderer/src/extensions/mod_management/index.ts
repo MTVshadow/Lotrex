@@ -145,6 +145,7 @@ import { findModByRef } from "./util/findModByRef";
 import ModHistory from "./util/ModHistory";
 import renderModName from "./util/modName";
 import { getModSources, registerModSource } from "./util/modSource";
+import { checkProtectedRestoreJournalsAtStartup } from "./util/protectedBaselineRecoveryUI";
 import sortMods from "./util/sort";
 import { setResolvedCB } from "./util/testModReference";
 import ActivationButton from "./views/ActivationButton";
@@ -1598,6 +1599,9 @@ function once(api: IExtensionApi) {
   const store: Redux.Store<IState> = api.store;
 
   if (process.platform === "linux") {
+    void checkProtectedRestoreJournalsAtStartup(api).catch((err) => {
+      log("error", "failed to inspect protected restore journals at startup", err);
+    });
     void checkDeploymentJournalsAtStartup(api).catch((err) => {
       log("error", "failed to inspect deployment journals at startup", err);
     });

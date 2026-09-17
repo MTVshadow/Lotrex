@@ -256,3 +256,39 @@ describe("addDiscoveredTool", () => {
     expect(result.discovered.gameId2.tools.toolId1.path).toBe("tool1 path");
   });
 });
+
+describe("unified library corrections", () => {
+  const correction = {
+    correctedAt: 123,
+    installationId: "steam:123",
+    originalData: {
+      executablePath: "/games/example/game.exe",
+      installPath: "/games/example",
+    },
+    overrides: {
+      executablePath: "/games/example/custom.exe",
+    },
+  };
+
+  it("persists a correction separately from discovered launcher data", () => {
+    const input = makeSettings({ game: makeGame({ path: "/games/example" }) });
+    const result = settingsReducer.reducers.SET_UNIFIED_LIBRARY_CORRECTION(input, correction);
+
+    expect(result.unifiedLibraryCorrections["steam:123"]).toEqual(correction);
+    expect(result.discovered.game.path).toBe("/games/example");
+  });
+
+  it("removes only the selected correction", () => {
+    const input = {
+      ...makeSettings({}),
+      unifiedLibraryCorrections: {
+        "steam:123": correction,
+        "steam:456": { ...correction, installationId: "steam:456" },
+      },
+    };
+    const result = settingsReducer.reducers.REMOVE_UNIFIED_LIBRARY_CORRECTION(input, "steam:123");
+
+    expect(result.unifiedLibraryCorrections["steam:123"]).toBeUndefined();
+    expect(result.unifiedLibraryCorrections["steam:456"]).toBeDefined();
+  });
+});

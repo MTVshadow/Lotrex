@@ -1,21 +1,42 @@
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 const {
   GAME_ID,
+  FORSAKEN_GODS_GAME_ID,
   PRIMARY_EXE,
-  FINAL_EXE,
+  FORSAKEN_GODS_EXE,
   STEAM_APP_ID,
+  FORSAKEN_GODS_STEAM_ID,
   GOG_APP_ID,
+  FORSAKEN_GODS_GOG_ID,
+  FORSAKEN_GODS_GAME,
+  GAMES,
+  linuxSteamCandidates,
+  default: registerGames,
   isGothic3DataArchive,
   isGothic3DataFile,
   findCommonRoot,
   normalizeGothic3Path,
+  isPatchBundle,
+  isCommunityPatch,
+  isUpdatePack,
+  isUkrainianLocalization,
+  patchOrderingInstructions,
+  reconcileInstalledPatchStack,
   testSupportedContent,
   installContent,
   getExecutable,
 } = require("./index.js");
+
+type RegisteredGame = {
+  id: string;
+  queryArgs: { steam: string[]; gog: string[] };
+  requiredFiles: string[];
+  executable: () => string;
+  details: { nexusPageId: string };
+};
 
 describe("game-gothic3 metadata and identifiers", () => {
   it("has correct game ID matching Nexus Mods", () => {
@@ -25,6 +46,64 @@ describe("game-gothic3 metadata and identifiers", () => {
   it("has correct Steam AppID and GOG ID", () => {
     expect(STEAM_APP_ID).toBe("39500");
     expect(GOG_APP_ID).toBe("1207658986");
+    expect(getExecutable(undefined)).toBe(PRIMARY_EXE);
+  });
+
+  it("identifies Forsaken Gods as its own installation", () => {
+    expect(FORSAKEN_GODS_GAME_ID).toBe("gothic3fg");
+    expect(FORSAKEN_GODS_STEAM_ID).toBe("65600");
+    expect(FORSAKEN_GODS_GOG_ID).toBe("1207658993");
+    expect(FORSAKEN_GODS_EXE).toBe("Gothic III Forsaken Gods.exe");
+    expect(FORSAKEN_GODS_GAME.installDir).toBe("Gothic 3 Forsaken Gods");
+  });
+
+  it("registers both game editions with edition-specific Steam discovery", () => {
+    const registeredGames: RegisteredGame[] = [];
+    const registerGame = vi.fn<(game: RegisteredGame) => void>((game) => {
+      registeredGames.push(game);
+    });
+    const registerInstaller = vi.fn<(...args: unknown[]) => void>();
+
+    registerGames({ registerGame, registerInstaller });
+
+    expect(registeredGames.map((game) => game.id)).toEqual(
+      GAMES.map((game: RegisteredGame) => game.id),
+    );
+    expect(registeredGames[0].queryArgs.steam).toEqual([STEAM_APP_ID]);
+
+    const forsakenGods = registeredGames.find((game) => game.id === FORSAKEN_GODS_GAME_ID);
+    if (forsakenGods === undefined) {
+      throw new Error("Forsaken Gods game registration is missing");
+    }
+
+    expect(forsakenGods.queryArgs.steam).toEqual([FORSAKEN_GODS_STEAM_ID]);
+    expect(forsakenGods.queryArgs.gog).toEqual([FORSAKEN_GODS_GOG_ID]);
+    expect(forsakenGods.requiredFiles).toEqual([FORSAKEN_GODS_EXE]);
+    expect(forsakenGods.executable()).toBe(FORSAKEN_GODS_EXE);
+    expect(forsakenGods.details.nexusPageId).toBe(GAME_ID);
+    expect(registerInstaller).toHaveBeenCalledOnce();
+  });
+
+  it("builds Steam fallback candidates from XDG roots for each installation", () => {
+    const env = { HOME: "/home/tester", XDG_DATA_HOME: "/data/user" };
+
+    expect(linuxSteamCandidates(GAMES[0], env)).toEqual([
+      path.join("/data/user", "Steam", "steamapps", "common", "Gothic 3"),
+      path.join("/home/tester", ".steam", "steam", "steamapps", "common", "Gothic 3"),
+      path.join(
+        "/home/tester",
+        ".var",
+        "app",
+        "com.valvesoftware.Steam",
+        ".local",
+        "share",
+        "Steam",
+        "steamapps",
+        "common",
+        "Gothic 3",
+      ),
+    ]);
+    expect(linuxSteamCandidates(FORSAKEN_GODS_GAME, env)[0]).toContain("Gothic 3 Forsaken Gods");
   });
 });
 
@@ -132,6 +211,11 @@ describe("testSupportedContent & installContent", () => {
     expect(res.supported).toBe(true);
   });
 
+  it("supports Gothic 3 Nexus mods for the Forsaken Gods installation", async () => {
+    const res = await testSupportedContent(["Data/_compiledImage.m00"], FORSAKEN_GODS_GAME_ID);
+    expect(res.supported).toBe(true);
+  });
+
   it("rejects non-gothic3 game ID", async () => {
     const res = await testSupportedContent(["_compiledImage.m00"], "skyrimse");
     expect(res.supported).toBe(false);
@@ -157,5 +241,67 @@ describe("testSupportedContent & installContent", () => {
         destination: "d3d9.dll",
       },
     ]);
+  });
+
+  it("identifies the patch sequence and makes the update override the base patch", () => {
+    const communityPatch = ["Gothic3.exe", "Data/Projects_compiled.cpt"];
+    const updatePack = ["Data/Projects_compiled.p01", "Data/Strings.p00"];
+    const localization = ["Data/Projects_compiled/stringtable.bin", "Ini/ge3.INI"];
+
+    expect(isCommunityPatch(communityPatch)).toBe(true);
+    expect(isUpdatePack(updatePack)).toBe(true);
+    expect(isUkrainianLocalization(localization)).toBe(true);
+    expect(patchOrderingInstructions(updatePack)).toEqual([
+      expect.objectContaining({ type: "rule", rule: expect.objectContaining({ type: "after" }) }),
+    ]);
+    expect(patchOrderingInstructions(localization)).toHaveLength(2);
+  });
+
+  it("rejects patch compilations that contain several installer executables", async () => {
+    const patchBundle = [
+      "Community Patch/Gothic_3_EE_Patch_v1.75.14_Int_Full.exe",
+      "Update Pack/Gothic_3_EE_v1.75_Int_Update_Pack_v1.04.11.exe",
+    ];
+
+    expect(isPatchBundle(patchBundle)).toBe(true);
+    await expect(installContent(patchBundle)).rejects.toThrow("multiple Gothic 3 patch installers");
+  });
+
+  it("orders the installed patch stack and disables a patch compilation", () => {
+    const dispatch = vi.fn();
+    const state = {
+      persistent: {
+        mods: {
+          gothic3: {
+            "Gothic_3_EE_Patch_v1.75.14_Int_Full": { rules: [] },
+            "Gothic_3_EE_v1.75_Int_Update_Pack_v1.04.11": { rules: [] },
+            patchBundle: {
+              attributes: { fileName: "Gothic 3 Patches-46-04-06-26-1767543105.7z" },
+              rules: [],
+            },
+          },
+        },
+        profiles: {
+          gothic: {
+            id: "gothic",
+            gameId: GAME_ID,
+            modState: { patchBundle: { enabled: true } },
+          },
+        },
+      },
+    };
+    const actionApi = {
+      addModRule: vi.fn((gameId, modId, rule) => ({ gameId, modId, rule })),
+      setModEnabled: vi.fn((profileId, modId, enabled) => ({ profileId, modId, enabled })),
+    };
+
+    reconcileInstalledPatchStack({
+      actions: actionApi,
+      getState: () => state,
+      store: { dispatch },
+    });
+
+    expect(actionApi.addModRule).toHaveBeenCalledTimes(2);
+    expect(actionApi.setModEnabled).toHaveBeenCalledWith("gothic", "patchBundle", false);
   });
 });

@@ -82,7 +82,7 @@ describe("Gate C — Packaged Native Steam beta verification suite", () => {
         finalize: async () => [],
       }) as any;
 
-    it("selects hardlinks as primary choice when game and staging share partition", () => {
+    it("selects symlinks as the safer primary choice when both methods are available", () => {
       const assessed: IDeploymentMethodAssessment[] = [
         { activator: createMockMethod("hardlink_activator"), errors: [], warnings: [] },
         { activator: createMockMethod("symlink_activator"), errors: [], warnings: [] },
@@ -93,10 +93,8 @@ describe("Gate C — Packaged Native Steam beta verification suite", () => {
         symlink: true,
       });
 
-      expect(recommendation.activator?.id).toBe("hardlink_activator");
-      expect(recommendation.reason).toContain(
-        "Hardlinks are supported and staging shares a filesystem",
-      );
+      expect(recommendation.activator?.id).toBe("symlink_activator");
+      expect(recommendation.reason).toContain("safer automatic Linux choice");
     });
 
     it("falls back to symlinks when hardlinks are unavailable (e.g. cross-partition)", () => {
@@ -115,9 +113,7 @@ describe("Gate C — Packaged Native Steam beta verification suite", () => {
       });
 
       expect(recommendation.activator?.id).toBe("symlink_activator");
-      expect(recommendation.reason).toContain(
-        "Symlinks are supported; hardlink requirements were not met",
-      );
+      expect(recommendation.reason).toContain("safer automatic Linux choice");
     });
   });
 
